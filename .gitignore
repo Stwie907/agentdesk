@@ -1,0 +1,9 @@
+.vs/
+.env
+__pycache__/
+*.pyc
+node_modules/
+dist/
+coverage/
+.idea/
+.vscode/
