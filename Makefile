@@ -6,11 +6,11 @@ help:
 	@printf '%s\n' \
 		'Available targets:' \
 		'  check  Validate the monorepo structure' \
-		'  test   Validate the initialization state' \
+		'  test   Run backend tests' \
 		'  lint   Report that no linter is configured' \
-		'  build  Report that no build is configured' \
-		'  start  Report that no services are configured' \
-		'  stop   Report that no services are configured'
+		'  build  Build service containers' \
+		'  start  Start service containers' \
+		'  stop   Stop service containers'
 
 check:
 	@test -f README.md
@@ -24,17 +24,25 @@ check:
 	@test -d evaluation
 	@test -d docs
 	@test -d deployment
+	@test -f backend/app/main.py
+	@test -f backend/app/config.py
+	@test -f backend/app/api/health.py
+	@test -f backend/tests/test_health.py
+	@test -f backend/requirements.txt
+	@test -f backend/Dockerfile
+	@test -f backend/README.md
 
 test: check
+	@cd backend && python -m pytest
 
 lint:
 	@printf '%s\n' 'No linter is configured.'
 
 build:
-	@printf '%s\n' 'No build is configured.'
+	docker compose build backend
 
 start:
-	@printf '%s\n' 'No services are configured.'
+	docker compose up --detach backend
 
 stop:
-	@printf '%s\n' 'No services are configured.'
+	docker compose down
