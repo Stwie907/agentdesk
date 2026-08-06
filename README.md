@@ -1,13 +1,13 @@
 # AgentDesk
 
-AgentDesk is organized as a minimal monorepo. This initial commit provides
-repository structure and developer entry points only; it contains no business
-logic, agents, RAG implementation, or MCP implementation.
+AgentDesk is organized as a minimal monorepo with backend and frontend service
+foundations. It contains no business logic, agents, RAG implementation, or MCP
+implementation.
 
 ## Repository layout
 
-- `backend/` — reserved for backend services.
-- `frontend/` — reserved for the web client.
+- `backend/` - FastAPI backend service foundation.
+- `frontend/` - React, TypeScript, and Vite frontend foundation.
 - `mcp-server/` — reserved for MCP server code.
 - `evaluation/` — reserved for evaluation assets.
 - `docs/` — project documentation.
@@ -15,4 +15,8 @@ logic, agents, RAG implementation, or MCP implementation.
 
 ## Commands
 
-Run `make check` to validate the expected repository structure.
+- `make check` validates the monorepo structure.
+- `make test` runs backend and frontend tests.
+- `make build` builds service containers.
+- `make start` starts service containers.
+- `make stop` stops service containers.
