@@ -1,8 +1,18 @@
 from app.runtime.executor import execute_tool
 from app.runtime.planner import plan
+import app.services.agent_runner as agent_runner
+
+def fake_run_agent(model, prompt):
+    return "mock agent response"
 
 
-def test_execution_pipeline_calculator():
+def test_execution_pipeline_calculator(monkeypatch):
+
+    monkeypatch.setattr(
+        agent_runner,
+        "run_agent",
+        fake_run_agent
+    )
     task = plan("计算12345*6789")
 
     assert task["tool"] == "calculator"
@@ -15,7 +25,13 @@ def test_execution_pipeline_calculator():
     assert result == "83810205"
 
 
-def test_execution_pipeline_datetime():
+def test_execution_pipeline_datetime(monkeypatch):
+
+    monkeypatch.setattr(
+        agent_runner,
+        "run_agent",
+        fake_run_agent
+    )
     task = plan("现在几点？")
 
     assert task["tool"] == "datetime"
@@ -30,14 +46,12 @@ def test_execution_pipeline_datetime():
 
 
 def test_execution_pipeline_normal_chat(monkeypatch):
-    from app.services import agent_runner
 
     monkeypatch.setattr(
-        agent_runner,
-        "run_agent",
-        lambda *args, **kwargs: "mock response"
-    )
-
+    agent_runner,
+    "run_agent",
+    fake_run_agent
+)
     task = plan("介绍一下AgentDesk项目")
 
     assert task["tool"] is None
