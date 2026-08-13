@@ -29,9 +29,16 @@ def test_execution_pipeline_datetime():
     assert len(result) > 0
 
 
-def test_execution_pipeline_normal_chat():
+def test_execution_pipeline_normal_chat(monkeypatch):
+    from app.services import agent_runner
+
+    monkeypatch.setattr(
+        agent_runner,
+        "run_agent",
+        lambda *args, **kwargs: "mock response"
+    )
+
     task = plan("介绍一下AgentDesk项目")
 
     assert task["tool"] is None
     assert task["input"] == "介绍一下AgentDesk项目"
-
