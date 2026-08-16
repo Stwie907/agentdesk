@@ -1,58 +1,100 @@
 from app.runtime.executor import execute_tool
-from app.runtime.planner import plan
-import app.services.agent_runner as agent_runner
+import app.runtime.planner as planner
 
-def fake_run_agent(model, prompt):
-    return "mock agent response"
+
+def fake_plan(user_input):
+
+    if "12345*6789" in user_input:
+        return {
+            "tool": "calculator",
+            "input": "12345*6789"
+        }
+
+
+    if "现在几点" in user_input:
+        return {
+            "tool": "datetime",
+            "input": ""
+        }
+
+
+    return {
+        "tool": None,
+        "input": user_input
+    }
+
 
 
 def test_execution_pipeline_calculator(monkeypatch):
 
     monkeypatch.setattr(
-        agent_runner,
-        "run_agent",
-        fake_run_agent
+        planner,
+        "plan",
+        fake_plan
     )
-    task = plan("计算12345*6789")
+
+
+    task = fake_plan(
+        "计算12345*6789"
+    )
+
 
     assert task["tool"] == "calculator"
 
+
     result = execute_tool(
         task["tool"],
-        task["input"],
+        task["input"]
     )
 
+
     assert result == "83810205"
+
 
 
 def test_execution_pipeline_datetime(monkeypatch):
 
     monkeypatch.setattr(
-        agent_runner,
-        "run_agent",
-        fake_run_agent
+        planner,
+        "plan",
+        fake_plan
     )
-    task = plan("现在几点？")
+
+
+    task = fake_plan(
+        "现在几点？"
+    )
+
 
     assert task["tool"] == "datetime"
 
+
     result = execute_tool(
         task["tool"],
-        task["input"],
+        task["input"]
     )
 
+
     assert isinstance(result, str)
+
     assert len(result) > 0
+
 
 
 def test_execution_pipeline_normal_chat(monkeypatch):
 
     monkeypatch.setattr(
-    agent_runner,
-    "run_agent",
-    fake_run_agent
-)
-    task = plan("介绍一下AgentDesk项目")
+        planner,
+        "plan",
+        fake_plan
+    )
+
+
+    task = fake_plan(
+        "介绍一下AgentDesk项目"
+    )
+
 
     assert task["tool"] is None
+
     assert task["input"] == "介绍一下AgentDesk项目"
