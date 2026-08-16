@@ -10,9 +10,10 @@ def create_execution(
 ):
 
     db_execution = Execution(
-        agent_id=execution.agent_id,
-        input=execution.input
-    )
+    agent_id=execution.agent_id,
+    input=execution.input,
+    status="pending"
+)
 
     db.add(db_execution)
 
