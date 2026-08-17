@@ -1,1 +1,7 @@
 agentdesk.db
+# database
+*.db
+
+# python cache
+__pycache__/
+*.pyc

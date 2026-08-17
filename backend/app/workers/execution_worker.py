@@ -1,5 +1,7 @@
 from app.database import SessionLocal
 
+from app.constants import ExecutionStatus
+
 from app.models.execution import Execution
 from app.models.agent import Agent
 from app.models.memory import Memory
@@ -31,7 +33,7 @@ def execute_agent(execution_id: int):
         return
 
 
-    execution.status = "running"
+    execution.status = ExecutionStatus.RUNNING.value
     db.commit()
 
 
@@ -53,7 +55,7 @@ def execute_agent(execution_id: int):
 
     if not agent:
 
-        execution.status = "failed"
+        execution.status = ExecutionStatus.FAILED.value
         execution.output = "Agent not found"
 
         db.commit()
@@ -121,7 +123,7 @@ def execute_agent(execution_id: int):
         if task["tool"] == "calculator":
 
             execution.output = tool_result
-            execution.status = "completed"
+            execution.status = ExecutionStatus.COMPLETED.value
 
             create_log(
                 db,
@@ -176,7 +178,8 @@ def execute_agent(execution_id: int):
 
         execution.output = result
 
-        execution.status = "completed"
+        execution.status = ExecutionStatus.COMPLETED.value
+
 
 
         create_log(
@@ -192,7 +195,7 @@ def execute_agent(execution_id: int):
 
         execution.output = str(e)
 
-        execution.status = "failed"
+        execution.status = ExecutionStatus.FAILED.value
 
 
         create_log(

@@ -6,8 +6,13 @@ def run_agent(
     prompt: str
 ):
 
+    url = "http://localhost:11434/api/generate"
+
+    print("OLLAMA URL:", url)
+    print("OLLAMA MODEL:", model)
+
     response = requests.post(
-        "http://localhost:11434/api/generate",
+        url,
         json={
             "model": model,
             "prompt": prompt,
@@ -15,6 +20,9 @@ def run_agent(
         },
         timeout=120
     )
+
+    print("OLLAMA STATUS:", response.status_code)
+    print("OLLAMA BODY:", response.text[:200])
 
     response.raise_for_status()
 
