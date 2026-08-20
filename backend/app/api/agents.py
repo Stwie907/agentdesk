@@ -3,6 +3,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas.agent import AgentCreate, AgentResponse
+from app.schemas.execution import ExecutionRead
+from app.crud.execution import get_executions_by_agent
+
 from app.crud.agent import (
     create_agent,
     get_agent,
@@ -66,3 +69,14 @@ def delete(
     return {
         "message": "Agent deleted successfully"
     }
+
+
+@router.get(
+    "/agents/{agent_id}/executions",
+    response_model=list[ExecutionRead]
+)
+def read_agent_executions(
+    agent_id: int,
+    db: Session = Depends(get_db)
+):
+    return get_executions_by_agent(db, agent_id)

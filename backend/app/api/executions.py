@@ -55,12 +55,20 @@ def create(
     "/{execution_id}",
     response_model=ExecutionRead
 )
+
 def read(
     execution_id: int,
     db: Session = Depends(get_db)
 ):
-
-    return get_execution(
+    execution = get_execution(
         db,
         execution_id
     )
+
+    if not execution:
+        raise HTTPException(
+            status_code=404,
+            detail="Execution not found"
+        )
+
+    return execution

@@ -37,3 +37,15 @@ def get_execution(
         )
         .first()
     )
+
+
+def get_executions_by_agent(
+    db: Session,
+    agent_id: int
+):
+    return (
+        db.query(Execution)
+        .filter(Execution.agent_id == agent_id)
+        .order_by(Execution.created_at.desc())
+        .all()
+    )
