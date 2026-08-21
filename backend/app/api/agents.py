@@ -1,10 +1,15 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas.agent import AgentCreate, AgentResponse
-from app.schemas.execution import ExecutionRead
-from app.crud.execution import get_executions_by_agent
+from app.schemas.execution import ExecutionCreate, ExecutionRead
+from app.schemas.chat import ChatRequest, ChatResponse
+from app.workers.execution_worker import execute_agent
+from app.crud.execution import (
+    create_execution,
+    get_executions_by_agent,
+)
 
 from app.crud.agent import (
     create_agent,
@@ -80,3 +85,38 @@ def read_agent_executions(
     db: Session = Depends(get_db)
 ):
     return get_executions_by_agent(db, agent_id)
+
+@router.post(
+    "/agents/{agent_id}/chat",
+    response_model=ChatResponse
+)
+def chat_with_agent(
+    agent_id: int,
+    chat: ChatRequest,
+    db: Session = Depends(get_db)
+):
+    agent = get_agent(db, agent_id)
+
+    if not agent:
+        raise HTTPException(
+            status_code=404,
+            detail="Agent not found"
+        )
+
+    execution = create_execution(
+        db,
+        ExecutionCreate(
+            agent_id=agent_id,
+            input=chat.message,
+        )
+    )
+
+    execute_agent(execution.id)
+
+    db.refresh(execution)
+
+    return ChatResponse(
+        execution_id=execution.id,
+        response=execution.output or "",
+        status=execution.status,
+    )
