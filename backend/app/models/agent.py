@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
-from sqlalchemy.orm import relationship
 from datetime import datetime
+
+from sqlalchemy import Column, Integer, String, Text, DateTime
+from sqlalchemy.orm import relationship
 
 from app.database import Base
 
@@ -8,18 +9,26 @@ from app.database import Base
 class Agent(Base):
     __tablename__ = "agents"
 
-    id = Column(Integer, primary_key=True, index=True)
-
-    project_id = Column(
+    id = Column(
         Integer,
-        ForeignKey("projects.id")
+        primary_key=True,
+        index=True
     )
 
-    name = Column(String, nullable=False)
+    name = Column(
+        String,
+        nullable=False
+    )
 
-    description = Column(String)
+    description = Column(
+        Text,
+        nullable=True
+    )
 
-    model = Column(String, default="qwen2.5")
+    model = Column(
+        String,
+        nullable=False
+    )
 
     created_at = Column(
         DateTime,
@@ -27,13 +36,15 @@ class Agent(Base):
     )
 
 
-    project = relationship(
-        "Project",
-        back_populates="agents"
-    )
-
     executions = relationship(
         "Execution",
+        back_populates="agent",
+        cascade="all, delete-orphan"
+    )
+
+
+    conversations = relationship(
+        "Conversation",
         back_populates="agent",
         cascade="all, delete-orphan"
     )
