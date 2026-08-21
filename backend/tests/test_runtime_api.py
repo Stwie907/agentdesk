@@ -37,8 +37,12 @@ def override_get_db():
     finally:
         db.close()
 
+def setup_test_db_override():
+    app.dependency_overrides[get_db] = override_get_db
 
-app.dependency_overrides[get_db] = override_get_db
+
+def clear_test_db_override():
+    app.dependency_overrides.pop(get_db, None)
 
 
 def reset_database():
@@ -103,83 +107,99 @@ def create_test_data():
 
 
 def test_get_execution_success():
+    setup_test_db_override()
     reset_database()
     data = create_test_data()
 
-    with TestClient(app) as client:
-        response = client.get(
-            f"/executions/{data['execution_id']}"
-        )
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                f"/executions/{data['execution_id']}"
+            )
 
-    assert response.status_code == 200
+        assert response.status_code == 200
 
-    body = response.json()
+        body = response.json()
 
-    assert body["id"] == data["execution_id"]
-    assert body["agent_id"] == data["agent_id"]
-    assert body["input"] == "first test execution"
-    assert body["output"] == "first result"
-    assert body["status"] == "completed"
+        assert body["id"] == data["execution_id"]
+        assert body["agent_id"] == data["agent_id"]
+        assert body["input"] == "first test execution"
+        assert body["output"] == "first result"
+        assert body["status"] == "completed"
+    finally:
+        clear_test_db_override()
 
 
 def test_get_execution_not_found():
+    setup_test_db_override()
     reset_database()
 
-    with TestClient(app) as client:
-        response = client.get("/executions/999999")
+    try:
+        with TestClient(app) as client:
+            response = client.get("/executions/999999")
 
-    assert response.status_code == 404
-    assert response.json() == {
-        "detail": "Execution not found"
-    }
+        assert response.status_code == 404
+        assert response.json() == {
+            "detail": "Execution not found"
+        }
+    finally:
+        clear_test_db_override()
 
 
 def test_get_agent_executions():
+    setup_test_db_override()
     reset_database()
     data = create_test_data()
 
-    with TestClient(app) as client:
-        response = client.get(
-            f"/agents/{data['agent_id']}/executions"
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                f"/agents/{data['agent_id']}/executions"
+            )
+
+        assert response.status_code == 200
+
+        body = response.json()
+
+        assert len(body) == 2
+
+        assert all(
+            execution["agent_id"] == data["agent_id"]
+            for execution in body
         )
 
-    assert response.status_code == 200
-
-    body = response.json()
-
-    assert len(body) == 2
-
-    assert all(
-        execution["agent_id"] == data["agent_id"]
-        for execution in body
-    )
-
-    assert {
-        execution["status"]
-        for execution in body
-    } == {
-        "completed",
-        "failed",
-    }
+        assert {
+            execution["status"]
+            for execution in body
+        } == {
+            "completed",
+            "failed",
+        }
+    finally:
+        clear_test_db_override()
 
 
 def test_get_execution_logs():
+    setup_test_db_override()
     reset_database()
     data = create_test_data()
 
-    with TestClient(app) as client:
-        response = client.get(
-            f"/execution-logs/{data['execution_id']}"
-        )
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                f"/execution-logs/{data['execution_id']}"
+            )
 
-    assert response.status_code == 200
+        assert response.status_code == 200
 
-    body = response.json()
+        body = response.json()
 
-    assert len(body) == 2
+        assert len(body) == 2
 
-    assert body[0]["execution_id"] == data["execution_id"]
-    assert body[0]["message"] == "Execution started"
+        assert body[0]["execution_id"] == data["execution_id"]
+        assert body[0]["message"] == "Execution started"
 
-    assert body[1]["execution_id"] == data["execution_id"]
-    assert body[1]["message"] == "Execution completed"
+        assert body[1]["execution_id"] == data["execution_id"]
+        assert body[1]["message"] == "Execution completed"
+    finally:
+        clear_test_db_override()
