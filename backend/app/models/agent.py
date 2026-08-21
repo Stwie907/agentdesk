@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, Integer, String, Text, DateTime
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -13,6 +13,12 @@ class Agent(Base):
         Integer,
         primary_key=True,
         index=True
+    )
+
+    project_id = Column(
+        Integer,
+        ForeignKey("projects.id"),
+        nullable=False
     )
 
     name = Column(
@@ -35,16 +41,17 @@ class Agent(Base):
         default=datetime.utcnow
     )
 
+    project = relationship(
+        "Project",
+        back_populates="agents"
+    )
 
     executions = relationship(
         "Execution",
-        back_populates="agent",
-        cascade="all, delete-orphan"
+        back_populates="agent"
     )
-
 
     conversations = relationship(
         "Conversation",
-        back_populates="agent",
-        cascade="all, delete-orphan"
+        back_populates="agent"
     )

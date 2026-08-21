@@ -1,8 +1,9 @@
+
 from fastapi import FastAPI
 
 from app.database import Base, engine
+import app.models
 
-# import routers
 from app.api import (
     health,
     users,
@@ -12,6 +13,7 @@ from app.api import (
     memories,
     execution_logs,
     conversations,
+    messages,
 )
 
 from app.config import APP_NAME
@@ -60,4 +62,8 @@ app.include_router(
 
 app.include_router(
     conversations.router
+)
+
+app.include_router(
+    messages.router
 )

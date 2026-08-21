@@ -1,6 +1,7 @@
+from datetime import datetime
+
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
-from datetime import datetime
 
 from app.database import Base
 
@@ -20,12 +21,14 @@ class Project(Base):
     )
 
     description = Column(
-        Text
+        Text,
+        nullable=True
     )
 
     owner_id = Column(
         Integer,
-        ForeignKey("users.id")
+        ForeignKey("users.id"),
+        nullable=False
     )
 
     created_at = Column(
@@ -33,11 +36,11 @@ class Project(Base):
         default=datetime.utcnow
     )
 
-
     owner = relationship(
         "User",
         back_populates="projects"
     )
+
     agents = relationship(
         "Agent",
         back_populates="project"
