@@ -5,6 +5,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.database import Base, get_db
+from app.models.user import User
 from app.models.agent import Agent
 from app.models.project import Project
 from app.models.execution import Execution
@@ -55,16 +56,27 @@ def create_test_data():
     db = TestingSessionLocal()
 
     try:
-        # create project first
+        # create user first
+        user = User(
+            username="runtime-test-user",
+            email="runtime@test.com"
+        )
+
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+
+        # create project with owner_id
         project = Project(
             name="runtime-test-project",
-            description="runtime test project"
+            description="runtime test project",
+            owner_id=user.id
         )
 
         db.add(project)
         db.commit()
         db.refresh(project)
-
 
         # create agent with project_id
         agent = Agent(
