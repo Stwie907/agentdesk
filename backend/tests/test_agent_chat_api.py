@@ -8,8 +8,9 @@ from sqlalchemy.pool import StaticPool
 from app.main import app
 from app.database import Base, get_db
 from app.models.agent import Agent
+from app.models.user import User
 from app.models.execution import Execution
-
+from app.models.project import Project
 
 TEST_DATABASE_URL = "sqlite://"
 
@@ -45,10 +46,30 @@ def create_test_agent():
     db = TestingSessionLocal()
 
     try:
+        user = User(
+            username="chat-test-user",
+            email="chat-test@example.com",
+        )
+
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+
+        project = Project(
+            name="chat-test-project",
+            description="chat test project",
+            owner_id=user.id
+        )
+
+        db.add(project)
+        db.commit()
+
         agent = Agent(
+            project_id=project.id,
             name="chat-test-agent",
             description="Agent used by chat API tests",
-            model="qwen2.5:7b",
+            model="qwen2.5:7b"
         )
 
         db.add(agent)
@@ -56,9 +77,9 @@ def create_test_agent():
         db.refresh(agent)
 
         return agent.id
+
     finally:
         db.close()
-
 
 def fake_execute_agent(execution_id: int):
     db = TestingSessionLocal()
