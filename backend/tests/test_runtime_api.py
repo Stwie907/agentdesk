@@ -5,7 +5,9 @@ from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.database import Base, get_db
+from app.models.user import User
 from app.models.agent import Agent
+from app.models.project import Project
 from app.models.execution import Execution
 from app.models.execution_log import ExecutionLog
 
@@ -54,7 +56,31 @@ def create_test_data():
     db = TestingSessionLocal()
 
     try:
+        # create user first
+        user = User(
+            username="runtime-test-user",
+            email="runtime@test.com"
+        )
+
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+
+        # create project with owner_id
+        project = Project(
+            name="runtime-test-project",
+            description="runtime test project",
+            owner_id=user.id
+        )
+
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+
+        # create agent with project_id
         agent = Agent(
+            project_id=project.id,
             name="runtime-test-agent",
             description="Agent used by runtime API tests",
             model="qwen2.5:7b",
@@ -64,6 +90,8 @@ def create_test_data():
         db.commit()
         db.refresh(agent)
 
+
+        # create executions
         execution_1 = Execution(
             agent_id=agent.id,
             input="first test execution",
@@ -78,12 +106,21 @@ def create_test_data():
             status="failed",
         )
 
-        db.add_all([execution_1, execution_2])
+
+        db.add_all(
+            [
+                execution_1,
+                execution_2
+            ]
+        )
+
         db.commit()
 
         db.refresh(execution_1)
         db.refresh(execution_2)
 
+
+        # create logs
         log_1 = ExecutionLog(
             execution_id=execution_1.id,
             message="Execution started",
@@ -94,17 +131,25 @@ def create_test_data():
             message="Execution completed",
         )
 
-        db.add_all([log_1, log_2])
+
+        db.add_all(
+            [
+                log_1,
+                log_2
+            ]
+        )
+
         db.commit()
+
 
         return {
             "agent_id": agent.id,
             "execution_id": execution_1.id,
         }
 
+
     finally:
         db.close()
-
 
 def test_get_execution_success():
     setup_test_db_override()

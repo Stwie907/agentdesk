@@ -5,6 +5,8 @@ from sqlalchemy.pool import StaticPool
 from app import models
 from app.database import Base
 from app.models.agent import Agent
+from app.models.user import User
+from app.models.project import Project
 from app.models.execution import Execution
 from app.models.execution_log import ExecutionLog
 
@@ -44,7 +46,28 @@ def test_worker_calculator_pipeline(monkeypatch):
     db = TestingSessionLocal()
 
     try:
+        user = User(
+            username="worker-test-user",
+            email="worker@test.com",
+        )
+
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+
+        project = Project(
+            name="worker-test-project",
+            description="worker test project",
+            owner_id=user.id,
+        )
+
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+
         agent = Agent(
+            project_id=project.id,
             name="Test Agent",
             model="qwen2.5:7b",
         )

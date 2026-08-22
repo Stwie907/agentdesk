@@ -6,8 +6,8 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 
 
-class Project(Base):
-    __tablename__ = "projects"
+class Message(Base):
+    __tablename__ = "messages"
 
     id = Column(
         Integer,
@@ -15,19 +15,19 @@ class Project(Base):
         index=True
     )
 
-    name = Column(
-        String(100),
+    conversation_id = Column(
+        Integer,
+        ForeignKey("conversations.id"),
         nullable=False
     )
 
-    description = Column(
-        Text,
-        nullable=True
+    role = Column(
+        String,
+        nullable=False
     )
 
-    owner_id = Column(
-        Integer,
-        ForeignKey("users.id"),
+    content = Column(
+        Text,
         nullable=False
     )
 
@@ -36,12 +36,8 @@ class Project(Base):
         default=datetime.utcnow
     )
 
-    owner = relationship(
-        "User",
-        back_populates="projects"
-    )
 
-    agents = relationship(
-        "Agent",
-        back_populates="project"
+    conversation = relationship(
+        "Conversation",
+        back_populates="messages"
     )
