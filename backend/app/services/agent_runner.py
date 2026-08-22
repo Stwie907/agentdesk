@@ -1,4 +1,5 @@
-import requests
+from app.runtime.planner import plan
+from app.runtime.executor import execute_tool
 
 
 def run_agent(
@@ -6,26 +7,31 @@ def run_agent(
     prompt: str
 ):
 
-    url = "http://localhost:11434/api/generate"
+    # 1. planner 决策
+    decision = plan(prompt)
 
-    print("OLLAMA URL:", url)
-    print("OLLAMA MODEL:", model)
 
-    response = requests.post(
-        url,
-        json={
-            "model": model,
-            "prompt": prompt,
-            "stream": False
-        },
-        timeout=120
-    )
+    # 2. 判断是否需要工具
+    tool = decision.get("tool")
+    tool_input = decision.get("input")
 
-    print("OLLAMA STATUS:", response.status_code)
-    print("OLLAMA BODY:", response.text[:200])
 
-    response.raise_for_status()
+    # 3. 执行工具
+    if tool:
 
-    data = response.json()
+        result = execute_tool(
+            tool,
+            tool_input
+        )
 
-    return data["response"]
+        return {
+            "tool": tool,
+            "result": result
+        }
+
+
+    # 4. 普通回答
+    return {
+        "tool": None,
+        "result": decision.get("input")
+    }
