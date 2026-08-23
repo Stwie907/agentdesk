@@ -4,9 +4,10 @@ from sqlalchemy.pool import StaticPool
 
 from app import models
 from app.database import Base
-from app.models.agent import Agent
+
 from app.models.user import User
 from app.models.project import Project
+from app.models.agent import Agent
 from app.models.execution import Execution
 from app.models.execution_log import ExecutionLog
 
@@ -14,6 +15,9 @@ import app.workers.execution_worker as worker
 
 
 def test_worker_calculator_pipeline(monkeypatch):
+    # ---------------------------------------------------------
+    # Isolated in-memory database
+    # ---------------------------------------------------------
     test_engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -28,24 +32,33 @@ def test_worker_calculator_pipeline(monkeypatch):
 
     Base.metadata.create_all(bind=test_engine)
 
+    # ---------------------------------------------------------
+    # Replace worker database session
+    # ---------------------------------------------------------
     monkeypatch.setattr(
         worker,
         "SessionLocal",
         TestingSessionLocal,
     )
 
+    # ---------------------------------------------------------
+    # Mock Agent Runtime
+    #
+    # Worker no longer calls plan() / execute_tool() directly.
+    # Planner and executor are now handled inside run_agent().
+    # ---------------------------------------------------------
     monkeypatch.setattr(
         worker,
-        "plan",
-        lambda user_input: {
-            "tool": "calculator",
-            "input": "12345*6789",
-        },
+        "run_agent",
+        lambda model, user_input, memory_text="": "83810205",
     )
 
     db = TestingSessionLocal()
 
     try:
+        # -----------------------------------------------------
+        # Create user
+        # -----------------------------------------------------
         user = User(
             username="worker-test-user",
             email="worker@test.com",
@@ -55,7 +68,9 @@ def test_worker_calculator_pipeline(monkeypatch):
         db.commit()
         db.refresh(user)
 
-
+        # -----------------------------------------------------
+        # Create project
+        # -----------------------------------------------------
         project = Project(
             name="worker-test-project",
             description="worker test project",
@@ -66,6 +81,9 @@ def test_worker_calculator_pipeline(monkeypatch):
         db.commit()
         db.refresh(project)
 
+        # -----------------------------------------------------
+        # Create agent
+        # -----------------------------------------------------
         agent = Agent(
             project_id=project.id,
             name="Test Agent",
@@ -76,6 +94,9 @@ def test_worker_calculator_pipeline(monkeypatch):
         db.commit()
         db.refresh(agent)
 
+        # -----------------------------------------------------
+        # Create execution
+        # -----------------------------------------------------
         execution = Execution(
             agent_id=agent.id,
             input="计算12345*6789",
@@ -90,8 +111,14 @@ def test_worker_calculator_pipeline(monkeypatch):
     finally:
         db.close()
 
+    # ---------------------------------------------------------
+    # Execute worker
+    # ---------------------------------------------------------
     worker.execute_agent(execution_id)
 
+    # ---------------------------------------------------------
+    # Verify execution
+    # ---------------------------------------------------------
     db = TestingSessionLocal()
 
     try:
@@ -102,9 +129,13 @@ def test_worker_calculator_pipeline(monkeypatch):
         )
 
         assert execution is not None
+
         assert execution.status == "completed"
         assert execution.output == "83810205"
 
+        # -----------------------------------------------------
+        # Verify execution logs
+        # -----------------------------------------------------
         logs = (
             db.query(ExecutionLog)
             .filter(ExecutionLog.execution_id == execution_id)
@@ -116,9 +147,8 @@ def test_worker_calculator_pipeline(monkeypatch):
 
         assert "Execution started" in messages
         assert "Loading memory" in messages
-        assert "Planning task" in messages
-        assert "Using tool calculator" in messages
-        assert "Tool result returned directly" in messages
+        assert "Running agent" in messages
+        assert "Execution completed" in messages
 
     finally:
         db.close()
