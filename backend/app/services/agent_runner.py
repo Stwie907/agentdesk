@@ -29,18 +29,22 @@ def run_agent(
     model: str,
     user_input: str,
     memory_text: str = "",
+    conversation_history: str = "",
 ) -> str:
     """
     Agent runtime entry point.
 
     Flow:
-        user input
+        current user input
             -> planner
             -> optional tool execution
+            -> combine memory + conversation history
             -> LLM
             -> final response
     """
 
+    # Planner only decides based on the CURRENT user request.
+    # Old conversation messages should not affect tool selection.
     task = plan(user_input)
 
     tool_name = task.get("tool")
@@ -54,30 +58,36 @@ def run_agent(
             tool_input,
         )
 
-        # Calculator results are deterministic and can be returned directly.
+        # Calculator output is deterministic,
+        # so it can be returned directly.
         if tool_name == "calculator":
             return str(tool_result)
 
     prompt = f"""
 你是一个 AI Agent。
 
-历史记忆：
-{memory_text}
+长期记忆：
+{memory_text or "无"}
 
-用户输入：
+当前会话历史：
+{conversation_history or "无"}
+
+当前用户输入：
 {user_input}
 
 工具执行结果：
-{tool_result}
+{tool_result or "无"}
 
 重要规则：
 
-1. 如果工具执行结果存在，必须直接使用工具结果。
-2. 不允许重新计算。
-3. 不允许修改工具返回的数据。
-4. 工具结果就是最终事实。
+1. 当前会话历史用于理解上下文和多轮对话。
+2. 当前用户输入是你现在必须回答的问题。
+3. 如果工具执行结果存在，必须使用工具结果。
+4. 不允许重新计算或修改工具返回的数据。
+5. 不要把历史对话中的旧问题误认为当前问题。
+6. 回答应结合历史上下文，但优先响应当前用户输入。
 
-请根据以上信息回答用户。
+请回答用户。
 """
 
     return call_llm(
