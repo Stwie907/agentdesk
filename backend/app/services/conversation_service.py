@@ -1,13 +1,54 @@
 from sqlalchemy.orm import Session
 
 from app.crud.conversation import get_conversation
-from app.crud.message import create_message
+from app.crud.message import create_message, get_messages
 from app.crud.execution import create_execution
 
 from app.schemas.message import MessageCreate
 from app.schemas.execution import ExecutionCreate
 
 from app.workers.execution_worker import execute_agent
+
+
+def build_conversation_history(
+    db: Session,
+    conversation_id: int,
+) -> str:
+    """
+    Build ordered conversation history from messages
+    that already exist before the current user turn.
+    """
+
+    messages = get_messages(
+        db,
+        conversation_id,
+    )
+
+    ordered_messages = sorted(
+        messages,
+        key=lambda message: (
+            message.created_at,
+            message.id,
+        ),
+    )
+
+    history_lines = []
+
+    for message in ordered_messages:
+        role = message.role.lower()
+
+        if role == "user":
+            speaker = "User"
+        elif role == "assistant":
+            speaker = "Assistant"
+        else:
+            speaker = role.capitalize()
+
+        history_lines.append(
+            f"{speaker}: {message.content}"
+        )
+
+    return "\n".join(history_lines)
 
 
 def run_conversation_chat(
@@ -19,10 +60,10 @@ def run_conversation_chat(
     Run one complete conversation turn.
 
     Flow:
-        conversation
-            -> save user message
+        load previous conversation history
+            -> save current user message
             -> create execution
-            -> run agent
+            -> run agent with history
             -> save assistant message
             -> return execution
     """
@@ -36,7 +77,14 @@ def run_conversation_chat(
     if not conversation:
         return None
 
-    # 2. Save user message
+    # 2. Load PREVIOUS conversation history
+    # before saving the current user message.
+    conversation_history = build_conversation_history(
+        db,
+        conversation_id,
+    )
+
+    # 3. Save current user message
     create_message(
         db,
         conversation_id,
@@ -46,7 +94,7 @@ def run_conversation_chat(
         ),
     )
 
-    # 3. Create execution for the conversation's agent
+    # 4. Create execution for this conversation's agent
     execution = create_execution(
         db,
         ExecutionCreate(
@@ -55,13 +103,16 @@ def run_conversation_chat(
         ),
     )
 
-    # 4. Run Agent Runtime
-    execute_agent(execution.id)
+    # 5. Run Agent Runtime with conversation history
+    execute_agent(
+        execution.id,
+        conversation_history,
+    )
 
-    # 5. Reload execution because worker uses another DB session
+    # 6. Reload because worker uses another DB session
     db.refresh(execution)
 
-    # 6. Save assistant response
+    # 7. Save assistant response
     assistant_response = execution.output or ""
 
     create_message(

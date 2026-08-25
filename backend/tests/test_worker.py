@@ -50,7 +50,10 @@ def test_worker_calculator_pipeline(monkeypatch):
     monkeypatch.setattr(
         worker,
         "run_agent",
-        lambda model, user_input, memory_text="": "83810205",
+        lambda model,
+        user_input,
+        memory_text="",
+        conversation_history="": "83810205",
     )
 
     db = TestingSessionLocal()

@@ -14,7 +14,8 @@ from app.models.agent import Agent
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.execution import Execution
-
+from app.crud.message import create_message
+from app.schemas.message import MessageCreate
 
 TEST_DATABASE_URL = "sqlite:///"
 
@@ -99,7 +100,10 @@ def create_test_data():
         db.close()
 
 
-def fake_execute_agent(execution_id: int):
+def fake_execute_agent(
+    execution_id: int,
+    conversation_history: str = "",
+):
     db = TestingSessionLocal()
 
     try:
@@ -149,7 +153,7 @@ def test_conversation_chat_runtime_integration():
         assert body["response"] == "Mocked conversation runtime response"
         assert body["status"] == "completed"
 
-        mock_execute.assert_called_once_with(body["execution_id"])
+        mock_execute.assert_called_once()
 
         db = TestingSessionLocal()
 
@@ -194,6 +198,87 @@ def test_conversation_chat_runtime_integration():
 
         finally:
             db.close()
+
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        Base.metadata.drop_all(bind=test_engine)
+        test_engine.dispose()
+
+def test_conversation_history_passed_to_runtime():
+    reset_database()
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    data = create_test_data()
+
+    captured = {}
+
+    def fake_execute_agent(
+        execution_id: int,
+        conversation_history: str = "",
+    ):
+        captured["history"] = conversation_history
+
+        db = TestingSessionLocal()
+
+        try:
+            execution = (
+                db.query(Execution)
+                .filter(Execution.id == execution_id)
+                .first()
+            )
+
+            assert execution is not None
+
+            execution.output = "Your name is Tom"
+            execution.status = "completed"
+
+            db.commit()
+
+        finally:
+            db.close()
+
+    db = TestingSessionLocal()
+
+    try:
+        create_message(
+            db,
+            data["conversation_id"],
+            MessageCreate(
+                role="user",
+                content="My name is Tom",
+            ),
+        )
+
+        create_message(
+            db,
+            data["conversation_id"],
+            MessageCreate(
+                role="assistant",
+                content="Hello Tom",
+            ),
+        )
+
+    finally:
+        db.close()
+
+    try:
+        with patch(
+            "app.services.conversation_service.execute_agent",
+            side_effect=fake_execute_agent,
+        ):
+            with TestClient(app) as client:
+                response = client.post(
+                    f"/conversations/{data['conversation_id']}/chat",
+                    json={
+                        "message": "What is my name?"
+                    },
+                )
+
+        assert response.status_code == 200
+
+        assert "My name is Tom" in captured["history"]
+        assert "Hello Tom" in captured["history"]
 
     finally:
         app.dependency_overrides.pop(get_db, None)

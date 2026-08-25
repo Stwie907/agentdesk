@@ -11,7 +11,10 @@ from app.services.agent_runner import run_agent
 from app.crud.execution_log import create_log
 
 
-def execute_agent(execution_id: int):
+def execute_agent(
+    execution_id: int,
+    conversation_history: str = "",
+):
     db = SessionLocal()
 
     try:
@@ -69,6 +72,13 @@ def execute_agent(execution_id: int):
             for memory in memories
         )
 
+        if conversation_history:
+            create_log(
+                db,
+                execution.id,
+                "Loading conversation history",
+            )
+
         create_log(
             db,
             execution.id,
@@ -79,6 +89,7 @@ def execute_agent(execution_id: int):
             agent.model,
             execution.input,
             memory_text,
+            conversation_history,
         )
 
         execution.output = str(result)
