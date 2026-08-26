@@ -16,6 +16,7 @@ from app.models.message import Message
 from app.models.execution import Execution
 from app.crud.message import create_message
 from app.schemas.message import MessageCreate
+from app.models.memory import Memory
 
 TEST_DATABASE_URL = "sqlite:///"
 
@@ -349,6 +350,139 @@ def test_conversation_chat_extracts_and_saves_memory():
 
         finally:
             db.close()
+
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        Base.metadata.drop_all(bind=test_engine)
+        test_engine.dispose()
+
+def test_conversation_chat_auto_persists_multiple_memories():
+    reset_database()
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    data = create_test_data()
+
+    try:
+        with patch(
+            "app.services.conversation_service.execute_agent",
+            side_effect=fake_execute_agent,
+        ):
+            with TestClient(app) as client:
+                response = client.post(
+                    f"/conversations/{data['conversation_id']}/chat",
+                    json={
+                        "message": "My name is Tom and I like Python"
+                    },
+                )
+
+        assert response.status_code == 200
+
+        db = TestingSessionLocal()
+
+        try:
+            memories = (
+                db.query(Memory)
+                .filter(
+                    Memory.agent_id == data["agent_id"]
+                )
+                .order_by(Memory.id)
+                .all()
+            )
+
+            contents = [
+                memory.content
+                for memory in memories
+            ]
+
+            assert "User's name is Tom." in contents
+            assert "User likes Python." in contents
+            assert len(memories) == 2
+
+        finally:
+            db.close()
+
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        Base.metadata.drop_all(bind=test_engine)
+        test_engine.dispose()
+
+def test_persisted_memory_is_retrieved_on_next_turn():
+    reset_database()
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    data = create_test_data()
+
+    captured = {}
+
+    def fake_execute_agent_with_memory(
+        execution_id: int,
+        conversation_history: str = "",
+    ):
+        db = TestingSessionLocal()
+
+        try:
+            execution = (
+                db.query(Execution)
+                .filter(Execution.id == execution_id)
+                .first()
+            )
+
+            assert execution is not None
+
+            from app.services.memory_service import build_memory_context
+
+            memory_text = build_memory_context(
+                db,
+                data["agent_id"],
+                execution.input,
+            )
+
+            captured["memory_text"] = memory_text
+            captured["user_input"] = execution.input
+
+            execution.output = "Your name is Tom"
+            execution.status = "completed"
+
+            db.commit()
+
+        finally:
+            db.close()
+
+    try:
+        # First turn: create persistent memory automatically.
+        with patch(
+            "app.services.conversation_service.execute_agent",
+            side_effect=fake_execute_agent,
+        ):
+            with TestClient(app) as client:
+                first_response = client.post(
+                    f"/conversations/{data['conversation_id']}/chat",
+                    json={
+                        "message": "My name is Tom"
+                    },
+                )
+
+        assert first_response.status_code == 200
+
+        # Second turn: ask something that should retrieve that memory.
+        with patch(
+            "app.services.conversation_service.execute_agent",
+            side_effect=fake_execute_agent_with_memory,
+        ):
+            with TestClient(app) as client:
+                second_response = client.post(
+                    f"/conversations/{data['conversation_id']}/chat",
+                    json={
+                        "message": "What is the user's name?"
+                    },
+                )
+
+        assert second_response.status_code == 200
+
+        assert captured["user_input"] == "What is the user's name?"
+        assert "User's name is Tom." in captured["memory_text"]
 
     finally:
         app.dependency_overrides.pop(get_db, None)
