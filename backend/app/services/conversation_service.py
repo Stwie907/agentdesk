@@ -8,6 +8,8 @@ from app.schemas.message import MessageCreate
 from app.schemas.execution import ExecutionCreate
 
 from app.workers.execution_worker import execute_agent
+from app.services.memory_extractor import extract_memories
+from app.services.memory_service import save_agent_memory
 
 
 def build_conversation_history(
@@ -93,6 +95,16 @@ def run_conversation_chat(
             content=user_input,
         ),
     )
+
+    # Extract long-term memories from the current user message.
+    extracted_memories = extract_memories(user_input)
+
+    for memory_content in extracted_memories:
+        save_agent_memory(
+            db,
+            conversation.agent_id,
+            memory_content,
+        )
 
     # 4. Create execution for this conversation's agent
     execution = create_execution(
