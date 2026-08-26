@@ -2,7 +2,8 @@ import requests
 
 from app.runtime.planner import plan
 from app.runtime.executor import execute_tool
-
+from app.database import SessionLocal
+from app.services.execution_trace import TraceEvent, trace_event
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 
@@ -30,6 +31,7 @@ def run_agent(
     user_input: str,
     memory_text: str = "",
     conversation_history: str = "",
+    execution_id: int | None = None,
 ) -> str:
     """
     Agent runtime entry point.
@@ -41,27 +43,70 @@ def run_agent(
             -> combine memory + conversation history
             -> LLM
             -> final response
+
+    When execution_id is provided, runtime trace events are persisted.
     """
 
-    # Planner only decides based on the CURRENT user request.
-    # Old conversation messages should not affect tool selection.
+    def trace(event: TraceEvent, message: str):
+        if execution_id is None:
+            return
+
+        db = SessionLocal()
+
+        try:
+            trace_event(
+                db,
+                execution_id,
+                event,
+                message,
+            )
+        finally:
+            db.close()
+
+    # ---------------------------------------------------------
+    # 1. Planner
+    # ---------------------------------------------------------
+
     task = plan(user_input)
 
     tool_name = task.get("tool")
     tool_input = task.get("input", user_input)
 
+    trace(
+        TraceEvent.PLANNER_DECISION,
+        f"tool={tool_name or 'none'}",
+    )
+
+    # ---------------------------------------------------------
+    # 2. Optional tool execution
+    # ---------------------------------------------------------
+
     tool_result = ""
 
     if tool_name:
+        trace(
+            TraceEvent.TOOL_CALLED,
+            f"tool={tool_name}",
+        )
+
         tool_result = execute_tool(
             tool_name,
             tool_input,
+        )
+
+        trace(
+            TraceEvent.TOOL_RESULT,
+            f"tool={tool_name}; result={tool_result}",
         )
 
         # Calculator output is deterministic,
         # so it can be returned directly.
         if tool_name == "calculator":
             return str(tool_result)
+
+    # ---------------------------------------------------------
+    # 3. Build final LLM prompt
+    # ---------------------------------------------------------
 
     prompt = f"""
 你是一个 AI Agent。
@@ -90,7 +135,23 @@ def run_agent(
 请回答用户。
 """
 
-    return call_llm(
+    # ---------------------------------------------------------
+    # 4. LLM
+    # ---------------------------------------------------------
+
+    trace(
+        TraceEvent.LLM_CALLED,
+        f"model={model}",
+    )
+
+    result = call_llm(
         model,
         prompt,
     )
+
+    trace(
+        TraceEvent.LLM_COMPLETED,
+        f"model={model}",
+    )
+
+    return result
