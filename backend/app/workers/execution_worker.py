@@ -4,10 +4,10 @@ from app.constants import ExecutionStatus
 
 from app.models.execution import Execution
 from app.models.agent import Agent
+
 from app.services.memory_service import build_memory_context
 from app.services.agent_runner import run_agent
-
-from app.crud.execution_log import create_log
+from app.services.execution_trace import TraceEvent, trace_event
 
 
 def execute_agent(
@@ -26,14 +26,22 @@ def execute_agent(
         if not execution:
             return
 
+        # ---------------------------------------------------------
+        # Execution started
+        # ---------------------------------------------------------
+
         execution.status = ExecutionStatus.RUNNING.value
         db.commit()
 
-        create_log(
+        trace_event(
             db,
             execution.id,
-            "Execution started",
+            TraceEvent.EXECUTION_STARTED,
         )
+
+        # ---------------------------------------------------------
+        # Load agent
+        # ---------------------------------------------------------
 
         agent = (
             db.query(Agent)
@@ -45,19 +53,25 @@ def execute_agent(
             execution.status = ExecutionStatus.FAILED.value
             execution.output = "Agent not found"
 
-            create_log(
+            trace_event(
                 db,
                 execution.id,
-                "Agent not found",
+                TraceEvent.EXECUTION_FAILED,
+                detail="Agent not found",
+                level="error",
             )
 
             db.commit()
             return
 
-        create_log(
+        # ---------------------------------------------------------
+        # Memory retrieval
+        # ---------------------------------------------------------
+
+        trace_event(
             db,
             execution.id,
-            "Loading memory",
+            TraceEvent.MEMORY_RETRIEVAL_STARTED,
         )
 
         memory_text = build_memory_context(
@@ -66,17 +80,36 @@ def execute_agent(
             execution.input,
         )
 
-        if conversation_history:
-            create_log(
-                db,
-                execution.id,
-                "Loading conversation history",
-            )
-
-        create_log(
+        trace_event(
             db,
             execution.id,
-            "Running agent",
+            TraceEvent.MEMORY_RETRIEVED,
+            detail=(
+                "Relevant memory loaded"
+                if memory_text
+                else "No relevant memory found"
+            ),
+        )
+
+        # ---------------------------------------------------------
+        # Conversation history
+        # ---------------------------------------------------------
+
+        if conversation_history:
+            trace_event(
+                db,
+                execution.id,
+                TraceEvent.CONVERSATION_HISTORY_LOADED,
+            )
+
+        # ---------------------------------------------------------
+        # Agent Runtime
+        # ---------------------------------------------------------
+
+        trace_event(
+            db,
+            execution.id,
+            TraceEvent.AGENT_STARTED,
         )
 
         result = run_agent(
@@ -84,15 +117,20 @@ def execute_agent(
             execution.input,
             memory_text,
             conversation_history,
+            execution_id=execution.id,
         )
+
+        # ---------------------------------------------------------
+        # Execution completed
+        # ---------------------------------------------------------
 
         execution.output = str(result)
         execution.status = ExecutionStatus.COMPLETED.value
 
-        create_log(
+        trace_event(
             db,
             execution.id,
-            "Execution completed",
+            TraceEvent.EXECUTION_COMPLETED,
         )
 
         db.commit()
@@ -110,10 +148,12 @@ def execute_agent(
             execution.output = str(e)
             execution.status = ExecutionStatus.FAILED.value
 
-            create_log(
+            trace_event(
                 db,
                 execution.id,
-                str(e),
+                TraceEvent.EXECUTION_FAILED,
+                detail=str(e),
+                level="error",
             )
 
             db.commit()

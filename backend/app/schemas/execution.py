@@ -1,4 +1,5 @@
 from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -13,6 +14,16 @@ class ExecutionRead(BaseModel):
     input: str
     output: str | None
     status: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ExecutionLogRead(BaseModel):
+    id: int
+    execution_id: int
+    level: str
+    message: str
     created_at: datetime
 
     model_config = {"from_attributes": True}

@@ -2,7 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.execution import ExecutionCreate, ExecutionRead
+from app.schemas.execution import (
+    ExecutionCreate,
+    ExecutionRead,
+    ExecutionLogRead,
+)
 from app.crud.execution import (
     create_execution,
     get_execution
@@ -11,6 +15,7 @@ from app.crud.execution import (
 from fastapi import BackgroundTasks
 from app.workers.execution_worker import execute_agent
 from app.models.agent import Agent
+from app.crud.execution_log import get_logs
 
 router = APIRouter(
     prefix="/executions",
@@ -72,3 +77,27 @@ def read(
         )
 
     return execution
+
+@router.get(
+    "/{execution_id}/logs",
+    response_model=list[ExecutionLogRead],
+)
+def read_execution_logs(
+    execution_id: int,
+    db: Session = Depends(get_db),
+):
+    execution = get_execution(
+        db,
+        execution_id,
+    )
+
+    if not execution:
+        raise HTTPException(
+            status_code=404,
+            detail="Execution not found",
+        )
+
+    return get_logs(
+        db,
+        execution_id,
+    )

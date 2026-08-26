@@ -53,7 +53,8 @@ def test_worker_calculator_pipeline(monkeypatch):
         lambda model,
         user_input,
         memory_text="",
-        conversation_history="": "83810205",
+        conversation_history="",
+        execution_id=None: "83810205",
     )
 
     db = TestingSessionLocal()
@@ -148,10 +149,14 @@ def test_worker_calculator_pipeline(monkeypatch):
 
         messages = [log.message for log in logs]
 
-        assert "Execution started" in messages
-        assert "Loading memory" in messages
-        assert "Running agent" in messages
-        assert "Execution completed" in messages
+        assert "execution_started" in messages
+        assert "memory_retrieval_started" in messages
+        assert any(
+            message.startswith("memory_retrieved")
+            for message in messages
+        )
+        assert "agent_started" in messages
+        assert "execution_completed" in messages
 
     finally:
         db.close()
@@ -197,13 +202,15 @@ def test_worker_passes_memory_to_agent_runtime(monkeypatch):
         user_input,
         memory_text="",
         conversation_history="",
-    ):
+        execution_id=None,
+ ):
         captured["model"] = model
         captured["user_input"] = user_input
         captured["memory_text"] = memory_text
         captured["conversation_history"] = conversation_history
+        captured["execution_id"] = execution_id
 
-        return "Memory runtime response"
+        return "Your name is Tom"
 
     monkeypatch.setattr(
         worker,
@@ -319,7 +326,7 @@ def test_worker_passes_memory_to_agent_runtime(monkeypatch):
 
         assert execution is not None
         assert execution.status == "completed"
-        assert execution.output == "Memory runtime response"
+        assert execution.output == "Your name is Tom"
 
     finally:
         db.close()
