@@ -8,6 +8,8 @@ from app.models.agent import Agent
 from app.services.memory_service import build_memory_context
 from app.services.agent_runner import run_agent
 from app.services.execution_trace import TraceEvent, trace_event
+from app.services.execution_failure import classify_failure
+from app.services.execution_retry import should_retry
 
 
 def execute_agent(
@@ -26,10 +28,9 @@ def execute_agent(
         if not execution:
             return
 
-        # ---------------------------------------------------------
+        # --------------------------------------------------------
         # Execution started
-        # ---------------------------------------------------------
-
+        # --------------------------------------------------------
         execution.status = ExecutionStatus.RUNNING.value
         db.commit()
 
@@ -39,10 +40,9 @@ def execute_agent(
             TraceEvent.EXECUTION_STARTED,
         )
 
-        # ---------------------------------------------------------
+        # --------------------------------------------------------
         # Load agent
-        # ---------------------------------------------------------
-
+        # --------------------------------------------------------
         agent = (
             db.query(Agent)
             .filter(Agent.id == execution.agent_id)
@@ -64,10 +64,9 @@ def execute_agent(
             db.commit()
             return
 
-        # ---------------------------------------------------------
+        # --------------------------------------------------------
         # Memory retrieval
-        # ---------------------------------------------------------
-
+        # --------------------------------------------------------
         trace_event(
             db,
             execution.id,
@@ -91,10 +90,9 @@ def execute_agent(
             ),
         )
 
-        # ---------------------------------------------------------
+        # --------------------------------------------------------
         # Conversation history
-        # ---------------------------------------------------------
-
+        # --------------------------------------------------------
         if conversation_history:
             trace_event(
                 db,
@@ -102,61 +100,90 @@ def execute_agent(
                 TraceEvent.CONVERSATION_HISTORY_LOADED,
             )
 
-        # ---------------------------------------------------------
+        # --------------------------------------------------------
         # Agent Runtime
-        # ---------------------------------------------------------
-
+        # --------------------------------------------------------
         trace_event(
             db,
             execution.id,
             TraceEvent.AGENT_STARTED,
         )
 
-        result = run_agent(
-            agent.model,
-            execution.input,
-            memory_text,
-            conversation_history,
-            execution_id=execution.id,
-        )
+        retry_count = 0
 
-        # ---------------------------------------------------------
-        # Execution completed
-        # ---------------------------------------------------------
+        while True:
+            try:
+                result = run_agent(
+                    agent.model,
+                    execution.input,
+                    memory_text,
+                    conversation_history,
+                    execution_id=execution.id,
+                )
 
-        execution.output = str(result)
-        execution.status = ExecutionStatus.COMPLETED.value
+                execution.output = str(result)
+                execution.status = ExecutionStatus.COMPLETED.value
 
-        trace_event(
-            db,
-            execution.id,
-            TraceEvent.EXECUTION_COMPLETED,
-        )
+                trace_event(
+                    db,
+                    execution.id,
+                    TraceEvent.EXECUTION_COMPLETED,
+                )
 
-        db.commit()
+                db.commit()
+                return
 
-    except Exception as e:
-        db.rollback()
+            except Exception as e:
+                db.rollback()
 
-        execution = (
-            db.query(Execution)
-            .filter(Execution.id == execution_id)
-            .first()
-        )
+                failure = classify_failure(e)
 
-        if execution:
-            execution.output = str(e)
-            execution.status = ExecutionStatus.FAILED.value
+                if should_retry(
+                    failure,
+                    retry_count,
+                ):
+                    retry_count += 1
 
-            trace_event(
-                db,
-                execution.id,
-                TraceEvent.EXECUTION_FAILED,
-                detail=str(e),
-                level="error",
-            )
+                    trace_event(
+                        db,
+                        execution.id,
+                        TraceEvent.EXECUTION_RETRYING,
+                        detail=(
+                            f"attempt={retry_count}; "
+                            f"type={failure.failure_type.value}; "
+                            f"message={failure.message}"
+                        ),
+                        level="warning",
+                    )
 
-            db.commit()
+                    continue
+
+                execution = (
+                    db.query(Execution)
+                    .filter(Execution.id == execution_id)
+                    .first()
+                )
+
+                if execution:
+                    execution.output = failure.message
+                    execution.status = ExecutionStatus.FAILED.value
+
+                    trace_event(
+                        db,
+                        execution.id,
+                        TraceEvent.EXECUTION_FAILED,
+                        detail=(
+                            f"type={failure.failure_type.value}; "
+                            f"retryable={str(failure.retryable).lower()}; "
+                            f"retries={retry_count}; "
+                            f"message={failure.message}"
+                        ),
+                        level="error",
+                    )
+
+                    db.commit()
+
+                return
 
     finally:
         db.close()

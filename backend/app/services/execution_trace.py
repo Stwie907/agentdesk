@@ -24,6 +24,7 @@ class TraceEvent(str, Enum):
 
     EXECUTION_COMPLETED = "execution_completed"
     EXECUTION_FAILED = "execution_failed"
+    EXECUTION_RETRYING = "execution_retrying"
     PLANNER_DECISION = "planner_decision"
     TOOL_CALLED = "tool_called"
     TOOL_RESULT = "tool_result"
