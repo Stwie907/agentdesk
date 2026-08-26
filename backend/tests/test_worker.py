@@ -278,7 +278,7 @@ def test_worker_passes_memory_to_agent_runtime(monkeypatch):
         # ---------------------------------------------------------
         execution = Execution(
             agent_id=agent.id,
-            input="What do you remember about me?",
+            input="What is the user's name?",
         )
 
         db.add(execution)
@@ -301,10 +301,9 @@ def test_worker_passes_memory_to_agent_runtime(monkeypatch):
     assert "memory_text" in captured
 
     assert "The user's name is Tom." in captured["memory_text"]
-    assert "The user likes Python." in captured["memory_text"]
-
+    assert "The user likes Python." not in captured["memory_text"]
     assert captured["model"] == "qwen2.5:7b"
-    assert captured["user_input"] == "What do you remember about me?"
+    assert captured["user_input"] == "What is the user's name?"
 
     # ---------------------------------------------------------
     # Verify execution result

@@ -63,6 +63,7 @@ def execute_agent(
         memory_text = build_memory_context(
             db,
             agent.id,
+            execution.input,
         )
 
         if conversation_history:
