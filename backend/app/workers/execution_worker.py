@@ -4,8 +4,7 @@ from app.constants import ExecutionStatus
 
 from app.models.execution import Execution
 from app.models.agent import Agent
-from app.models.memory import Memory
-
+from app.services.memory_service import build_memory_context
 from app.services.agent_runner import run_agent
 
 from app.crud.execution_log import create_log
@@ -61,15 +60,9 @@ def execute_agent(
             "Loading memory",
         )
 
-        memories = (
-            db.query(Memory)
-            .filter(Memory.agent_id == agent.id)
-            .all()
-        )
-
-        memory_text = "\n".join(
-            memory.content
-            for memory in memories
+        memory_text = build_memory_context(
+            db,
+            agent.id,
         )
 
         if conversation_history:

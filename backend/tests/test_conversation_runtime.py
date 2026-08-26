@@ -284,3 +284,73 @@ def test_conversation_history_passed_to_runtime():
         app.dependency_overrides.pop(get_db, None)
         Base.metadata.drop_all(bind=test_engine)
         test_engine.dispose()
+
+
+def test_conversation_chat_extracts_and_saves_memory():
+    reset_database()
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    data = create_test_data()
+
+    def fake_execute_agent(
+        execution_id: int,
+        conversation_history: str = "",
+    ):
+        db = TestingSessionLocal()
+
+        try:
+            execution = (
+                db.query(Execution)
+                .filter(Execution.id == execution_id)
+                .first()
+            )
+
+            assert execution is not None
+
+            execution.output = "Nice to meet you, Tom."
+            execution.status = "completed"
+
+            db.commit()
+
+        finally:
+            db.close()
+
+    try:
+        with patch(
+            "app.services.conversation_service.execute_agent",
+            side_effect=fake_execute_agent,
+        ):
+            with TestClient(app) as client:
+                response = client.post(
+                    f"/conversations/{data['conversation_id']}/chat",
+                    json={
+                        "message": "My name is Tom"
+                    },
+                )
+
+        assert response.status_code == 200
+
+        db = TestingSessionLocal()
+
+        try:
+            from app.models.memory import Memory
+
+            memories = (
+                db.query(Memory)
+                .filter(
+                    Memory.agent_id == data["agent_id"]
+                )
+                .all()
+            )
+
+            assert len(memories) == 1
+            assert memories[0].content == "User's name is Tom."
+
+        finally:
+            db.close()
+
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        Base.metadata.drop_all(bind=test_engine)
+        test_engine.dispose()

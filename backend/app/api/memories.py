@@ -1,62 +1,73 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
-from app.models.memory import Memory
-from app.schemas.memory import MemoryCreate, MemoryResponse
+from app.database import get_db
+
+from app.schemas.memory import (
+    MemoryCreate,
+    MemoryResponse,
+)
+
+from app.crud.memory import (
+    create_memory,
+    get_memory,
+    get_memories_by_agent,
+    delete_memory,
+)
 
 
 router = APIRouter(
     prefix="/memories",
-    tags=["memories"]
+    tags=["memories"],
 )
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
 
 
 @router.post(
     "",
-    response_model=MemoryResponse
+    response_model=MemoryResponse,
 )
-def create_memory(
+def create(
     memory: MemoryCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-
-    new_memory = Memory(
-        agent_id=memory.agent_id,
-        content=memory.content
+    return create_memory(
+        db,
+        memory,
     )
-
-    db.add(new_memory)
-    db.commit()
-    db.refresh(new_memory)
-
-    return new_memory
-
 
 
 @router.get(
     "/{agent_id}",
-    response_model=list[MemoryResponse]
+    response_model=list[MemoryResponse],
 )
-def get_memories(
+def list_agent_memories(
     agent_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-
-    return (
-        db.query(Memory)
-        .filter(
-            Memory.agent_id == agent_id
-        )
-        .all()
+    return get_memories_by_agent(
+        db,
+        agent_id,
     )
 
+
+@router.delete(
+    "/item/{memory_id}",
+)
+def remove(
+    memory_id: int,
+    db: Session = Depends(get_db),
+):
+    memory = delete_memory(
+        db,
+        memory_id,
+    )
+
+    if not memory:
+        raise HTTPException(
+            status_code=404,
+            detail="Memory not found",
+        )
+
+    return {
+        "message": "Memory deleted successfully"
+    }
