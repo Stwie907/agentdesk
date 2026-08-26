@@ -233,3 +233,219 @@ def test_save_agent_memory_updates_conflicting_name():
         db.close()
         Base.metadata.drop_all(bind=test_engine)
         test_engine.dispose()
+
+def test_retrieve_relevant_memories():
+    from app.models.memory import Memory
+    from app.services.memory_service import retrieve_relevant_memories
+
+    Base.metadata.drop_all(bind=test_engine)
+    Base.metadata.create_all(bind=test_engine)
+
+    db = TestingSessionLocal()
+
+    try:
+        user = User(
+            username="memory-retrieval-user",
+            email="memory-retrieval@example.com",
+        )
+
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        project = Project(
+            name="Memory Retrieval Project",
+            description="Memory retrieval test project",
+            owner_id=user.id,
+        )
+
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+
+        agent = Agent(
+            project_id=project.id,
+            name="Memory Retrieval Agent",
+            description="Agent used to test memory retrieval",
+            model="qwen2.5:7b",
+        )
+
+        db.add(agent)
+        db.commit()
+        db.refresh(agent)
+
+        db.add_all(
+            [
+                Memory(
+                    agent_id=agent.id,
+                    content="The user's name is Tom.",
+                ),
+                Memory(
+                    agent_id=agent.id,
+                    content="The user likes Python.",
+                ),
+                Memory(
+                    agent_id=agent.id,
+                    content="The user lives in Tokyo.",
+                ),
+            ]
+        )
+
+        db.commit()
+
+        memories = retrieve_relevant_memories(
+            db,
+            agent.id,
+            "What is the user's name?",
+        )
+
+        assert len(memories) >= 1
+
+        contents = [
+            memory.content
+            for memory in memories
+        ]
+
+        assert "The user's name is Tom." in contents
+
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=test_engine)
+        test_engine.dispose()
+
+
+def test_retrieve_memories_respects_limit():
+    from app.models.memory import Memory
+    from app.services.memory_service import retrieve_relevant_memories
+
+    Base.metadata.drop_all(bind=test_engine)
+    Base.metadata.create_all(bind=test_engine)
+
+    db = TestingSessionLocal()
+
+    try:
+        user = User(
+            username="memory-limit-user",
+            email="memory-limit@example.com",
+        )
+
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        project = Project(
+            name="Memory Limit Project",
+            description="Memory retrieval limit test",
+            owner_id=user.id,
+        )
+
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+
+        agent = Agent(
+            project_id=project.id,
+            name="Memory Limit Agent",
+            description="Agent used to test retrieval limit",
+            model="qwen2.5:7b",
+        )
+
+        db.add(agent)
+        db.commit()
+        db.refresh(agent)
+
+        db.add_all(
+            [
+                Memory(
+                    agent_id=agent.id,
+                    content="The user likes Python.",
+                ),
+                Memory(
+                    agent_id=agent.id,
+                    content="The user likes Java.",
+                ),
+                Memory(
+                    agent_id=agent.id,
+                    content="The user likes Go.",
+                ),
+            ]
+        )
+
+        db.commit()
+
+        memories = retrieve_relevant_memories(
+            db,
+            agent.id,
+            "What does the user like?",
+            limit=2,
+        )
+
+        assert len(memories) == 2
+
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=test_engine)
+        test_engine.dispose()
+
+
+def test_retrieve_relevant_memories_returns_empty_when_no_match():
+    from app.models.memory import Memory
+    from app.services.memory_service import retrieve_relevant_memories
+
+    Base.metadata.drop_all(bind=test_engine)
+    Base.metadata.create_all(bind=test_engine)
+
+    db = TestingSessionLocal()
+
+    try:
+        user = User(
+            username="memory-no-match-user",
+            email="memory-no-match@example.com",
+        )
+
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        project = Project(
+            name="Memory No Match Project",
+            description="Memory no-match retrieval test",
+            owner_id=user.id,
+        )
+
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+
+        agent = Agent(
+            project_id=project.id,
+            name="Memory No Match Agent",
+            description="Agent used to test no-match retrieval",
+            model="qwen2.5:7b",
+        )
+
+        db.add(agent)
+        db.commit()
+        db.refresh(agent)
+
+        db.add(
+            Memory(
+                agent_id=agent.id,
+                content="The user likes Python.",
+            )
+        )
+
+        db.commit()
+
+        memories = retrieve_relevant_memories(
+            db,
+            agent.id,
+            "What is the weather today?",
+        )
+
+        assert memories == []
+
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=test_engine)
+        test_engine.dispose()
