@@ -32,6 +32,7 @@ def run_agent(
     memory_text: str = "",
     conversation_history: str = "",
     execution_id: int | None = None,
+    allowed_tools: list[str] | None = None,
 ) -> str:
     """
     Agent runtime entry point.
@@ -67,7 +68,10 @@ def run_agent(
     # 1. Planner
     # ---------------------------------------------------------
 
-    task = plan(user_input)
+    task = plan(
+        user_input,
+        allowed_tools=allowed_tools,
+    )
 
     tool_name = task.get("tool")
     tool_input = task.get("input", user_input)
@@ -92,6 +96,7 @@ def run_agent(
         tool_result = execute_tool(
             tool_name,
             tool_input,
+            allowed_tools=allowed_tools,
         )
 
         trace(

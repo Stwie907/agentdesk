@@ -54,7 +54,8 @@ def test_worker_calculator_pipeline(monkeypatch):
         user_input,
         memory_text="",
         conversation_history="",
-        execution_id=None: "83810205",
+        execution_id=None,
+        allowed_tools=None: "83810205",
     )
 
     db = TestingSessionLocal()
@@ -203,12 +204,14 @@ def test_worker_passes_memory_to_agent_runtime(monkeypatch):
         memory_text="",
         conversation_history="",
         execution_id=None,
+        allowed_tools=None,
  ):
         captured["model"] = model
         captured["user_input"] = user_input
         captured["memory_text"] = memory_text
         captured["conversation_history"] = conversation_history
         captured["execution_id"] = execution_id
+        captured["allowed_tools"] = allowed_tools
 
         return "Your name is Tom"
 
