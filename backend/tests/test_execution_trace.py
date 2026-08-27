@@ -121,7 +121,7 @@ def test_runtime_trace_records_planner_and_tool_events(monkeypatch):
         monkeypatch.setattr(
             agent_runner,
             "plan",
-            lambda user_input: {
+            lambda user_input,allowed_tools=None: {
                 "tool": "calculator",
                 "input": "12345*6789",
             },
@@ -130,7 +130,7 @@ def test_runtime_trace_records_planner_and_tool_events(monkeypatch):
         monkeypatch.setattr(
             agent_runner,
             "execute_tool",
-            lambda tool_name, tool_input: "83810205",
+            lambda tool_name, tool_input, allowed_tools=None: "83810205",
         )
 
         result = agent_runner.run_agent(
@@ -210,7 +210,7 @@ def test_runtime_trace_records_llm_events(monkeypatch):
         monkeypatch.setattr(
             agent_runner,
             "plan",
-            lambda user_input: {
+            lambda user_input,allowed_tools=None: {
                 "tool": None,
                 "input": user_input,
             },

@@ -1,3 +1,4 @@
+import json
 from app.database import SessionLocal
 
 from app.constants import ExecutionStatus
@@ -65,6 +66,18 @@ def execute_agent(
             return
 
         # --------------------------------------------------------
+        # Load Agent tool permissions
+        # --------------------------------------------------------
+        try:
+            allowed_tools = json.loads(agent.allowed_tools)
+
+            if not isinstance(allowed_tools, list):
+                allowed_tools = ["calculator", "datetime"]
+
+        except (json.JSONDecodeError, TypeError):
+            allowed_tools = ["calculator", "datetime"]
+
+        # --------------------------------------------------------
         # Memory retrieval
         # --------------------------------------------------------
         trace_event(
@@ -119,7 +132,8 @@ def execute_agent(
                     memory_text,
                     conversation_history,
                     execution_id=execution.id,
-                )
+                    allowed_tools=allowed_tools,
+               )
 
                 execution.output = str(result)
                 execution.status = ExecutionStatus.COMPLETED.value

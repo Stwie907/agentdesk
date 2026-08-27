@@ -36,6 +36,12 @@ class Agent(Base):
         nullable=False
     )
 
+    allowed_tools = Column(
+        Text,
+        nullable=False,
+        default='["calculator", "datetime"]',
+    )
+
     created_at = Column(
         DateTime,
         default=datetime.utcnow
