@@ -4,7 +4,23 @@ from app.tools.base import ToolArgumentsError
 from app.tools.registry import get_tool
 
 
-class ToolPermissionDenied(Exception):
+class ToolError(Exception):
+    """
+    Base exception for tool execution failures.
+    """
+
+
+class ToolNotFoundError(ToolError):
+    """
+    Raised when the requested tool does not exist in the registry.
+    """
+
+    def __init__(self, tool_name: str):
+        self.tool_name = tool_name
+        super().__init__(f"Tool '{tool_name}' not found")
+
+
+class ToolPermissionDenied(ToolError):
     """
     Raised when an Agent tries to execute a tool that it is not
     allowed to use.
@@ -17,6 +33,19 @@ class ToolPermissionDenied(Exception):
         )
 
 
+class ToolExecutionError(ToolError):
+    """
+    Raised when a registered tool fails during execution.
+    """
+
+    def __init__(self, tool_name: str, message: str):
+        self.tool_name = tool_name
+        self.original_message = message
+        super().__init__(
+            f"Tool '{tool_name}' execution failed: {message}"
+        )
+
+
 def execute_tool(
     tool_name: str,
     input: Union[str, Dict[str, Any]],
@@ -25,14 +54,18 @@ def execute_tool(
     """
     Execute a registered tool.
 
-    Responsibilities:
-    - verify tool permission
-    - find the tool from the registry
-    - delegate argument validation to the tool contract
-    - execute the tool
-    - return the result
+    Error contract:
+    - ToolPermissionDenied:
+      the tool exists conceptually but the Agent is not allowed to use it.
+    - ToolNotFoundError:
+      the requested tool is not registered.
+    - ToolArgumentsError:
+      the tool received invalid arguments.
+    - ToolExecutionError:
+      the tool itself failed while executing.
 
-    The executor deliberately contains no tool-specific logic.
+    ToolArgumentsError is deliberately allowed to propagate unchanged
+    because it already represents a structured tool-contract failure.
     """
 
     if (
@@ -44,6 +77,16 @@ def execute_tool(
     tool = get_tool(tool_name)
 
     if not tool:
-        return "Tool not found"
+        raise ToolNotFoundError(tool_name)
 
-    return tool.execute(input)
+    try:
+        return tool.execute(input)
+
+    except ToolArgumentsError:
+        raise
+
+    except Exception as exc:
+        raise ToolExecutionError(
+            tool_name,
+            str(exc),
+        ) from exc
