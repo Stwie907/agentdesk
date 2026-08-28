@@ -1,3 +1,4 @@
+from typing import Any, Dict, Union
 from datetime import datetime
 
 from app.tools.base import BaseTool
@@ -11,13 +12,21 @@ class DateTimeTool(BaseTool):
     )
 
     input_schema = {
-        "type": "string",
-        "description": (
-            "Optional user text. This tool does not require a specific input."
-        ),
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": False,
     }
 
-    def run(self, input_text: str) -> str:
+    def run(
+        self,
+        arguments: Union[str, Dict[str, Any]],
+    ) -> str:
+        # Backward compatibility:
+        # old runtime may still pass an empty string.
+        if isinstance(arguments, str):
+            arguments = {}
+
         now = datetime.now()
 
         return now.strftime("%Y-%m-%d %H:%M:%S")

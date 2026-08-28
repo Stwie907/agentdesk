@@ -1,5 +1,6 @@
-from typing import Optional
+from typing import Any, Dict, List, Optional, Union
 
+from app.tools.base import ToolArgumentsError
 from app.tools.registry import get_tool
 
 
@@ -11,13 +12,15 @@ class ToolPermissionDenied(Exception):
 
     def __init__(self, tool_name: str):
         self.tool_name = tool_name
-        super().__init__(f"Tool '{tool_name}' is not allowed for this agent")
+        super().__init__(
+            f"Tool '{tool_name}' is not allowed for this agent"
+        )
 
 
 def execute_tool(
     tool_name: str,
-    input: str,
-    allowed_tools: Optional[list[str]] = None,
+    input: Union[str, Dict[str, Any]],
+    allowed_tools: Optional[List[str]] = None,
 ):
     """
     Execute a registered tool.
@@ -25,19 +28,17 @@ def execute_tool(
     Responsibilities:
     - verify tool permission
     - find the tool from the registry
+    - delegate argument validation to the tool contract
     - execute the tool
-    - return the tool result
+    - return the result
 
-    Permission behavior:
-    - allowed_tools=None keeps backward compatibility
-    - when allowed_tools is provided, the requested tool must
-      explicitly appear in the list
-
-    Database execution lifecycle and logging are handled
-    by the worker/runtime layer, not by the tool executor.
+    The executor deliberately contains no tool-specific logic.
     """
 
-    if allowed_tools is not None and tool_name not in allowed_tools:
+    if (
+        allowed_tools is not None
+        and tool_name not in allowed_tools
+    ):
         raise ToolPermissionDenied(tool_name)
 
     tool = get_tool(tool_name)
@@ -45,4 +46,4 @@ def execute_tool(
     if not tool:
         return "Tool not found"
 
-    return tool.run(input)
+    return tool.execute(input)

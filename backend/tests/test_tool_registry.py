@@ -80,8 +80,14 @@ def test_registry_returns_tool_metadata():
     assert metadata is not None
     assert metadata["name"] == "calculator"
     assert metadata["description"]
-    assert metadata["input_schema"]["type"] == "string"
-
+    assert metadata["input_schema"]["type"] == "object"
+    assert metadata["input_schema"]["required"] == ["expression"]
+    assert "expression" in metadata["input_schema"]["properties"]
+    assert (
+        metadata["input_schema"]["properties"]["expression"]["type"]
+        == "string"
+    )
+    assert metadata["input_schema"]["additionalProperties"] is False
 
 def test_registry_lists_tool_metadata():
     metadata = list_tool_metadata()
