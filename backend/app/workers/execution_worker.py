@@ -138,6 +138,13 @@ def execute_agent(
                 execution.output = str(result)
                 execution.status = ExecutionStatus.COMPLETED.value
 
+                # Persist retry metadata.
+                execution.retry_count = retry_count
+
+                # A successful final execution must not expose stale failure metadata.
+                execution.failure_type = None
+                execution.failure_message = None
+
                 trace_event(
                     db,
                     execution.id,
@@ -181,6 +188,11 @@ def execute_agent(
                 if execution:
                     execution.output = failure.message
                     execution.status = ExecutionStatus.FAILED.value
+
+                    # Persist final retry/failure metadata.
+                    execution.retry_count = retry_count
+                    execution.failure_type = failure.failure_type.value
+                    execution.failure_message = failure.message
 
                     trace_event(
                         db,
