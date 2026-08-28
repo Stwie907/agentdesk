@@ -2,41 +2,9 @@ import json
 
 import requests
 
+from app.tools.registry import get_tool_metadata, list_tool_metadata
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-
-DEFAULT_ALLOWED_TOOLS = [
-    "calculator",
-    "datetime",
-]
-
-
-TOOL_DESCRIPTIONS = {
-    "calculator": """
-1. calculator
-用途：数学计算。
-例如：
-用户：计算12345*6789
-返回：
-{
-    "tool": "calculator",
-    "input": "12345*6789"
-}
-""",
-    "datetime": """
-2. datetime
-用途：获取当前日期和时间。
-当用户询问现在时间、当前时间、今天日期、今天几号、现在几点等信息时使用。
-例如：
-用户：现在几点？
-返回：
-{
-    "tool": "datetime",
-    "input": ""
-}
-""",
-}
-
 
 def normalize_allowed_tools(
     allowed_tools: list[str] | None,
@@ -45,17 +13,22 @@ def normalize_allowed_tools(
     Normalize the tools visible to the planner.
 
     None keeps backward compatibility and means all currently
-    supported tools are available.
+    registered tools are available.
     """
 
+    registered_names = [
+        metadata["name"]
+        for metadata in list_tool_metadata()
+    ]
+
     if allowed_tools is None:
-        return DEFAULT_ALLOWED_TOOLS.copy()
+        return registered_names
 
     normalized = []
 
     for tool_name in allowed_tools:
         if (
-            tool_name in TOOL_DESCRIPTIONS
+            tool_name in registered_names
             and tool_name not in normalized
         ):
             normalized.append(tool_name)
@@ -67,20 +40,43 @@ def build_tools_prompt(
     allowed_tools: list[str],
 ) -> str:
     """
-    Build the tool section shown to the LLM.
-
-    The planner should only know about tools that the current
-    Agent is allowed to use.
+    Build the tool section shown to the LLM dynamically
+    from Tool Registry metadata.
     """
 
     if not allowed_tools:
         return "当前 Agent 没有任何可用工具。"
 
-    return "\n".join(
-        TOOL_DESCRIPTIONS[tool_name]
-        for tool_name in allowed_tools
-    )
+    sections = []
 
+    for index, tool_name in enumerate(allowed_tools, start=1):
+        metadata = get_tool_metadata(tool_name)
+
+        if metadata is None:
+            continue
+
+        input_schema = json.dumps(
+            metadata["input_schema"],
+            ensure_ascii=False,
+        )
+
+        sections.append(
+            f"""
+{index}. {metadata["name"]}
+用途: {metadata["description"]}
+输入格式: {input_schema}
+返回:
+{{
+    "tool": "{metadata["name"]}",
+    "input": "<tool input>"
+}}
+""".strip()
+        )
+
+    if not sections:
+        return "当前 Agent 没有任何可用工具。"
+
+    return "\n\n".join(sections)
 
 def plan(
     user_input: str,
