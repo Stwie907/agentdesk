@@ -34,6 +34,22 @@ class Execution(Base):
         default="pending"
     )
 
+    retry_count = Column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    failure_type = Column(
+        String,
+        nullable=True,
+    )
+
+    failure_message = Column(
+        Text,
+        nullable=True,
+    )
+
     logs = relationship(
         "ExecutionLog",
         backref="execution"

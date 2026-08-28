@@ -14,10 +14,14 @@ class ExecutionRead(BaseModel):
     input: str
     output: str | None
     status: str
+
+    retry_count: int = 0
+    failure_type: str | None = None
+    failure_message: str | None = None
+
     created_at: datetime
 
     model_config = {"from_attributes": True}
-
 
 class ExecutionLogRead(BaseModel):
     id: int
