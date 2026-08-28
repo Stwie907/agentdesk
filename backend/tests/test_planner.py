@@ -172,3 +172,50 @@ def test_planner_none_permissions_keeps_backward_compatibility(
 
     assert result["tool"] == "calculator"
     assert result["input"] == "2+3"
+
+
+def test_planner_discovers_dynamically_registered_tool(monkeypatch):
+    from app.tools.base import BaseTool
+    from app.tools.registry import register_tool
+    import app.runtime.planner as planner
+
+    class EchoTool(BaseTool):
+        name = "echo"
+        description = "Echo the provided input."
+        input_schema = {
+            "type": "string",
+        }
+
+        def run(self, input_text: str):
+            return input_text
+
+    register_tool(EchoTool())
+
+    captured = {}
+
+    class FakeResponse:
+        def json(self):
+            return {
+                "response": '{"tool": "echo", "input": "hello"}'
+            }
+
+    def fake_post(*args, **kwargs):
+        captured["prompt"] = kwargs["json"]["prompt"]
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        planner.requests,
+        "post",
+        fake_post,
+    )
+
+    result = planner.plan(
+        "请使用 echo 工具输出 hello",
+        allowed_tools=["echo"],
+    )
+
+    assert result["tool"] == "echo"
+    assert result["input"] == "hello"
+
+    assert "echo" in captured["prompt"]
+    assert "Echo the provided input." in captured["prompt"]
