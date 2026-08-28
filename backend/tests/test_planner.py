@@ -147,6 +147,7 @@ def test_planner_no_allowed_tools_skips_llm(
 
     assert result == {
         "tool": None,
+        "arguments": {},
         "input": "现在几点？",
     }
 
@@ -219,3 +220,66 @@ def test_planner_discovers_dynamically_registered_tool(monkeypatch):
 
     assert "echo" in captured["prompt"]
     assert "Echo the provided input." in captured["prompt"]
+
+def test_planner_supports_structured_arguments(monkeypatch):
+    class FakeResponse:
+        def json(self):
+            return {
+                "response": json.dumps(
+                    {
+                        "tool": "calculator",
+                        "arguments": {
+                            "expression": "12345*6789",
+                        },
+                    }
+                )
+            }
+
+    def fake_post(*args, **kwargs):
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        planner.requests,
+        "post",
+        fake_post,
+    )
+
+    result = planner.plan(
+        "计算12345*6789",
+        allowed_tools=["calculator"],
+    )
+
+    assert result["tool"] == "calculator"
+    assert result["arguments"] == {
+        "expression": "12345*6789",
+    }
+
+
+def test_planner_no_tool_uses_empty_arguments(monkeypatch):
+    class FakeResponse:
+        def json(self):
+            return {
+                "response": json.dumps(
+                    {
+                        "tool": None,
+                        "arguments": {},
+                    }
+                )
+            }
+
+    def fake_post(*args, **kwargs):
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        planner.requests,
+        "post",
+        fake_post,
+    )
+
+    result = planner.plan(
+        "介绍一下 AgentDesk",
+        allowed_tools=["calculator"],
+    )
+
+    assert result["tool"] is None
+    assert result["arguments"] == {}

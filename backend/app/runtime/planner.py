@@ -91,6 +91,7 @@ def plan(
     if not available_tools:
         return {
             "tool": None,
+            "arguments": {},
             "input": user_input,
         }
 
@@ -145,26 +146,51 @@ def plan(
     except Exception:
         return {
             "tool": None,
+            "arguments": {},
             "input": user_input,
         }
 
     tool_name = result.get("tool")
 
     # Planner-side safety check.
-    #
-    # The Executor remains the final hard security boundary,
-    # but the Planner should never intentionally propagate a
-    # tool decision outside the Agent's permissions.
+    # The Executor remains the final hard security boundary.
     if tool_name is not None and tool_name not in available_tools:
         return {
             "tool": None,
+            "arguments": {},
             "input": user_input,
         }
 
+    arguments = result.get("arguments")
+
+    # New structured contract.
+    if isinstance(arguments, dict):
+        return {
+            "tool": tool_name,
+            "arguments": arguments,
+            "input": result.get(
+                "input",
+                user_input,
+            ),
+        }
+
+    # Backward compatibility with the legacy Planner contract.
+    legacy_input = result.get(
+        "input",
+        user_input,
+    )
+
+    if tool_name == "calculator":
+        arguments = {
+            "expression": legacy_input,
+        }
+    elif tool_name == "datetime":
+        arguments = {}
+    else:
+        arguments = {}
+
     return {
         "tool": tool_name,
-        "input": result.get(
-            "input",
-            user_input,
-        ),
+        "arguments": arguments,
+        "input": legacy_input,
     }

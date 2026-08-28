@@ -74,7 +74,23 @@ def run_agent(
     )
 
     tool_name = task.get("tool")
-    tool_input = task.get("input", user_input)
+
+    tool_arguments = task.get("arguments")
+
+    if not isinstance(tool_arguments, dict):
+        legacy_input = task.get(
+            "input",
+            user_input,
+        )
+
+        if tool_name == "calculator":
+            tool_arguments = {
+                "expression": legacy_input,
+            }
+        elif tool_name == "datetime":
+            tool_arguments = {}
+        else:
+            tool_arguments = legacy_input
 
     trace(
         TraceEvent.PLANNER_DECISION,
@@ -95,7 +111,7 @@ def run_agent(
 
         tool_result = execute_tool(
             tool_name,
-            tool_input,
+            tool_arguments,
             allowed_tools=allowed_tools,
         )
 
