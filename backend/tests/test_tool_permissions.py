@@ -1,6 +1,7 @@
 import pytest
 
 from app.runtime.executor import (
+    ToolNotFoundError,
     ToolPermissionDenied,
     execute_tool,
 )
@@ -47,9 +48,11 @@ def test_none_allowed_tools_keeps_backward_compatibility():
 
 
 def test_unknown_tool_without_permission_restriction():
-    result = execute_tool(
-        "unknown-tool",
-        "",
-    )
-
-    assert result == "Tool not found"
+    with pytest.raises(
+        ToolNotFoundError,
+        match="unknown-tool",
+    ):
+        execute_tool(
+            "unknown-tool",
+            "",
+        )
