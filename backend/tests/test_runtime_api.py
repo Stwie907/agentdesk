@@ -248,3 +248,137 @@ def test_get_execution_logs():
         assert body[1]["message"] == "Execution completed"
     finally:
         clear_test_db_override()
+
+
+def test_get_execution_exposes_success_metadata():
+    setup_test_db_override()
+    reset_database()
+
+    db = TestingSessionLocal()
+
+    try:
+        user = User(
+            username="metadata-success-user",
+            email="metadata-success@example.com",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        project = Project(
+            name="metadata-success-project",
+            description="metadata success project",
+            owner_id=user.id,
+        )
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+
+        agent = Agent(
+            project_id=project.id,
+            name="metadata-success-agent",
+            description="metadata success agent",
+            model="qwen2.5:7b",
+        )
+        db.add(agent)
+        db.commit()
+        db.refresh(agent)
+
+        execution = Execution(
+            agent_id=agent.id,
+            input="successful execution",
+            output="done",
+            status="completed",
+            retry_count=1,
+            failure_type=None,
+            failure_message=None,
+        )
+        db.add(execution)
+        db.commit()
+        db.refresh(execution)
+
+        with TestClient(app) as client:
+            response = client.get(
+                f"/executions/{execution.id}"
+            )
+
+        assert response.status_code == 200
+
+        body = response.json()
+
+        assert body["id"] == execution.id
+        assert body["status"] == "completed"
+        assert body["retry_count"] == 1
+        assert body["failure_type"] is None
+        assert body["failure_message"] is None
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+
+def test_get_execution_exposes_failure_metadata():
+    setup_test_db_override()
+    reset_database()
+
+    db = TestingSessionLocal()
+
+    try:
+        user = User(
+            username="metadata-failure-user",
+            email="metadata-failure@example.com",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        project = Project(
+            name="metadata-failure-project",
+            description="metadata failure project",
+            owner_id=user.id,
+        )
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+
+        agent = Agent(
+            project_id=project.id,
+            name="metadata-failure-agent",
+            description="metadata failure agent",
+            model="qwen2.5:7b",
+        )
+        db.add(agent)
+        db.commit()
+        db.refresh(agent)
+
+        execution = Execution(
+            agent_id=agent.id,
+            input="failed execution",
+            output="runtime exploded",
+            status="failed",
+            retry_count=2,
+            failure_type="runtime_error",
+            failure_message="runtime exploded",
+        )
+        db.add(execution)
+        db.commit()
+        db.refresh(execution)
+
+        with TestClient(app) as client:
+            response = client.get(
+                f"/executions/{execution.id}"
+            )
+
+        assert response.status_code == 200
+
+        body = response.json()
+
+        assert body["id"] == execution.id
+        assert body["status"] == "failed"
+        assert body["retry_count"] == 2
+        assert body["failure_type"] == "runtime_error"
+        assert body["failure_message"] == "runtime exploded"
+
+    finally:
+        db.close()
+        clear_test_db_override()
