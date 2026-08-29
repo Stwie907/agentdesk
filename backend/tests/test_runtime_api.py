@@ -382,3 +382,190 @@ def test_get_execution_exposes_failure_metadata():
     finally:
         db.close()
         clear_test_db_override()
+
+def test_get_agent_executions_agent_not_found():
+    setup_test_db_override()
+    reset_database()
+
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                "/agents/999999/executions"
+            )
+
+        assert response.status_code == 404
+        assert response.json() == {
+            "detail": "Agent not found"
+        }
+
+    finally:
+        clear_test_db_override()
+
+def test_get_agent_executions_exposes_metadata_and_order():
+    setup_test_db_override()
+    reset_database()
+
+    db = TestingSessionLocal()
+
+    try:
+        user = User(
+            username="history-metadata-user",
+            email="history-metadata@example.com",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        project = Project(
+            name="history-metadata-project",
+            description="history metadata project",
+            owner_id=user.id,
+        )
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+
+        agent = Agent(
+            project_id=project.id,
+            name="history-metadata-agent",
+            description="history metadata agent",
+            model="qwen2.5:7b",
+        )
+        db.add(agent)
+        db.commit()
+        db.refresh(agent)
+
+        execution_old = Execution(
+            agent_id=agent.id,
+            input="old execution",
+            output="old result",
+            status="completed",
+            retry_count=0,
+            failure_type=None,
+            failure_message=None,
+        )
+
+        execution_new = Execution(
+            agent_id=agent.id,
+            input="new execution",
+            output="runtime exploded",
+            status="failed",
+            retry_count=2,
+            failure_type="runtime_error",
+            failure_message="runtime exploded",
+        )
+
+        db.add(execution_old)
+        db.commit()
+        db.refresh(execution_old)
+
+        db.add(execution_new)
+        db.commit()
+        db.refresh(execution_new)
+
+        with TestClient(app) as client:
+            response = client.get(
+                f"/agents/{agent.id}/executions"
+            )
+
+        assert response.status_code == 200
+
+        body = response.json()
+
+        assert len(body) == 2
+
+        assert body[0]["id"] == execution_new.id
+        assert body[0]["status"] == "failed"
+        assert body[0]["retry_count"] == 2
+        assert body[0]["failure_type"] == "runtime_error"
+        assert body[0]["failure_message"] == "runtime exploded"
+
+        assert body[1]["id"] == execution_old.id
+        assert body[1]["status"] == "completed"
+        assert body[1]["retry_count"] == 0
+        assert body[1]["failure_type"] is None
+        assert body[1]["failure_message"] is None
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+
+def test_get_agent_executions_excludes_other_agents():
+    setup_test_db_override()
+    reset_database()
+
+    db = TestingSessionLocal()
+
+    try:
+        user = User(
+            username="history-isolation-user",
+            email="history-isolation@example.com",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        project = Project(
+            name="history-isolation-project",
+            description="history isolation project",
+            owner_id=user.id,
+        )
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+
+        agent_1 = Agent(
+            project_id=project.id,
+            name="history-agent-1",
+            description="first agent",
+            model="qwen2.5:7b",
+        )
+
+        agent_2 = Agent(
+            project_id=project.id,
+            name="history-agent-2",
+            description="second agent",
+            model="qwen2.5:7b",
+        )
+
+        db.add_all([agent_1, agent_2])
+        db.commit()
+        db.refresh(agent_1)
+        db.refresh(agent_2)
+
+        execution_1 = Execution(
+            agent_id=agent_1.id,
+            input="agent one execution",
+            output="one",
+            status="completed",
+        )
+
+        execution_2 = Execution(
+            agent_id=agent_2.id,
+            input="agent two execution",
+            output="two",
+            status="completed",
+        )
+
+        db.add_all([execution_1, execution_2])
+        db.commit()
+        db.refresh(execution_1)
+        db.refresh(execution_2)
+
+        with TestClient(app) as client:
+            response = client.get(
+                f"/agents/{agent_1.id}/executions"
+            )
+
+        assert response.status_code == 200
+
+        body = response.json()
+
+        assert len(body) == 1
+        assert body[0]["id"] == execution_1.id
+        assert body[0]["agent_id"] == agent_1.id
+
+    finally:
+        db.close()
+        clear_test_db_override()

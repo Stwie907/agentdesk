@@ -84,6 +84,14 @@ def read_agent_executions(
     agent_id: int,
     db: Session = Depends(get_db)
 ):
+    agent = get_agent(db, agent_id)
+
+    if not agent:
+        raise HTTPException(
+            status_code=404,
+            detail="Agent not found",
+        )
+
     return get_executions_by_agent(db, agent_id)
 
 @router.post(
