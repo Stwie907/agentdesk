@@ -46,6 +46,9 @@ def get_executions_by_agent(
     return (
         db.query(Execution)
         .filter(Execution.agent_id == agent_id)
-        .order_by(Execution.created_at.desc())
+        .order_by(
+            Execution.created_at.desc(),
+            Execution.id.desc(),
+        )
         .all()
     )

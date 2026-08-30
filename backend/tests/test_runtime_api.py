@@ -569,3 +569,280 @@ def test_get_agent_executions_excludes_other_agents():
     finally:
         db.close()
         clear_test_db_override()
+
+def test_retry_failed_execution_resets_runtime_state(monkeypatch):
+    setup_test_db_override()
+    reset_database()
+
+    db = TestingSessionLocal()
+
+    try:
+        user = User(
+            username="manual-retry-user",
+            email="manual-retry@example.com",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        project = Project(
+            name="manual-retry-project",
+            description="manual retry project",
+            owner_id=user.id,
+        )
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+
+        agent = Agent(
+            project_id=project.id,
+            name="manual-retry-agent",
+            description="manual retry agent",
+            model="qwen2.5:7b",
+        )
+        db.add(agent)
+        db.commit()
+        db.refresh(agent)
+
+        execution = Execution(
+            agent_id=agent.id,
+            input="retry this execution",
+            output="previous failure",
+            status="failed",
+            retry_count=2,
+            failure_type="runtime_error",
+            failure_message="previous failure",
+        )
+        db.add(execution)
+        db.commit()
+        db.refresh(execution)
+
+        called = {"execution_id": None}
+
+        def fake_execute_agent(execution_id):
+            called["execution_id"] = execution_id
+
+        monkeypatch.setattr(
+            "app.api.executions.execute_agent",
+            fake_execute_agent,
+        )
+
+        with TestClient(app) as client:
+            response = client.post(
+                f"/executions/{execution.id}/retry"
+            )
+
+        assert response.status_code == 200
+
+        body = response.json()
+
+        assert body["id"] == execution.id
+        assert body["agent_id"] == agent.id
+        assert body["input"] == "retry this execution"
+        assert body["status"] == "pending"
+
+        assert body["output"] is None
+        assert body["retry_count"] == 0
+        assert body["failure_type"] is None
+        assert body["failure_message"] is None
+
+        assert called["execution_id"] == execution.id
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+
+def test_retry_execution_not_found():
+    setup_test_db_override()
+    reset_database()
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/executions/999999/retry"
+            )
+
+        assert response.status_code == 404
+        assert response.json() == {
+            "detail": "Execution not found"
+        }
+
+    finally:
+        clear_test_db_override()
+
+
+def test_retry_completed_execution_is_rejected():
+    setup_test_db_override()
+    reset_database()
+
+    db = TestingSessionLocal()
+
+    try:
+        user = User(
+            username="completed-retry-user",
+            email="completed-retry@example.com",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        project = Project(
+            name="completed-retry-project",
+            description="completed retry project",
+            owner_id=user.id,
+        )
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+
+        agent = Agent(
+            project_id=project.id,
+            name="completed-retry-agent",
+            description="completed retry agent",
+            model="qwen2.5:7b",
+        )
+        db.add(agent)
+        db.commit()
+        db.refresh(agent)
+
+        execution = Execution(
+            agent_id=agent.id,
+            input="already completed",
+            output="done",
+            status="completed",
+        )
+        db.add(execution)
+        db.commit()
+        db.refresh(execution)
+
+        with TestClient(app) as client:
+            response = client.post(
+                f"/executions/{execution.id}/retry"
+            )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "detail": "Only failed executions can be retried"
+        }
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+
+def test_retry_pending_execution_is_rejected():
+    setup_test_db_override()
+    reset_database()
+
+    db = TestingSessionLocal()
+
+    try:
+        user = User(
+            username="pending-retry-user",
+            email="pending-retry@example.com",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        project = Project(
+            name="pending-retry-project",
+            description="pending retry project",
+            owner_id=user.id,
+        )
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+
+        agent = Agent(
+            project_id=project.id,
+            name="pending-retry-agent",
+            description="pending retry agent",
+            model="qwen2.5:7b",
+        )
+        db.add(agent)
+        db.commit()
+        db.refresh(agent)
+
+        execution = Execution(
+            agent_id=agent.id,
+            input="still pending",
+            output=None,
+            status="pending",
+        )
+        db.add(execution)
+        db.commit()
+        db.refresh(execution)
+
+        with TestClient(app) as client:
+            response = client.post(
+                f"/executions/{execution.id}/retry"
+            )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "detail": "Only failed executions can be retried"
+        }
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+def test_retry_running_execution_is_rejected():
+    setup_test_db_override()
+    reset_database()
+
+    db = TestingSessionLocal()
+
+    try:
+        user = User(
+            username="running-retry-user",
+            email="running-retry@example.com",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        project = Project(
+            name="running-retry-project",
+            description="running retry project",
+            owner_id=user.id,
+        )
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+
+        agent = Agent(
+            project_id=project.id,
+            name="running-retry-agent",
+            description="running retry agent",
+            model="qwen2.5:7b",
+        )
+        db.add(agent)
+        db.commit()
+        db.refresh(agent)
+
+        execution = Execution(
+            agent_id=agent.id,
+            input="currently running",
+            output=None,
+            status="running",
+        )
+        db.add(execution)
+        db.commit()
+        db.refresh(execution)
+
+        with TestClient(app) as client:
+            response = client.post(
+                f"/executions/{execution.id}/retry"
+            )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "detail": "Only failed executions can be retried"
+        }
+
+    finally:
+        db.close()
+        clear_test_db_override()
