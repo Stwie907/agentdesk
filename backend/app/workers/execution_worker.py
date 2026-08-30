@@ -29,6 +29,9 @@ def execute_agent(
         if not execution:
             return
 
+        # A cancelled execution must never be started by the worker.
+        if execution.status == ExecutionStatus.CANCELLED.value:
+            return
         # --------------------------------------------------------
         # Execution started
         # --------------------------------------------------------

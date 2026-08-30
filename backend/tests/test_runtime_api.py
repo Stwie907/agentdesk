@@ -846,3 +846,264 @@ def test_retry_running_execution_is_rejected():
     finally:
         db.close()
         clear_test_db_override()
+
+def test_cancel_pending_execution():
+    setup_test_db_override()
+    reset_database()
+
+    db = TestingSessionLocal()
+
+    try:
+        user = User(
+            username="cancel-pending-user",
+            email="cancel-pending@example.com",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        project = Project(
+            name="cancel-pending-project",
+            description="cancel pending project",
+            owner_id=user.id,
+        )
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+
+        agent = Agent(
+            project_id=project.id,
+            name="cancel-pending-agent",
+            description="cancel pending agent",
+            model="qwen2.5:7b",
+        )
+        db.add(agent)
+        db.commit()
+        db.refresh(agent)
+
+        execution = Execution(
+            agent_id=agent.id,
+            input="cancel me",
+            output=None,
+            status="pending",
+        )
+        db.add(execution)
+        db.commit()
+        db.refresh(execution)
+
+        with TestClient(app) as client:
+            response = client.post(
+                f"/executions/{execution.id}/cancel"
+            )
+
+        assert response.status_code == 200
+
+        body = response.json()
+
+        assert body["id"] == execution.id
+        assert body["agent_id"] == agent.id
+        assert body["input"] == "cancel me"
+        assert body["status"] == "cancelled"
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+
+def test_cancel_execution_not_found():
+    setup_test_db_override()
+    reset_database()
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/executions/999999/cancel"
+            )
+
+        assert response.status_code == 404
+        assert response.json() == {
+            "detail": "Execution not found"
+        }
+
+    finally:
+        clear_test_db_override()
+
+
+def test_cancel_running_execution_is_rejected():
+    setup_test_db_override()
+    reset_database()
+
+    db = TestingSessionLocal()
+
+    try:
+        user = User(
+            username="cancel-running-user",
+            email="cancel-running@example.com",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        project = Project(
+            name="cancel-running-project",
+            description="cancel running project",
+            owner_id=user.id,
+        )
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+
+        agent = Agent(
+            project_id=project.id,
+            name="cancel-running-agent",
+            description="cancel running agent",
+            model="qwen2.5:7b",
+        )
+        db.add(agent)
+        db.commit()
+        db.refresh(agent)
+
+        execution = Execution(
+            agent_id=agent.id,
+            input="already running",
+            output=None,
+            status="running",
+        )
+        db.add(execution)
+        db.commit()
+        db.refresh(execution)
+
+        with TestClient(app) as client:
+            response = client.post(
+                f"/executions/{execution.id}/cancel"
+            )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "detail": "Only pending executions can be cancelled"
+        }
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+
+def test_cancel_completed_execution_is_rejected():
+    setup_test_db_override()
+    reset_database()
+
+    db = TestingSessionLocal()
+
+    try:
+        user = User(
+            username="cancel-completed-user",
+            email="cancel-completed@example.com",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        project = Project(
+            name="cancel-completed-project",
+            description="cancel completed project",
+            owner_id=user.id,
+        )
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+
+        agent = Agent(
+            project_id=project.id,
+            name="cancel-completed-agent",
+            description="cancel completed agent",
+            model="qwen2.5:7b",
+        )
+        db.add(agent)
+        db.commit()
+        db.refresh(agent)
+
+        execution = Execution(
+            agent_id=agent.id,
+            input="already completed",
+            output="done",
+            status="completed",
+        )
+        db.add(execution)
+        db.commit()
+        db.refresh(execution)
+
+        with TestClient(app) as client:
+            response = client.post(
+                f"/executions/{execution.id}/cancel"
+            )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "detail": "Only pending executions can be cancelled"
+        }
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+
+def test_cancel_failed_execution_is_rejected():
+    setup_test_db_override()
+    reset_database()
+
+    db = TestingSessionLocal()
+
+    try:
+        user = User(
+            username="cancel-failed-user",
+            email="cancel-failed@example.com",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        project = Project(
+            name="cancel-failed-project",
+            description="cancel failed project",
+            owner_id=user.id,
+        )
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+
+        agent = Agent(
+            project_id=project.id,
+            name="cancel-failed-agent",
+            description="cancel failed agent",
+            model="qwen2.5:7b",
+        )
+        db.add(agent)
+        db.commit()
+        db.refresh(agent)
+
+        execution = Execution(
+            agent_id=agent.id,
+            input="already failed",
+            output="failed",
+            status="failed",
+            retry_count=1,
+            failure_type="runtime_error",
+            failure_message="failed",
+        )
+        db.add(execution)
+        db.commit()
+        db.refresh(execution)
+
+        with TestClient(app) as client:
+            response = client.post(
+                f"/executions/{execution.id}/cancel"
+            )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "detail": "Only pending executions can be cancelled"
+        }
+
+    finally:
+        db.close()
+        clear_test_db_override()

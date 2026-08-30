@@ -150,3 +150,38 @@ def retry_execution(
     )
 
     return execution
+
+@router.post(
+    "/{execution_id}/cancel",
+    response_model=ExecutionRead,
+)
+def cancel_execution(
+    execution_id: int,
+    db: Session = Depends(get_db),
+):
+    execution = get_execution(
+        db,
+        execution_id,
+    )
+
+    if not execution:
+        raise HTTPException(
+            status_code=404,
+            detail="Execution not found",
+        )
+
+    if execution.status != "pending":
+        raise HTTPException(
+            status_code=409,
+            detail="Only pending executions can be cancelled",
+        )
+
+    execution.status = "cancelled"
+    execution.failure_type = None
+    execution.failure_message = None
+
+    db.commit()
+    db.refresh(execution)
+
+    return execution
+
