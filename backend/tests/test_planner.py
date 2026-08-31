@@ -283,3 +283,104 @@ def test_planner_no_tool_uses_empty_arguments(monkeypatch):
 
     assert result["tool"] is None
     assert result["arguments"] == {}
+
+
+def test_planner_v4_legacy_calculator_normalizes_arguments(monkeypatch):
+    class FakeResponse:
+        def json(self):
+            return {
+                "response": json.dumps(
+                    {
+                        "tool": "calculator",
+                        "input": "12+34",
+                    }
+                )
+            }
+
+    def fake_post(*args, **kwargs):
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        planner.requests,
+        "post",
+        fake_post,
+    )
+
+    result = planner.plan(
+        "计算12+34",
+        allowed_tools=["calculator"],
+    )
+
+    assert result == {
+        "tool": "calculator",
+        "arguments": {
+            "expression": "12+34",
+        },
+        "input": "12+34",
+    }
+
+
+def test_planner_v4_legacy_datetime_normalizes_arguments(monkeypatch):
+    class FakeResponse:
+        def json(self):
+            return {
+                "response": json.dumps(
+                    {
+                        "tool": "datetime",
+                        "input": "",
+                    }
+                )
+            }
+
+    def fake_post(*args, **kwargs):
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        planner.requests,
+        "post",
+        fake_post,
+    )
+
+    result = planner.plan(
+        "现在几点？",
+        allowed_tools=["datetime"],
+    )
+
+    assert result == {
+        "tool": "datetime",
+        "arguments": {},
+        "input": "",
+    }
+
+
+def test_planner_v4_no_tool_has_stable_contract(monkeypatch):
+    class FakeResponse:
+        def json(self):
+            return {
+                "response": json.dumps(
+                    {
+                        "tool": None,
+                        "input": "介绍一下 AgentDesk",
+                    }
+                )
+            }
+
+    def fake_post(*args, **kwargs):
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        planner.requests,
+        "post",
+        fake_post,
+    )
+
+    result = planner.plan(
+        "介绍一下 AgentDesk",
+        allowed_tools=["calculator"],
+    )
+
+    assert result == {
+        "tool": None,
+        "arguments": {},
+        "input": "介绍一下 AgentDesk",
+    }
