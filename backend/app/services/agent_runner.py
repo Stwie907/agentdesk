@@ -2,6 +2,7 @@ import requests
 
 from app.runtime.planner import plan
 from app.runtime.executor import execute_tool
+from app.runtime.execution_plan import execution_plan_from_task
 from app.database import SessionLocal
 from app.services.execution_trace import TraceEvent, trace_event
 
@@ -73,24 +74,15 @@ def run_agent(
         allowed_tools=allowed_tools,
     )
 
-    tool_name = task.get("tool")
+    execution_plan = execution_plan_from_task(
+        task,
+        user_input=user_input,
+    )
 
-    tool_arguments = task.get("arguments")
+    step = execution_plan.steps[0]
 
-    if not isinstance(tool_arguments, dict):
-        legacy_input = task.get(
-            "input",
-            user_input,
-        )
-
-        if tool_name == "calculator":
-            tool_arguments = {
-                "expression": legacy_input,
-            }
-        elif tool_name == "datetime":
-            tool_arguments = {}
-        else:
-            tool_arguments = legacy_input
+    tool_name = step.tool
+    tool_arguments = step.arguments
 
     trace(
         TraceEvent.PLANNER_DECISION,
