@@ -1,7 +1,7 @@
 import requests
 
 from app.runtime.planner import plan
-from app.runtime.executor import execute_tool
+from app.runtime.plan_executor import execute_plan
 from app.runtime.execution_plan import execution_plan_from_task
 from app.database import SessionLocal
 from app.services.execution_trace import TraceEvent, trace_event
@@ -79,43 +79,51 @@ def run_agent(
         user_input=user_input,
     )
 
-    step = execution_plan.steps[0]
+    tool_names = [
+        step.tool
+        for step in execution_plan.steps
+        if step.tool is not None
+    ]
 
-    tool_name = step.tool
-    tool_arguments = step.arguments
+    if len(tool_names) == 0:
+        planner_trace_message = "tool=none"
+    elif len(tool_names) == 1:
+        planner_trace_message = f"tool={tool_names[0]}"
+    else:
+        planner_trace_message = f"tools={tool_names}"
 
     trace(
         TraceEvent.PLANNER_DECISION,
-        f"tool={tool_name or 'none'}",
+        planner_trace_message,
     )
 
-    # ---------------------------------------------------------
-    # 2. Optional tool execution
-    # ---------------------------------------------------------
-
-    tool_result = ""
-
-    if tool_name:
+    for tool_name in tool_names:
         trace(
             TraceEvent.TOOL_CALLED,
             f"tool={tool_name}",
         )
 
-        tool_result = execute_tool(
-            tool_name,
-            tool_arguments,
-            allowed_tools=allowed_tools,
-        )
+    plan_result = execute_plan(
+        execution_plan,
+        allowed_tools=allowed_tools,
+    )
 
-        trace(
-            TraceEvent.TOOL_RESULT,
-            f"tool={tool_name}; result={tool_result}",
-        )
+    for step_result in plan_result.steps:
+        if step_result.step.tool is not None:
+            trace(
+                TraceEvent.TOOL_RESULT,
+                f"tool={step_result.step.tool}; result={step_result.output}",
+            )
 
-        # Calculator output is deterministic,
-        # so it can be returned directly.
-        if tool_name == "calculator":
-            return str(tool_result)
+    tool_result = plan_result.last_output
+
+    # Calculator output is deterministic,
+    # so it can be returned directly.
+    if (
+        len(execution_plan.steps) == 1
+        and execution_plan.steps[0].tool == "calculator"
+    ):
+        return str(tool_result)
 
     # ---------------------------------------------------------
     # 3. Build final LLM prompt
