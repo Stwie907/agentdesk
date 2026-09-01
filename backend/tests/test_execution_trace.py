@@ -6,7 +6,7 @@ from app.database import Base
 from app.models.execution import Execution
 from app.models.execution_log import ExecutionLog
 from app.services.execution_trace import TraceEvent, trace_event
-
+import app.runtime.plan_executor as plan_executor
 
 TEST_DATABASE_URL = "sqlite:///"
 
@@ -128,7 +128,7 @@ def test_runtime_trace_records_planner_and_tool_events(monkeypatch):
         )
 
         monkeypatch.setattr(
-            agent_runner,
+            plan_executor,
             "execute_tool",
             lambda tool_name, tool_input, allowed_tools=None: "83810205",
         )
