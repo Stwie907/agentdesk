@@ -384,3 +384,226 @@ def test_planner_v4_no_tool_has_stable_contract(monkeypatch):
         "arguments": {},
         "input": "介绍一下 AgentDesk",
     }
+
+def test_plan_execution_wraps_legacy_single_step(monkeypatch):
+    class FakeResponse:
+        def json(self):
+            return {
+                "response": json.dumps(
+                    {
+                        "tool": "calculator",
+                        "arguments": {
+                            "expression": "1+1",
+                        },
+                        "input": "1+1",
+                    }
+                )
+            }
+
+    def fake_post(*args, **kwargs):
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        planner.requests,
+        "post",
+        fake_post,
+    )
+
+    execution_plan = planner.plan_execution(
+        "计算1+1",
+        allowed_tools=["calculator"],
+    )
+
+    assert len(execution_plan.steps) == 1
+
+    step = execution_plan.steps[0]
+
+    assert step.tool == "calculator"
+    assert step.arguments == {
+        "expression": "1+1",
+    }
+    assert step.input == "1+1"
+
+    def fake_plan(user_input, allowed_tools=None):
+        return task
+
+    monkeypatch.setattr(
+        planner,
+        "plan",
+        fake_plan,
+    )
+
+    execution_plan = planner.plan_execution(
+        "计算1+1",
+        allowed_tools=["calculator"],
+    )
+
+    assert len(execution_plan.steps) == 1
+
+    step = execution_plan.steps[0]
+
+    assert step.tool == "calculator"
+    assert step.arguments == {
+        "expression": "1+1",
+    }
+    assert step.input == "1+1"
+
+def test_plan_execution_supports_multi_step_response(monkeypatch):
+    class FakeResponse:
+        def json(self):
+            return {
+                "response": json.dumps(
+                    {
+                        "steps": [
+                            {
+                                "tool": "calculator",
+                                "arguments": {
+                                    "expression": "1+1",
+                                },
+                                "input": "1+1",
+                            },
+                            {
+                                "tool": "calculator",
+                                "arguments": {
+                                    "expression": {
+                                        "$step_output": 0,
+                                    },
+                                },
+                                "input": "",
+                            },
+                        ]
+                    }
+                )
+            }
+
+    def fake_post(*args, **kwargs):
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        planner.requests,
+        "post",
+        fake_post,
+    )
+
+    execution_plan = planner.plan_execution(
+        "先计算1+1，然后继续处理上一步结果",
+        allowed_tools=["calculator"],
+    )
+
+    assert len(execution_plan.steps) == 2
+
+    assert execution_plan.steps[0].tool == "calculator"
+    assert execution_plan.steps[0].arguments == {
+        "expression": "1+1",
+    }
+
+    assert execution_plan.steps[1].tool == "calculator"
+    assert execution_plan.steps[1].arguments == {
+        "expression": {
+            "$step_output": 0,
+        },
+    }
+
+def test_plan_execution_rejects_disallowed_tool_in_multi_step_response(
+    monkeypatch,
+):
+    class FakeResponse:
+        def json(self):
+            return {
+                "response": json.dumps(
+                    {
+                        "steps": [
+                            {
+                                "tool": "calculator",
+                                "arguments": {
+                                    "expression": "1+1",
+                                },
+                                "input": "1+1",
+                            },
+                            {
+                                "tool": "datetime",
+                                "arguments": {},
+                                "input": "现在几点？",
+                            },
+                        ]
+                    }
+                )
+            }
+
+    def fake_post(*args, **kwargs):
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        planner.requests,
+        "post",
+        fake_post,
+    )
+
+    execution_plan = planner.plan_execution(
+        "先计算1+1，再查询时间",
+        allowed_tools=["calculator"],
+    )
+
+    assert len(execution_plan.steps) == 1
+
+    step = execution_plan.steps[0]
+
+    assert step.tool == "calculator"
+    assert step.arguments == {
+        "expression": "1+1",
+    }
+
+def test_plan_execution_falls_back_when_multi_step_response_has_no_valid_steps(
+    monkeypatch,
+):
+    class FakeResponse:
+        def json(self):
+            return {
+                "response": json.dumps(
+                    {
+                        "steps": [
+                            "invalid-step",
+                            123,
+                            None,
+                        ]
+                    }
+                )
+            }
+
+    def fake_post(*args, **kwargs):
+        return FakeResponse()
+
+    fallback_task = {
+        "tool": "calculator",
+        "arguments": {
+            "expression": "2+3",
+        },
+        "input": "2+3",
+    }
+
+    monkeypatch.setattr(
+        planner.requests,
+        "post",
+        fake_post,
+    )
+
+    monkeypatch.setattr(
+        planner,
+        "plan",
+        lambda user_input, allowed_tools=None: fallback_task,
+    )
+
+    execution_plan = planner.plan_execution(
+        "计算2+3",
+        allowed_tools=["calculator"],
+    )
+
+    assert len(execution_plan.steps) == 1
+
+    step = execution_plan.steps[0]
+
+    assert step.tool == "calculator"
+    assert step.arguments == {
+        "expression": "2+3",
+    }
+    assert step.input == "2+3"

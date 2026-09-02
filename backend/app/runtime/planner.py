@@ -2,6 +2,12 @@ import json
 
 import requests
 
+from app.runtime.execution_plan import ExecutionPlan, execution_plan_from_task
+from app.runtime.execution_plan import (
+    ExecutionPlan,
+    ExecutionStep,
+    execution_plan_from_task,
+)
 from app.tools.registry import get_tool_metadata, list_tool_metadata
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
@@ -194,3 +200,186 @@ def plan(
         "arguments": arguments,
         "input": legacy_input,
     }
+
+
+def plan_execution(
+    user_input: str,
+    allowed_tools: list[str] | None = None,
+) -> ExecutionPlan:
+    """
+    Build an ExecutionPlan while preserving the existing Planner V4 contract.
+
+    Multi-step responses use:
+
+        {
+            "steps": [
+                {
+                    "tool": "...",
+                    "arguments": {...},
+                    "input": "..."
+                }
+            ]
+        }
+
+    Existing Planner V4 single-task responses remain supported.
+    """
+
+    available_tools = normalize_allowed_tools(
+        allowed_tools
+    )
+
+    # Preserve the existing no-tool behavior and avoid an unnecessary LLM call.
+    if not available_tools:
+        task = plan(
+            user_input,
+            allowed_tools=allowed_tools,
+        )
+
+        return execution_plan_from_task(
+            task,
+            user_input=user_input,
+        )
+
+    tools_prompt = build_tools_prompt(
+        available_tools
+    )
+
+    prompt = f"""
+你是一个多步骤任务规划器。
+
+你的任务是把用户请求规划成一个或多个按顺序执行的步骤。
+
+当前 Agent 只能使用下面列出的工具：
+
+{tools_prompt}
+
+返回合法 JSON，格式必须为：
+
+{{
+    "steps": [
+        {{
+            "tool": "<tool name or null>",
+            "arguments": {{}},
+            "input": "<step input>"
+        }}
+    ]
+}}
+
+重要规则：
+
+1. 只返回合法 JSON。
+2. 不要解释。
+3. 不要使用 Markdown。
+4. 只能选择当前 Agent 被允许使用的工具。
+5. 如果某一步不需要工具，tool 必须为 null。
+6. arguments 必须始终是 JSON object。
+7. 后面的步骤可以通过下面格式引用前面步骤的输出：
+
+{{
+    "$step_output": <zero-based step index>
+}}
+
+8. 不允许引用当前步骤或未来步骤。
+
+用户输入：
+
+{user_input}
+""".strip()
+
+    response = requests.post(
+        OLLAMA_URL,
+        json={
+            "model": "qwen2.5:7b",
+            "prompt": prompt,
+            "stream": False,
+        },
+    )
+
+    text = response.json()["response"]
+
+    try:
+        result = json.loads(text)
+    except Exception:
+        result = None
+
+    # New multi-step Planner contract.
+    if isinstance(result, dict):
+        raw_steps = result.get("steps")
+
+        if isinstance(raw_steps, list):
+            steps = []
+
+            for raw_step in raw_steps:
+                if not isinstance(raw_step, dict):
+                    continue
+
+                tool_name = raw_step.get("tool")
+
+                if (
+                    tool_name is not None
+                    and tool_name not in available_tools
+                ):
+                    continue
+
+                arguments = raw_step.get("arguments")
+                if not isinstance(arguments, dict):
+                    arguments = {}
+
+                step_input = raw_step.get(
+                    "input",
+                    user_input,
+                )
+
+                steps.append(
+                    ExecutionStep(
+                        tool=tool_name,
+                        arguments=arguments,
+                        input=step_input,
+                    )
+                )
+
+            if steps:
+                return ExecutionPlan(
+                    steps=steps,
+                )
+
+        # Backward compatibility with the Planner V4
+        # single-task response contract.
+        if "tool" in result:
+            tool_name = result.get("tool")
+
+            if (
+                tool_name is not None
+                and tool_name not in available_tools
+            ):
+                tool_name = None
+
+            arguments = result.get("arguments")
+            if not isinstance(arguments, dict):
+                arguments = {}
+
+            task = {
+                "tool": tool_name,
+                "arguments": arguments,
+                "input": result.get(
+                    "input",
+                    user_input,
+                ),
+            }
+
+            return execution_plan_from_task(
+                task,
+                user_input=user_input,
+            )
+
+    # Malformed or unsupported response:
+    # fall back to the existing Planner V4 behavior.
+    task = plan(
+        user_input,
+        allowed_tools=allowed_tools,
+    )
+
+    return execution_plan_from_task(
+        task,
+        user_input=user_input,
+    )
