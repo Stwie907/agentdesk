@@ -6,6 +6,7 @@ from app.database import Base
 from app.models.execution import Execution
 from app.models.execution_log import ExecutionLog
 from app.services.execution_trace import TraceEvent, trace_event
+from app.runtime.execution_plan import ExecutionPlan, ExecutionStep
 import app.runtime.plan_executor as plan_executor
 
 TEST_DATABASE_URL = "sqlite:///"
@@ -120,11 +121,18 @@ def test_runtime_trace_records_planner_and_tool_events(monkeypatch):
 
         monkeypatch.setattr(
             agent_runner,
-            "plan",
-            lambda user_input,allowed_tools=None: {
-                "tool": "calculator",
-                "input": "12345*6789",
-            },
+            "plan_execution",
+            lambda user_input, allowed_tools=None: ExecutionPlan(
+                steps=[
+                    ExecutionStep(
+                        tool="calculator",
+                        arguments={
+                            "expression": "12345*6789",
+                        },
+                        input="12345*6789",
+                    )
+                ]
+            ),
         )
 
         monkeypatch.setattr(
@@ -209,13 +217,17 @@ def test_runtime_trace_records_llm_events(monkeypatch):
         # Planner decides that no tool is needed.
         monkeypatch.setattr(
             agent_runner,
-            "plan",
-            lambda user_input,allowed_tools=None: {
-                "tool": None,
-                "input": user_input,
-            },
+            "plan_execution",
+            lambda user_input, allowed_tools=None: ExecutionPlan(
+                steps=[
+                    ExecutionStep(
+                        tool=None,
+                        arguments={},
+                        input=user_input,
+                    )
+                ]
+            ),
         )
-
         # Do NOT call real Ollama in tests.
         monkeypatch.setattr(
             agent_runner,
@@ -259,6 +271,113 @@ def test_runtime_trace_records_llm_events(monkeypatch):
             message.startswith("tool_result")
             for message in messages
         )
+
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=test_engine)
+        test_engine.dispose()
+
+def test_runtime_trace_records_multi_step_execution_order(monkeypatch):
+    from app.services import agent_runner
+    from app.runtime.execution_plan import ExecutionPlan, ExecutionStep
+
+    monkeypatch.setattr(
+        agent_runner,
+        "SessionLocal",
+        TestingSessionLocal,
+    )
+
+    Base.metadata.drop_all(bind=test_engine)
+    Base.metadata.create_all(bind=test_engine)
+
+    db = TestingSessionLocal()
+
+    try:
+        execution = Execution(
+            agent_id=1,
+            input="multi-step trace test",
+            status="pending",
+        )
+
+        db.add(execution)
+        db.commit()
+        db.refresh(execution)
+
+        monkeypatch.setattr(
+            agent_runner,
+            "plan_execution",
+            lambda user_input, allowed_tools=None: ExecutionPlan(
+                steps=[
+                    ExecutionStep(
+                        tool="calculator",
+                        arguments={"expression": "1+1"},
+                        input="1+1",
+                    ),
+                    ExecutionStep(
+                        tool="calculator",
+                        arguments={"expression": "2+2"},
+                        input="2+2",
+                    ),
+                ]
+            ),
+        )
+
+        outputs = iter(["2", "4"])
+
+        monkeypatch.setattr(
+            agent_runner,
+            "call_llm",
+            lambda model, prompt: "Mocked final response",
+        )
+
+        monkeypatch.setattr(
+            plan_executor,
+            "execute_tool",
+            lambda tool_name, tool_input, allowed_tools=None: next(outputs),
+        )
+
+        result = agent_runner.run_agent(
+            "qwen2.5:7b",
+            "multi-step trace test",
+            execution_id=execution.id,
+        )
+
+        assert result == "Mocked final response"
+
+        logs = (
+            db.query(ExecutionLog)
+            .filter(
+                ExecutionLog.execution_id == execution.id
+            )
+            .order_by(ExecutionLog.id)
+            .all()
+        )
+
+        messages = [
+            log.message
+            for log in logs
+        ]
+
+
+        execution_messages = [
+            message
+            for message in messages
+            if not message.startswith("llm_")
+        ]
+
+        assert execution_messages == [
+            "planner_decision: tools=['calculator', 'calculator']",
+            "plan_started",
+            "step_started: step=0 tool=calculator",
+            "tool_called: tool=calculator",
+            "tool_result: tool=calculator; result=2",
+            "step_completed: step=0 tool=calculator",
+            "step_started: step=1 tool=calculator",
+            "tool_called: tool=calculator",
+            "tool_result: tool=calculator; result=4",
+            "step_completed: step=1 tool=calculator",
+            "plan_completed",
+        ]
 
     finally:
         db.close()

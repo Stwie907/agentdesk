@@ -67,17 +67,25 @@ def test_run_agent_delegates_execution_to_plan_executor(monkeypatch):
 
     monkeypatch.setattr(
         agent_runner,
-        "plan",
-        lambda *args, **kwargs: {
-            "tool": "calculator",
-            "arguments": {
-                "expression": "40+2",
-            },
-            "input": "40+2",
-        },
+        "plan_execution",
+        lambda *args, **kwargs: ExecutionPlan(
+            steps=[
+                ExecutionStep(
+                    tool="calculator",
+                    arguments={
+                        "expression": "40+2",
+                    },
+                    input="40+2",
+                )
+            ]
+        ),
     )
-
-    def fake_execute_plan(plan, allowed_tools=None):
+    def fake_execute_plan(
+        plan,
+        allowed_tools=None,
+        on_step_started=None,
+        on_step_completed=None,
+    ):
         calls["execute_plan"] += 1
 
         assert len(plan.steps) == 1
