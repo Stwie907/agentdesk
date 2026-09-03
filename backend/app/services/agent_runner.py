@@ -1,10 +1,9 @@
 import requests
 
-from app.runtime.planner import plan
 from app.runtime.plan_executor import execute_plan
-from app.runtime.execution_plan import execution_plan_from_task
 from app.database import SessionLocal
 from app.services.execution_trace import TraceEvent, trace_event
+from app.runtime.planner import plan_execution
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 
@@ -69,14 +68,9 @@ def run_agent(
     # 1. Planner
     # ---------------------------------------------------------
 
-    task = plan(
+    execution_plan = plan_execution(
         user_input,
         allowed_tools=allowed_tools,
-    )
-
-    execution_plan = execution_plan_from_task(
-        task,
-        user_input=user_input,
     )
 
     tool_names = [
@@ -97,23 +91,63 @@ def run_agent(
         planner_trace_message,
     )
 
-    for tool_name in tool_names:
-        trace(
-            TraceEvent.TOOL_CALLED,
-            f"tool={tool_name}",
+    trace(
+        TraceEvent.PLAN_STARTED,
+        "",
+    )
+
+
+    def on_step_started(step_index, step):
+        tool_detail = (
+            f" tool={step.tool}"
+            if step.tool is not None
+            else ""
         )
+
+        trace(
+            TraceEvent.STEP_STARTED,
+            f"step={step_index}{tool_detail}",
+        )
+
+        if step.tool is not None:
+            trace(
+                TraceEvent.TOOL_CALLED,
+                f"tool={step.tool}",
+            )
+
+
+    def on_step_completed(step_index, step_result):
+        step = step_result.step
+
+        if step.tool is not None:
+            trace(
+                TraceEvent.TOOL_RESULT,
+                f"tool={step.tool}; result={step_result.output}",
+            )
+
+        tool_detail = (
+            f" tool={step.tool}"
+            if step.tool is not None
+            else ""
+        )
+
+        trace(
+            TraceEvent.STEP_COMPLETED,
+            f"step={step_index}{tool_detail}",
+        )
+
 
     plan_result = execute_plan(
         execution_plan,
         allowed_tools=allowed_tools,
+        on_step_started=on_step_started,
+        on_step_completed=on_step_completed,
     )
 
-    for step_result in plan_result.steps:
-        if step_result.step.tool is not None:
-            trace(
-                TraceEvent.TOOL_RESULT,
-                f"tool={step_result.step.tool}; result={step_result.output}",
-            )
+    trace(
+        TraceEvent.PLAN_COMPLETED,
+        "",
+    )
 
     tool_result = plan_result.last_output
 

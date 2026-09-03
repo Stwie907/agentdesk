@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any
-
+from typing import Any, Callable
 from app.runtime.execution_plan import ExecutionPlan, ExecutionStep
 from app.runtime.executor import execute_tool
 
@@ -118,6 +117,8 @@ def execute_step(
 def execute_plan(
     plan: ExecutionPlan,
     allowed_tools: list[str] | None = None,
+    on_step_started: Callable[[int, ExecutionStep], None] | None = None,
+    on_step_completed: Callable[[int, StepExecutionResult], None] | None = None,
 ) -> PlanExecutionResult:
     """
     Execute every step in an ExecutionPlan in order.
@@ -128,13 +129,16 @@ def execute_plan(
             "$step_output": <step index>
         }
 
+    Optional lifecycle callbacks allow callers to observe step execution
+    without coupling the runtime executor to persistence or tracing systems.
+
     Tool permissions and tool execution errors are still delegated to
     app.runtime.executor.execute_tool().
     """
 
     results: list[StepExecutionResult] = []
 
-    for step in plan.steps:
+    for step_index, step in enumerate(plan.steps):
         resolved_arguments = resolve_step_outputs(
             step.arguments,
             results,
@@ -146,10 +150,22 @@ def execute_plan(
             input=step.input,
         )
 
+        if on_step_started is not None:
+            on_step_started(
+                step_index,
+                resolved_step,
+            )
+
         result = execute_step(
             resolved_step,
             allowed_tools=allowed_tools,
         )
+
+        if on_step_completed is not None:
+            on_step_completed(
+                step_index,
+                result,
+            )
 
         results.append(result)
 
