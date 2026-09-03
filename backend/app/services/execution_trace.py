@@ -1,3 +1,4 @@
+import re
 from enum import Enum
 
 from sqlalchemy.orm import Session
@@ -69,6 +70,7 @@ def trace_event(
     Stored message format:
 
         event
+
         event: detail
     """
 
@@ -88,15 +90,15 @@ def trace_event(
 def get_runtime_v4_trace(
     db: Session,
     execution_id: int,
-) -> list[ExecutionLog]:
+) -> list[dict]:
     """
-    Return Runtime V4 plan/step trace events for one execution.
+    Return structured Runtime V4 plan/step trace events.
 
-    Runtime V4 trace data is currently persisted in ExecutionLog.message,
-    so this reader intentionally filters the existing log records instead
-    of introducing a second persistence model.
+    Runtime V4 trace data is currently persisted in ExecutionLog.message.
+    This reader filters the existing log records and converts the internal
+    message format into an API-friendly structured representation.
 
-    Results are ordered by ExecutionLog.id so API clients receive events
+    Results remain ordered by ExecutionLog.id so clients receive events
     in the same order in which they were persisted.
     """
 
@@ -107,11 +109,108 @@ def get_runtime_v4_trace(
         .all()
     )
 
-    return [
-        log
-        for log in logs
-        if _is_runtime_v4_trace_message(log.message)
-    ]
+    trace = []
+
+    for log in logs:
+        parsed = _parse_runtime_v4_trace_log(log)
+
+        if parsed is not None:
+            trace.append(parsed)
+
+    return trace
+
+
+def _parse_runtime_v4_trace_log(
+    log: ExecutionLog,
+) -> dict | None:
+    """
+    Convert one Runtime V4 ExecutionLog record into structured trace data.
+
+    Supported examples:
+
+        plan_started
+
+        step_started: step=0 tool=calculator
+
+        step_completed: step=0 tool=calculator
+
+        step_failed: step=1 tool=calculator; error=calculator exploded
+
+        plan_completed
+
+        plan_failed: step=1; error=calculator exploded
+    """
+
+    message = log.message
+
+    event = message.split(":", 1)[0].strip()
+
+    if event not in RUNTIME_V4_TRACE_EVENTS:
+        return None
+
+    step_index = _parse_step_index(message)
+    tool = _parse_tool(message)
+    error = _parse_error(message)
+
+    return {
+        "id": log.id,
+        "execution_id": log.execution_id,
+        "event": event,
+        "step_index": step_index,
+        "tool": tool,
+        "error": error,
+        "message": log.message,
+        "created_at": log.created_at,
+    }
+
+
+def _parse_step_index(message: str) -> int | None:
+    """
+    Extract a zero-based step index from a Runtime V4 trace message.
+    """
+
+    match = re.search(r"\bstep=(\d+)\b", message)
+
+    if match is None:
+        return None
+
+    return int(match.group(1))
+
+
+def _parse_tool(message: str) -> str | None:
+    """
+    Extract a tool name from a Runtime V4 trace message.
+
+    Tool names are terminated by whitespace, semicolon, or end-of-string.
+    """
+
+    match = re.search(r"\btool=([^\s;]+)", message)
+
+    if match is None:
+        return None
+
+    return match.group(1)
+
+
+def _parse_error(message: str) -> str | None:
+    """
+    Extract failure information from a Runtime V4 trace message.
+
+    Error text is intentionally allowed to contain spaces because runtime
+    exceptions may contain human-readable messages.
+    """
+
+    marker = "error="
+
+    if marker not in message:
+        return None
+
+    error = message.split(marker, 1)[1].strip()
+
+    if not error:
+        return None
+
+    return error
 
 
 def _is_runtime_v4_trace_message(message: str) -> bool:

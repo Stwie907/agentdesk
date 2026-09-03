@@ -1202,3 +1202,126 @@ def test_get_execution_trace_not_found():
 
     finally:
         clear_test_db_override()
+
+def test_get_execution_trace_returns_structured_step_fields():
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        db.add(
+            ExecutionLog(
+                execution_id=data["execution_id"],
+                message="step_started: step=0 tool=calculator",
+            )
+        )
+        db.commit()
+
+        with TestClient(app) as client:
+            response = client.get(
+                f"/executions/{data['execution_id']}/trace"
+            )
+
+        assert response.status_code == 200
+
+        body = response.json()
+
+        assert len(body) == 1
+        assert body[0]["event"] == "step_started"
+        assert body[0]["step_index"] == 0
+        assert body[0]["tool"] == "calculator"
+        assert body[0]["error"] is None
+        assert body[0]["message"] == (
+            "step_started: step=0 tool=calculator"
+        )
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+
+def test_get_execution_trace_returns_structured_failure_fields():
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        db.add(
+            ExecutionLog(
+                execution_id=data["execution_id"],
+                message=(
+                    "step_failed: step=1 tool=calculator; "
+                    "error=calculator exploded"
+                ),
+            )
+        )
+        db.commit()
+
+        with TestClient(app) as client:
+            response = client.get(
+                f"/executions/{data['execution_id']}/trace"
+            )
+
+        assert response.status_code == 200
+
+        body = response.json()
+
+        assert len(body) == 1
+        assert body[0]["event"] == "step_failed"
+        assert body[0]["step_index"] == 1
+        assert body[0]["tool"] == "calculator"
+        assert body[0]["error"] == "calculator exploded"
+        assert body[0]["message"] == (
+            "step_failed: step=1 tool=calculator; "
+            "error=calculator exploded"
+        )
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+def test_get_execution_trace_returns_structured_plan_failure_fields():
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        db.add(
+            ExecutionLog(
+                execution_id=data["execution_id"],
+                message=(
+                    "plan_failed: step=1; "
+                    "error=calculator exploded"
+                ),
+            )
+        )
+        db.commit()
+
+        with TestClient(app) as client:
+            response = client.get(
+                f"/executions/{data['execution_id']}/trace"
+            )
+
+        assert response.status_code == 200
+
+        body = response.json()
+
+        assert len(body) == 1
+        assert body[0]["event"] == "plan_failed"
+        assert body[0]["step_index"] == 1
+        assert body[0]["tool"] is None
+        assert body[0]["error"] == "calculator exploded"
+        assert body[0]["message"] == (
+            "plan_failed: step=1; "
+            "error=calculator exploded"
+        )
+
+    finally:
+        db.close()
+        clear_test_db_override()
