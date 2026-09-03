@@ -16,6 +16,7 @@ from fastapi import BackgroundTasks
 from app.workers.execution_worker import execute_agent
 from app.models.agent import Agent
 from app.crud.execution_log import get_logs
+from app.services.execution_trace import get_runtime_v4_trace
 
 router = APIRouter(
     prefix="/executions",
@@ -102,6 +103,29 @@ def read_execution_logs(
         execution_id,
     )
 
+@router.get(
+    "/{execution_id}/trace",
+    response_model=list[ExecutionLogRead],
+)
+def read_execution_trace(
+    execution_id: int,
+    db: Session = Depends(get_db),
+):
+    execution = get_execution(
+        db,
+        execution_id,
+    )
+
+    if not execution:
+        raise HTTPException(
+            status_code=404,
+            detail="Execution not found",
+        )
+
+    return get_runtime_v4_trace(
+        db,
+        execution_id,
+    )
 
 @router.post(
     "/{execution_id}/retry",

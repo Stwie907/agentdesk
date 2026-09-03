@@ -1107,3 +1107,98 @@ def test_cancel_failed_execution_is_rejected():
     finally:
         db.close()
         clear_test_db_override()
+
+def test_get_execution_trace_returns_only_runtime_v4_events():
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        db.add_all(
+            [
+                ExecutionLog(
+                    execution_id=data["execution_id"],
+                    message="plan_started",
+                ),
+                ExecutionLog(
+                    execution_id=data["execution_id"],
+                    message="step_started: step=0 tool=calculator",
+                ),
+                ExecutionLog(
+                    execution_id=data["execution_id"],
+                    message="step_completed: step=0 tool=calculator",
+                ),
+                ExecutionLog(
+                    execution_id=data["execution_id"],
+                    message="plan_completed",
+                ),
+            ]
+        )
+        db.commit()
+
+        with TestClient(app) as client:
+            response = client.get(
+                f"/executions/{data['execution_id']}/trace"
+            )
+
+        assert response.status_code == 200
+
+        body = response.json()
+
+        assert [
+            item["message"]
+            for item in body
+        ] == [
+            "plan_started",
+            "step_started: step=0 tool=calculator",
+            "step_completed: step=0 tool=calculator",
+            "plan_completed",
+        ]
+
+        assert all(
+            item["execution_id"] == data["execution_id"]
+            for item in body
+        )
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+
+def test_get_execution_trace_returns_empty_list_without_runtime_v4_events():
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                f"/executions/{data['execution_id']}/trace"
+            )
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    finally:
+        clear_test_db_override()
+
+
+def test_get_execution_trace_not_found():
+    setup_test_db_override()
+    reset_database()
+
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                "/executions/999999/trace"
+            )
+
+        assert response.status_code == 404
+        assert response.json() == {
+            "detail": "Execution not found"
+        }
+
+    finally:
+        clear_test_db_override()
