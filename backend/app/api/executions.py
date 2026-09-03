@@ -6,6 +6,7 @@ from app.schemas.execution import (
     ExecutionCreate,
     ExecutionRead,
     ExecutionLogRead,
+    ExecutionTraceRead,
 )
 from app.crud.execution import (
     create_execution,
@@ -105,7 +106,7 @@ def read_execution_logs(
 
 @router.get(
     "/{execution_id}/trace",
-    response_model=list[ExecutionLogRead],
+    response_model=list[ExecutionTraceRead],
 )
 def read_execution_trace(
     execution_id: int,

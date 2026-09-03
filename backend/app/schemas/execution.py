@@ -23,6 +23,7 @@ class ExecutionRead(BaseModel):
 
     model_config = {"from_attributes": True}
 
+
 class ExecutionLogRead(BaseModel):
     id: int
     execution_id: int
@@ -31,3 +32,26 @@ class ExecutionLogRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ExecutionTraceRead(BaseModel):
+    """
+    Structured Runtime V4 execution trace event.
+
+    Runtime V4 trace data is currently persisted inside
+    ExecutionLog.message. This schema exposes the useful
+    lifecycle fields directly to API clients so they do not
+    need to parse internal log-message formatting.
+    """
+
+    id: int
+    execution_id: int
+
+    event: str
+
+    step_index: int | None = None
+    tool: str | None = None
+    error: str | None = None
+
+    message: str
+    created_at: datetime
