@@ -383,3 +383,115 @@ def test_runtime_trace_records_multi_step_execution_order(monkeypatch):
         db.close()
         Base.metadata.drop_all(bind=test_engine)
         test_engine.dispose()
+
+def test_runtime_trace_records_multi_step_failure_order(monkeypatch):
+    import pytest
+
+    from app.services import agent_runner
+    from app.runtime.execution_plan import ExecutionPlan, ExecutionStep
+
+    monkeypatch.setattr(
+        agent_runner,
+        "SessionLocal",
+        TestingSessionLocal,
+    )
+
+    Base.metadata.drop_all(bind=test_engine)
+    Base.metadata.create_all(bind=test_engine)
+
+    db = TestingSessionLocal()
+
+    try:
+        execution = Execution(
+            agent_id=1,
+            input="multi-step failure trace test",
+            status="pending",
+        )
+
+        db.add(execution)
+        db.commit()
+        db.refresh(execution)
+
+        monkeypatch.setattr(
+            agent_runner,
+            "plan_execution",
+            lambda user_input, allowed_tools=None: ExecutionPlan(
+                steps=[
+                    ExecutionStep(
+                        tool="calculator",
+                        arguments={"expression": "1+1"},
+                        input="1+1",
+                    ),
+                    ExecutionStep(
+                        tool="calculator",
+                        arguments={"expression": "2+2"},
+                        input="2+2",
+                    ),
+                ]
+            ),
+        )
+
+        calls = {"count": 0}
+
+        def fake_execute_tool(
+            tool_name,
+            tool_input,
+            allowed_tools=None,
+        ):
+            calls["count"] += 1
+
+            if calls["count"] == 1:
+                return "2"
+
+            raise RuntimeError("calculator exploded")
+
+        monkeypatch.setattr(
+            plan_executor,
+            "execute_tool",
+            fake_execute_tool,
+        )
+
+        with pytest.raises(
+            RuntimeError,
+            match="calculator exploded",
+        ):
+            agent_runner.run_agent(
+                "qwen2.5:7b",
+                "multi-step failure trace test",
+                execution_id=execution.id,
+            )
+
+        logs = (
+            db.query(ExecutionLog)
+            .filter(
+                ExecutionLog.execution_id == execution.id
+            )
+            .order_by(ExecutionLog.id)
+            .all()
+        )
+
+        messages = [
+            log.message
+            for log in logs
+        ]
+
+        assert messages == [
+            "planner_decision: tools=['calculator', 'calculator']",
+            "plan_started",
+            "step_started: step=0 tool=calculator",
+            "tool_called: tool=calculator",
+            "tool_result: tool=calculator; result=2",
+            "step_completed: step=0 tool=calculator",
+            "step_started: step=1 tool=calculator",
+            "tool_called: tool=calculator",
+            "step_failed: step=1 tool=calculator; error=calculator exploded",
+            "plan_failed: step=1; error=calculator exploded",
+        ]
+
+        assert "step_completed: step=1 tool=calculator" not in messages
+        assert "plan_completed" not in messages
+
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=test_engine)
+        test_engine.dispose()

@@ -119,6 +119,7 @@ def execute_plan(
     allowed_tools: list[str] | None = None,
     on_step_started: Callable[[int, ExecutionStep], None] | None = None,
     on_step_completed: Callable[[int, StepExecutionResult], None] | None = None,
+    on_step_failed: Callable[[int, ExecutionStep, Exception], None] | None = None,
 ) -> PlanExecutionResult:
     """
     Execute every step in an ExecutionPlan in order.
@@ -156,10 +157,20 @@ def execute_plan(
                 resolved_step,
             )
 
-        result = execute_step(
-            resolved_step,
-            allowed_tools=allowed_tools,
-        )
+        try:
+            result = execute_step(
+                resolved_step,
+                allowed_tools=allowed_tools,
+            )
+        except Exception as exc:
+            if on_step_failed is not None:
+                on_step_failed(
+                    step_index,
+                    resolved_step,
+                    exc,
+                )
+
+            raise
 
         if on_step_completed is not None:
             on_step_completed(

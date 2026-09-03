@@ -136,13 +136,45 @@ def run_agent(
             f"step={step_index}{tool_detail}",
         )
 
+    failed_step = {
+        "index": None,
+    }
 
-    plan_result = execute_plan(
-        execution_plan,
-        allowed_tools=allowed_tools,
-        on_step_started=on_step_started,
-        on_step_completed=on_step_completed,
-    )
+
+    def on_step_failed(step_index, step, exc):
+        failed_step["index"] = step_index
+
+        tool_detail = (
+            f" tool={step.tool}"
+            if step.tool is not None
+            else ""
+        )
+
+        trace(
+            TraceEvent.STEP_FAILED,
+            f"step={step_index}{tool_detail}; error={exc}",
+        )
+
+    try:
+        plan_result = execute_plan(
+            execution_plan,
+            allowed_tools=allowed_tools,
+            on_step_started=on_step_started,
+            on_step_completed=on_step_completed,
+            on_step_failed=on_step_failed,
+        )
+    except Exception as exc:
+        detail = f"error={exc}"
+
+        if failed_step["index"] is not None:
+            detail = f"step={failed_step['index']}; {detail}"
+
+        trace(
+            TraceEvent.PLAN_FAILED,
+            detail,
+        )
+
+        raise
 
     trace(
         TraceEvent.PLAN_COMPLETED,
@@ -210,3 +242,15 @@ def run_agent(
     )
 
     return result
+
+def on_step_failed(step_index, step, exc):
+    tool_detail = (
+        f" tool={step.tool}"
+        if step.tool is not None
+        else ""
+    )
+
+    trace(
+        TraceEvent.STEP_FAILED,
+        f"step={step_index}{tool_detail}; error={exc}",
+    )

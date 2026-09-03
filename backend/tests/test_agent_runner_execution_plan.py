@@ -85,6 +85,7 @@ def test_run_agent_delegates_execution_to_plan_executor(monkeypatch):
         allowed_tools=None,
         on_step_started=None,
         on_step_completed=None,
+        on_step_failed=None,
     ):
         calls["execute_plan"] += 1
 
