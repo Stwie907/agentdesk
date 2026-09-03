@@ -30,7 +30,9 @@ class TraceEvent(str, Enum):
     PLAN_STARTED = "plan_started"
     STEP_STARTED = "step_started"
     STEP_COMPLETED = "step_completed"
+    STEP_FAILED = "step_failed"
     PLAN_COMPLETED = "plan_completed"
+    PLAN_FAILED = "plan_failed"
 
     TOOL_CALLED = "tool_called"
     TOOL_RESULT = "tool_result"
