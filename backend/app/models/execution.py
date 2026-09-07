@@ -50,9 +50,23 @@ class Execution(Base):
         nullable=True,
     )
 
+    replay_of_execution_id = Column(
+        Integer,
+        ForeignKey("executions.id"),
+        nullable=True,
+        index=True,
+    )
+
     logs = relationship(
         "ExecutionLog",
         backref="execution"
+    )
+
+
+    snapshot = relationship(
+        "ExecutionSnapshot",
+        back_populates="execution",
+        uselist=False
     )
 
     created_at = Column(

@@ -52,3 +52,27 @@ def get_executions_by_agent(
         )
         .all()
     )
+
+def create_replay_execution(
+    db: Session,
+    source_execution: Execution,
+):
+    """
+    Create a new execution that replays a previous execution snapshot.
+
+    The original execution remains unchanged. The new execution records
+    its provenance through replay_of_execution_id.
+    """
+
+    db_execution = Execution(
+        agent_id=source_execution.agent_id,
+        input=source_execution.input,
+        status="pending",
+        replay_of_execution_id=source_execution.id,
+    )
+
+    db.add(db_execution)
+    db.commit()
+    db.refresh(db_execution)
+
+    return db_execution

@@ -18,6 +18,7 @@ class ExecutionRead(BaseModel):
     retry_count: int = 0
     failure_type: str | None = None
     failure_message: str | None = None
+    replay_of_execution_id: int | None = None
 
     created_at: datetime
 

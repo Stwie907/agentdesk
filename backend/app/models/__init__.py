@@ -6,3 +6,4 @@ from app.models.execution_log import ExecutionLog
 from app.models.memory import Memory
 from app.models.conversation import Conversation
 from app.models.message import Message
+from app.models.execution_snapshot import ExecutionSnapshot

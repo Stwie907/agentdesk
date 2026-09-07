@@ -10,7 +10,7 @@ from app.models.agent import Agent
 from app.models.project import Project
 from app.models.execution import Execution
 from app.models.execution_log import ExecutionLog
-
+from app.models.execution_snapshot import ExecutionSnapshot
 
 # ---------------------------------
 # Isolated in-memory test database
@@ -1320,6 +1320,260 @@ def test_get_execution_trace_returns_structured_plan_failure_fields():
         assert body[0]["message"] == (
             "plan_failed: step=1; "
             "error=calculator exploded"
+        )
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+def test_replay_execution_returns_404_when_execution_does_not_exist():
+    setup_test_db_override()
+    reset_database()
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/executions/999999/replay",
+            )
+
+        assert response.status_code == 404
+        assert response.json() == {
+            "detail": "Execution not found",
+        }
+
+    finally:
+        clear_test_db_override()
+
+def test_replay_execution_returns_409_when_snapshot_does_not_exist():
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                f"/executions/{data['execution_id']}/replay",
+            )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "detail": "Execution snapshot not found",
+        }
+
+    finally:
+        clear_test_db_override()
+
+def test_replay_execution_returns_409_when_snapshot_has_no_plan():
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        snapshot = ExecutionSnapshot(
+            execution_id=data["execution_id"],
+            input_snapshot="snapshot input",
+            plan_snapshot=None,
+            output_snapshot=None,
+        )
+
+        db.add(snapshot)
+        db.commit()
+
+        with TestClient(app) as client:
+            response = client.post(
+                f"/executions/{data['execution_id']}/replay",
+            )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "detail": "Execution snapshot does not contain a plan",
+        }
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+def test_replay_execution_creates_new_execution_from_snapshot(monkeypatch):
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        snapshot = ExecutionSnapshot(
+            execution_id=data["execution_id"],
+            input_snapshot="first test execution",
+            plan_snapshot=(
+                '{"steps":['
+                '{"tool":"calculator",'
+                '"arguments":{"expression":"40+2"},'
+                '"input":"calculate 40+2"}'
+                ']}'
+            ),
+            output_snapshot="first result",
+        )
+
+        db.add(snapshot)
+        db.commit()
+
+        monkeypatch.setattr(
+            "app.runtime.plan_executor.execute_tool",
+            lambda tool_name, tool_input, allowed_tools=None: "42",
+        )
+
+        with TestClient(app) as client:
+            response = client.post(
+                f"/executions/{data['execution_id']}/replay",
+            )
+
+        assert response.status_code == 200
+
+        body = response.json()
+
+        assert body["id"] != data["execution_id"]
+        assert body["agent_id"] == data["agent_id"]
+        assert body["status"] == "completed"
+        assert body["output"] == "42"
+
+        assert (
+            body["replay_of_execution_id"]
+            == data["execution_id"]
+        )
+
+        assert body["retry_count"] == 0
+        assert body["failure_type"] is None
+        assert body["failure_message"] is None
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+def test_replay_execution_does_not_modify_source_execution(monkeypatch):
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        source_execution = db.query(Execution).filter(
+            Execution.id == data["execution_id"]
+        ).first()
+
+        original_input = source_execution.input
+        original_output = source_execution.output
+        original_status = source_execution.status
+        original_retry_count = source_execution.retry_count
+        original_failure_type = source_execution.failure_type
+        original_failure_message = source_execution.failure_message
+
+        snapshot = ExecutionSnapshot(
+            execution_id=data["execution_id"],
+            input_snapshot="replay input",
+            plan_snapshot=(
+                '{"steps":['
+                '{"tool":"calculator",'
+                '"arguments":{"expression":"40+2"},'
+                '"input":"calculate 40+2"}'
+                ']}'
+            ),
+            output_snapshot="original snapshot output",
+        )
+
+        db.add(snapshot)
+        db.commit()
+
+        monkeypatch.setattr(
+            "app.runtime.plan_executor.execute_tool",
+            lambda tool_name, tool_input, allowed_tools=None: "42",
+        )
+
+        with TestClient(app) as client:
+            response = client.post(
+                f"/executions/{data['execution_id']}/replay",
+            )
+
+        assert response.status_code == 200
+
+        db.expire_all()
+
+        source_execution = db.query(Execution).filter(
+            Execution.id == data["execution_id"]
+        ).first()
+
+        assert source_execution.input == original_input
+        assert source_execution.output == original_output
+        assert source_execution.status == original_status
+        assert source_execution.retry_count == original_retry_count
+        assert source_execution.failure_type == original_failure_type
+        assert source_execution.failure_message == original_failure_message
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+def test_replay_execution_persists_replay_lineage(monkeypatch):
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        snapshot = ExecutionSnapshot(
+            execution_id=data["execution_id"],
+            input_snapshot="lineage replay input",
+            plan_snapshot=(
+                '{"steps":['
+                '{"tool":"calculator",'
+                '"arguments":{"expression":"6*7"},'
+                '"input":"calculate 6*7"}'
+                ']}'
+            ),
+            output_snapshot="original output",
+        )
+
+        db.add(snapshot)
+        db.commit()
+
+        monkeypatch.setattr(
+            "app.runtime.plan_executor.execute_tool",
+            lambda tool_name, tool_input, allowed_tools=None: "42",
+        )
+
+        with TestClient(app) as client:
+            response = client.post(
+                f"/executions/{data['execution_id']}/replay",
+            )
+
+        assert response.status_code == 200
+
+        replay_id = response.json()["id"]
+
+        db.expire_all()
+
+        source_execution = (
+            db.query(Execution)
+            .filter(Execution.id == data["execution_id"])
+            .first()
+        )
+
+        replay_execution = (
+            db.query(Execution)
+            .filter(Execution.id == replay_id)
+            .first()
+        )
+
+        assert source_execution.replay_of_execution_id is None
+
+        assert replay_execution is not None
+        assert replay_execution.id != source_execution.id
+        assert (
+            replay_execution.replay_of_execution_id
+            == source_execution.id
         )
 
     finally:
