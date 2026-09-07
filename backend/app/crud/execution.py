@@ -76,3 +76,27 @@ def create_replay_execution(
     db.refresh(db_execution)
 
     return db_execution
+
+def get_replays_by_execution(
+    db: Session,
+    execution_id: int,
+):
+    """
+    Return executions that were replayed from one source execution.
+
+    Results are ordered deterministically from oldest to newest.
+    The id tie-breaker keeps ordering stable when multiple executions
+    share the same created_at timestamp.
+    """
+
+    return (
+        db.query(Execution)
+        .filter(
+            Execution.replay_of_execution_id == execution_id
+        )
+        .order_by(
+            Execution.created_at.asc(),
+            Execution.id.asc(),
+        )
+        .all()
+    )
