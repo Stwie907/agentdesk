@@ -10,9 +10,9 @@ from app.schemas.execution import (
 )
 from app.crud.execution import (
     create_execution,
-    get_execution
+    get_execution,
+    get_replays_by_execution,
 )
-
 from fastapi import BackgroundTasks
 from app.workers.execution_worker import execute_agent
 from app.models.agent import Agent
@@ -21,6 +21,7 @@ from app.services.execution_trace import get_runtime_v4_trace
 import json
 
 from app.crud.execution_snapshot import get_execution_snapshot
+from app.schemas.execution_snapshot import ExecutionSnapshotRead
 from app.services.execution_snapshot import replay_execution
 
 router = APIRouter(
@@ -83,6 +84,70 @@ def read(
         )
 
     return execution
+
+@router.get(
+    "/{execution_id}/snapshot",
+    response_model=ExecutionSnapshotRead,
+)
+def read_execution_snapshot(
+    execution_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Return the persisted Runtime V4 snapshot for one execution.
+    """
+
+    execution = get_execution(
+        db,
+        execution_id,
+    )
+
+    if not execution:
+        raise HTTPException(
+            status_code=404,
+            detail="Execution not found",
+        )
+
+    snapshot = get_execution_snapshot(
+        db,
+        execution_id,
+    )
+
+    if snapshot is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Execution snapshot not found",
+        )
+
+    return snapshot
+
+@router.get(
+    "/{execution_id}/replays",
+    response_model=list[ExecutionRead],
+)
+def read_execution_replays(
+    execution_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Return executions replayed from one source execution.
+    """
+
+    execution = get_execution(
+        db,
+        execution_id,
+    )
+
+    if not execution:
+        raise HTTPException(
+            status_code=404,
+            detail="Execution not found",
+        )
+
+    return get_replays_by_execution(
+        db,
+        execution_id,
+    )
 
 @router.get(
     "/{execution_id}/logs",

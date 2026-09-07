@@ -1579,3 +1579,246 @@ def test_replay_execution_persists_replay_lineage(monkeypatch):
     finally:
         db.close()
         clear_test_db_override()
+
+def test_get_execution_snapshot_returns_snapshot():
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        snapshot = ExecutionSnapshot(
+            execution_id=data["execution_id"],
+            input_snapshot="snapshot input",
+            plan_snapshot='{"steps":[]}',
+            output_snapshot="snapshot output",
+        )
+
+        db.add(snapshot)
+        db.commit()
+        db.refresh(snapshot)
+
+        with TestClient(app) as client:
+            response = client.get(
+                f"/executions/{data['execution_id']}/snapshot",
+            )
+
+        assert response.status_code == 200
+
+        body = response.json()
+
+        assert body["id"] == snapshot.id
+        assert body["execution_id"] == data["execution_id"]
+        assert body["input_snapshot"] == "snapshot input"
+        assert body["plan_snapshot"] == '{"steps":[]}'
+        assert body["output_snapshot"] == "snapshot output"
+        assert body["created_at"] is not None
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+
+def test_get_execution_snapshot_returns_404_when_execution_does_not_exist():
+    setup_test_db_override()
+    reset_database()
+
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                "/executions/999999/snapshot",
+            )
+
+        assert response.status_code == 404
+        assert response.json() == {
+            "detail": "Execution not found",
+        }
+
+    finally:
+        clear_test_db_override()
+
+
+def test_get_execution_snapshot_returns_404_when_snapshot_does_not_exist():
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                f"/executions/{data['execution_id']}/snapshot",
+            )
+
+        assert response.status_code == 404
+        assert response.json() == {
+            "detail": "Execution snapshot not found",
+        }
+
+    finally:
+        clear_test_db_override()
+
+def test_get_execution_replays_returns_empty_list_when_no_replays_exist():
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                f"/executions/{data['execution_id']}/replays",
+            )
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    finally:
+        clear_test_db_override()
+
+
+def test_get_execution_replays_returns_404_when_execution_does_not_exist():
+    setup_test_db_override()
+    reset_database()
+
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                "/executions/999999/replays",
+            )
+
+        assert response.status_code == 404
+        assert response.json() == {
+            "detail": "Execution not found",
+        }
+
+    finally:
+        clear_test_db_override()
+
+
+def test_get_execution_replays_returns_only_replays_for_source_execution():
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        source_execution = (
+            db.query(Execution)
+            .filter(Execution.id == data["execution_id"])
+            .first()
+        )
+
+        replay_execution = Execution(
+            agent_id=data["agent_id"],
+            input="replay input",
+            output="replay output",
+            status="completed",
+            replay_of_execution_id=source_execution.id,
+        )
+
+        unrelated_execution = Execution(
+            agent_id=data["agent_id"],
+            input="unrelated input",
+            output="unrelated output",
+            status="completed",
+        )
+
+        db.add_all(
+            [
+                replay_execution,
+                unrelated_execution,
+            ]
+        )
+        db.commit()
+        db.refresh(replay_execution)
+        db.refresh(unrelated_execution)
+
+        with TestClient(app) as client:
+            response = client.get(
+                f"/executions/{source_execution.id}/replays",
+            )
+
+        assert response.status_code == 200
+
+        body = response.json()
+
+        assert len(body) == 1
+        assert body[0]["id"] == replay_execution.id
+        assert (
+            body[0]["replay_of_execution_id"]
+            == source_execution.id
+        )
+
+        returned_ids = [
+            item["id"]
+            for item in body
+        ]
+
+        assert unrelated_execution.id not in returned_ids
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+
+def test_get_execution_replays_returns_deterministic_order():
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        source_execution = (
+            db.query(Execution)
+            .filter(Execution.id == data["execution_id"])
+            .first()
+        )
+
+        replay_one = Execution(
+            agent_id=data["agent_id"],
+            input="replay one",
+            output="first",
+            status="completed",
+            replay_of_execution_id=source_execution.id,
+            created_at=source_execution.created_at,
+        )
+
+        replay_two = Execution(
+            agent_id=data["agent_id"],
+            input="replay two",
+            output="second",
+            status="completed",
+            replay_of_execution_id=source_execution.id,
+            created_at=source_execution.created_at,
+        )
+
+        db.add(replay_one)
+        db.commit()
+        db.refresh(replay_one)
+
+        db.add(replay_two)
+        db.commit()
+        db.refresh(replay_two)
+
+        with TestClient(app) as client:
+            response = client.get(
+                f"/executions/{source_execution.id}/replays",
+            )
+
+        assert response.status_code == 200
+
+        body = response.json()
+
+        assert [
+            item["id"]
+            for item in body
+        ] == [
+            replay_one.id,
+            replay_two.id,
+        ]
+
+    finally:
+        db.close()
+        clear_test_db_override()
