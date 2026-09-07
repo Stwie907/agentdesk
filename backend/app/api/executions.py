@@ -18,6 +18,10 @@ from app.workers.execution_worker import execute_agent
 from app.models.agent import Agent
 from app.crud.execution_log import get_logs
 from app.services.execution_trace import get_runtime_v4_trace
+import json
+
+from app.crud.execution_snapshot import get_execution_snapshot
+from app.services.execution_snapshot import replay_execution
 
 router = APIRouter(
     prefix="/executions",
@@ -210,3 +214,81 @@ def cancel_execution(
 
     return execution
 
+@router.post(
+    "/{execution_id}/replay",
+    response_model=ExecutionRead,
+)
+def replay_execution_endpoint(
+    execution_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Replay an execution from its persisted Runtime V4 snapshot.
+
+    Replay creates a new Execution instead of modifying the source
+    execution. The stored ExecutionPlan is executed directly, so the
+    planner is not invoked again.
+    """
+
+    source_execution = get_execution(
+        db,
+        execution_id,
+    )
+
+    if not source_execution:
+        raise HTTPException(
+            status_code=404,
+            detail="Execution not found",
+        )
+
+    snapshot = get_execution_snapshot(
+        db,
+        execution_id,
+    )
+
+    if snapshot is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Execution snapshot not found",
+        )
+
+    if not snapshot.plan_snapshot:
+        raise HTTPException(
+            status_code=409,
+            detail="Execution snapshot does not contain a plan",
+        )
+
+    agent = (
+        db.query(Agent)
+        .filter(Agent.id == source_execution.agent_id)
+        .first()
+    )
+
+    if not agent:
+        raise HTTPException(
+            status_code=404,
+            detail="Agent not found",
+        )
+
+    allowed_tools = ["calculator", "datetime"]
+
+    if agent.allowed_tools:
+        try:
+            parsed_allowed_tools = json.loads(agent.allowed_tools)
+
+            if isinstance(parsed_allowed_tools, list):
+                allowed_tools = parsed_allowed_tools
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    try:
+        return replay_execution(
+            db,
+            source_execution,
+            allowed_tools=allowed_tools,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc

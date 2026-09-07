@@ -4,6 +4,10 @@ from app.runtime.plan_executor import execute_plan
 from app.database import SessionLocal
 from app.services.execution_trace import TraceEvent, trace_event
 from app.runtime.planner import plan_execution
+from app.services.execution_snapshot import (
+    persist_execution_plan_snapshot,
+    persist_execution_output_snapshot,
+)
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 
@@ -72,6 +76,19 @@ def run_agent(
         user_input,
         allowed_tools=allowed_tools,
     )
+
+    if execution_id is not None:
+        db = SessionLocal()
+
+        try:
+            persist_execution_plan_snapshot(
+                db,
+                execution_id,
+                user_input,
+                execution_plan,
+            )
+        finally:
+            db.close()
 
     tool_names = [
         step.tool
@@ -189,7 +206,21 @@ def run_agent(
         len(execution_plan.steps) == 1
         and execution_plan.steps[0].tool == "calculator"
     ):
-        return str(tool_result)
+        final_result = str(tool_result)
+
+        if execution_id is not None:
+            db = SessionLocal()
+
+            try:
+                persist_execution_output_snapshot(
+                    db,
+                    execution_id,
+                    final_result,
+                )
+            finally:
+                db.close()
+
+        return final_result
 
     # ---------------------------------------------------------
     # 3. Build final LLM prompt
@@ -240,6 +271,18 @@ def run_agent(
         TraceEvent.LLM_COMPLETED,
         f"model={model}",
     )
+
+    if execution_id is not None:
+        db = SessionLocal()
+
+        try:
+            persist_execution_output_snapshot(
+                db,
+                execution_id,
+                str(result),
+            )
+        finally:
+            db.close()
 
     return result
 
