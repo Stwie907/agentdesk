@@ -1,3 +1,5 @@
+from app.constants import CURRENT_EXECUTION_SNAPSHOT_VERSION
+
 from datetime import datetime
 
 from pydantic import BaseModel
@@ -12,10 +14,10 @@ class ExecutionSnapshotCreate(BaseModel):
     """
 
     execution_id: int
+    snapshot_version: int = CURRENT_EXECUTION_SNAPSHOT_VERSION
     input_snapshot: str
     plan_snapshot: str | None = None
     output_snapshot: str | None = None
-
 
 class ExecutionSnapshotRead(BaseModel):
     """
@@ -24,6 +26,7 @@ class ExecutionSnapshotRead(BaseModel):
 
     id: int
     execution_id: int
+    snapshot_version: int
 
     input_snapshot: str
     plan_snapshot: str | None = None

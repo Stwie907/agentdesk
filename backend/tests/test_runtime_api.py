@@ -5,6 +5,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.database import Base, get_db
+from app.constants import CURRENT_EXECUTION_SNAPSHOT_VERSION
 from app.models.user import User
 from app.models.agent import Agent
 from app.models.project import Project
@@ -1395,6 +1396,79 @@ def test_replay_execution_returns_409_when_snapshot_has_no_plan():
         db.close()
         clear_test_db_override()
 
+def test_replay_execution_returns_409_for_unsupported_snapshot_version():
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        source_execution = (
+            db.query(Execution)
+            .filter(Execution.id == data["execution_id"])
+            .first()
+        )
+
+        original_input = source_execution.input
+        original_output = source_execution.output
+        original_status = source_execution.status
+
+        snapshot = ExecutionSnapshot(
+            execution_id=data["execution_id"],
+            snapshot_version=CURRENT_EXECUTION_SNAPSHOT_VERSION + 1,
+            input_snapshot="unsupported version replay input",
+            plan_snapshot='{"steps":[]}',
+            output_snapshot="original snapshot output",
+        )
+
+        db.add(snapshot)
+        db.commit()
+
+        with TestClient(app) as client:
+            response = client.post(
+                f"/executions/{data['execution_id']}/replay",
+            )
+
+        assert response.status_code == 409
+
+        assert response.json() == {
+            "detail": (
+                "Unsupported execution snapshot version: "
+                f"{CURRENT_EXECUTION_SNAPSHOT_VERSION + 1}; "
+                "supported version: "
+                f"{CURRENT_EXECUTION_SNAPSHOT_VERSION}"
+            ),
+        }
+
+        db.expire_all()
+
+        replay_executions = (
+            db.query(Execution)
+            .filter(
+                Execution.replay_of_execution_id
+                == data["execution_id"]
+            )
+            .all()
+        )
+
+        assert replay_executions == []
+
+        source_execution = (
+            db.query(Execution)
+            .filter(Execution.id == data["execution_id"])
+            .first()
+        )
+
+        assert source_execution.input == original_input
+        assert source_execution.output == original_output
+        assert source_execution.status == original_status
+        assert source_execution.replay_of_execution_id is None
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
 def test_replay_execution_creates_new_execution_from_snapshot(monkeypatch):
     setup_test_db_override()
     reset_database()
@@ -1818,6 +1892,142 @@ def test_get_execution_replays_returns_deterministic_order():
             replay_one.id,
             replay_two.id,
         ]
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+def test_replay_execution_returns_409_for_malformed_plan_snapshot_json():
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        source_execution = (
+            db.query(Execution)
+            .filter(Execution.id == data["execution_id"])
+            .first()
+        )
+
+        original_input = source_execution.input
+        original_output = source_execution.output
+        original_status = source_execution.status
+
+        snapshot = ExecutionSnapshot(
+            execution_id=data["execution_id"],
+            snapshot_version=CURRENT_EXECUTION_SNAPSHOT_VERSION,
+            input_snapshot="malformed plan replay input",
+            plan_snapshot="{this is not valid json",
+            output_snapshot="original snapshot output",
+        )
+
+        db.add(snapshot)
+        db.commit()
+
+        with TestClient(app) as client:
+            response = client.post(
+                f"/executions/{data['execution_id']}/replay",
+            )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "detail": "Invalid execution plan snapshot JSON",
+        }
+
+        db.expire_all()
+
+        replay_executions = (
+            db.query(Execution)
+            .filter(
+                Execution.replay_of_execution_id
+                == data["execution_id"]
+            )
+            .all()
+        )
+
+        assert replay_executions == []
+
+        source_execution = (
+            db.query(Execution)
+            .filter(Execution.id == data["execution_id"])
+            .first()
+        )
+
+        assert source_execution.input == original_input
+        assert source_execution.output == original_output
+        assert source_execution.status == original_status
+        assert source_execution.replay_of_execution_id is None
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+def test_replay_execution_returns_409_for_invalid_plan_snapshot_structure():
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        source_execution = (
+            db.query(Execution)
+            .filter(Execution.id == data["execution_id"])
+            .first()
+        )
+
+        original_input = source_execution.input
+        original_output = source_execution.output
+        original_status = source_execution.status
+
+        snapshot = ExecutionSnapshot(
+            execution_id=data["execution_id"],
+            snapshot_version=CURRENT_EXECUTION_SNAPSHOT_VERSION,
+            input_snapshot="invalid plan structure replay input",
+            plan_snapshot='{"steps":"not-a-list"}',
+            output_snapshot="original snapshot output",
+        )
+
+        db.add(snapshot)
+        db.commit()
+
+        with TestClient(app) as client:
+            response = client.post(
+                f"/executions/{data['execution_id']}/replay",
+            )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "detail": (
+                "Execution plan snapshot must contain a steps list"
+            ),
+        }
+
+        db.expire_all()
+
+        replay_executions = (
+            db.query(Execution)
+            .filter(
+                Execution.replay_of_execution_id
+                == data["execution_id"]
+            )
+            .all()
+        )
+
+        assert replay_executions == []
+
+        source_execution = (
+            db.query(Execution)
+            .filter(Execution.id == data["execution_id"])
+            .first()
+        )
+
+        assert source_execution.input == original_input
+        assert source_execution.output == original_output
+        assert source_execution.status == original_status
+        assert source_execution.replay_of_execution_id is None
 
     finally:
         db.close()

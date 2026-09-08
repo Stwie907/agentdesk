@@ -1,3 +1,4 @@
+from app.constants import CURRENT_EXECUTION_SNAPSHOT_VERSION
 from sqlalchemy import Column, Integer, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -19,6 +20,13 @@ class ExecutionSnapshot(Base):
         ForeignKey("executions.id"),
         nullable=False,
         unique=True
+    )
+
+    snapshot_version = Column(
+        Integer,
+        nullable=False,
+        default=CURRENT_EXECUTION_SNAPSHOT_VERSION,
+        server_default=str(CURRENT_EXECUTION_SNAPSHOT_VERSION),
     )
 
     input_snapshot = Column(

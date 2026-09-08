@@ -3,6 +3,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base
+from app.constants import CURRENT_EXECUTION_SNAPSHOT_VERSION
 from app.models.execution import Execution
 from app.models.execution_snapshot import ExecutionSnapshot
 from app.crud.execution_snapshot import (
@@ -809,6 +810,312 @@ def test_replay_execution_creates_new_completed_execution(monkeypatch):
 
         assert original.status == "completed"
         assert original.output == "original result"
+
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=test_engine)
+        test_engine.dispose()
+
+def test_new_execution_snapshot_persists_current_snapshot_version():
+    Base.metadata.drop_all(bind=test_engine)
+    Base.metadata.create_all(bind=test_engine)
+
+    db = TestingSessionLocal()
+
+    try:
+        execution = Execution(
+            agent_id=1,
+            input="snapshot version test",
+            status="completed",
+            output="snapshot version output",
+        )
+
+        db.add(execution)
+        db.commit()
+        db.refresh(execution)
+
+        snapshot_create = ExecutionSnapshotCreate(
+            execution_id=execution.id,
+            input_snapshot="snapshot version input",
+            plan_snapshot='{"steps":[]}',
+            output_snapshot="snapshot version output",
+        )
+
+        # Callers do not need to provide a version explicitly.
+        assert (
+            snapshot_create.snapshot_version
+            == CURRENT_EXECUTION_SNAPSHOT_VERSION
+        )
+
+        created = create_execution_snapshot(
+            db,
+            snapshot_create,
+        )
+
+        assert (
+            created.snapshot_version
+            == CURRENT_EXECUTION_SNAPSHOT_VERSION
+        )
+
+        loaded = get_execution_snapshot(
+            db,
+            execution.id,
+        )
+
+        assert loaded is not None
+        assert (
+            loaded.snapshot_version
+            == CURRENT_EXECUTION_SNAPSHOT_VERSION
+        )
+
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=test_engine)
+        test_engine.dispose()
+
+def test_replay_execution_snapshot_rejects_unsupported_snapshot_version():
+    Base.metadata.drop_all(bind=test_engine)
+    Base.metadata.create_all(bind=test_engine)
+
+    db = TestingSessionLocal()
+
+    try:
+        execution = Execution(
+            agent_id=1,
+            input="unsupported snapshot version test",
+            status="completed",
+            output="original output",
+        )
+
+        db.add(execution)
+        db.commit()
+        db.refresh(execution)
+
+        snapshot = ExecutionSnapshot(
+            execution_id=execution.id,
+            snapshot_version=CURRENT_EXECUTION_SNAPSHOT_VERSION + 1,
+            input_snapshot="unsupported version input",
+            plan_snapshot='{"steps":[]}',
+            output_snapshot="original output",
+        )
+
+        db.add(snapshot)
+        db.commit()
+        db.refresh(snapshot)
+
+        try:
+            replay_execution_snapshot(
+                db,
+                execution.id,
+            )
+
+            assert False, (
+                "Expected unsupported execution snapshot version "
+                "to be rejected"
+            )
+
+        except ValueError as exc:
+            assert "Unsupported execution snapshot version" in str(exc)
+
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=test_engine)
+        test_engine.dispose()
+
+def test_replay_execution_rejects_unsupported_version_without_creating_replay():
+    Base.metadata.drop_all(bind=test_engine)
+    Base.metadata.create_all(bind=test_engine)
+
+    db = TestingSessionLocal()
+
+    try:
+        source_execution = Execution(
+            agent_id=1,
+            input="source execution",
+            status="completed",
+            output="source output",
+        )
+
+        db.add(source_execution)
+        db.commit()
+        db.refresh(source_execution)
+
+        snapshot = ExecutionSnapshot(
+            execution_id=source_execution.id,
+            snapshot_version=CURRENT_EXECUTION_SNAPSHOT_VERSION + 1,
+            input_snapshot="unsupported replay snapshot",
+            plan_snapshot='{"steps":[]}',
+            output_snapshot="source output",
+        )
+
+        db.add(snapshot)
+        db.commit()
+        db.refresh(snapshot)
+
+        try:
+            replay_execution(
+                db,
+                source_execution,
+            )
+
+            assert False, (
+                "Expected unsupported execution snapshot version "
+                "to reject replay"
+            )
+
+        except ValueError as exc:
+            assert "Unsupported execution snapshot version" in str(exc)
+
+        replay_executions = (
+            db.query(Execution)
+            .filter(
+                Execution.replay_of_execution_id
+                == source_execution.id
+            )
+            .all()
+        )
+
+        assert replay_executions == []
+
+        db.refresh(source_execution)
+
+        assert source_execution.status == "completed"
+        assert source_execution.output == "source output"
+        assert source_execution.replay_of_execution_id is None
+
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=test_engine)
+        test_engine.dispose()
+
+def test_replay_execution_rejects_malformed_plan_json_without_creating_replay():
+    Base.metadata.drop_all(bind=test_engine)
+    Base.metadata.create_all(bind=test_engine)
+
+    db = TestingSessionLocal()
+
+    try:
+        source_execution = Execution(
+            agent_id=1,
+            input="malformed plan source",
+            status="completed",
+            output="source output",
+        )
+
+        db.add(source_execution)
+        db.commit()
+        db.refresh(source_execution)
+
+        snapshot = ExecutionSnapshot(
+            execution_id=source_execution.id,
+            snapshot_version=CURRENT_EXECUTION_SNAPSHOT_VERSION,
+            input_snapshot="malformed plan input",
+            plan_snapshot="{this is not valid json",
+            output_snapshot="source output",
+        )
+
+        db.add(snapshot)
+        db.commit()
+        db.refresh(snapshot)
+
+        try:
+            replay_execution(
+                db,
+                source_execution,
+            )
+
+            assert False, (
+                "Expected malformed execution plan snapshot "
+                "to reject replay"
+            )
+
+        except ValueError as exc:
+            assert "Invalid execution plan snapshot JSON" in str(exc)
+
+        replay_executions = (
+            db.query(Execution)
+            .filter(
+                Execution.replay_of_execution_id
+                == source_execution.id
+            )
+            .all()
+        )
+
+        assert replay_executions == []
+
+        db.refresh(source_execution)
+
+        assert source_execution.status == "completed"
+        assert source_execution.output == "source output"
+
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=test_engine)
+        test_engine.dispose()
+
+def test_replay_execution_rejects_invalid_plan_structure_without_creating_replay():
+    Base.metadata.drop_all(bind=test_engine)
+    Base.metadata.create_all(bind=test_engine)
+
+    db = TestingSessionLocal()
+
+    try:
+        source_execution = Execution(
+            agent_id=1,
+            input="invalid plan structure source",
+            status="completed",
+            output="source output",
+        )
+
+        db.add(source_execution)
+        db.commit()
+        db.refresh(source_execution)
+
+        snapshot = ExecutionSnapshot(
+            execution_id=source_execution.id,
+            snapshot_version=CURRENT_EXECUTION_SNAPSHOT_VERSION,
+            input_snapshot="invalid plan structure input",
+            plan_snapshot='{"steps":"not-a-list"}',
+            output_snapshot="source output",
+        )
+
+        db.add(snapshot)
+        db.commit()
+        db.refresh(snapshot)
+
+        try:
+            replay_execution(
+                db,
+                source_execution,
+            )
+
+            assert False, (
+                "Expected invalid execution plan snapshot structure "
+                "to reject replay"
+            )
+
+        except ValueError as exc:
+            assert (
+                "Execution plan snapshot must contain a steps list"
+                in str(exc)
+            )
+
+        replay_executions = (
+            db.query(Execution)
+            .filter(
+                Execution.replay_of_execution_id
+                == source_execution.id
+            )
+            .all()
+        )
+
+        assert replay_executions == []
+
+        db.refresh(source_execution)
+
+        assert source_execution.status == "completed"
+        assert source_execution.output == "source output"
+        assert source_execution.replay_of_execution_id is None
 
     finally:
         db.close()
