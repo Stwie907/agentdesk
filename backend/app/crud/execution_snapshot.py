@@ -17,6 +17,7 @@ def create_execution_snapshot(
 
     db_snapshot = ExecutionSnapshot(
         execution_id=snapshot.execution_id,
+        snapshot_version=snapshot.snapshot_version,
         input_snapshot=snapshot.input_snapshot,
         plan_snapshot=snapshot.plan_snapshot,
         output_snapshot=snapshot.output_snapshot,

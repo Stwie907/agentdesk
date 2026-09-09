@@ -12,6 +12,7 @@ from app.runtime.execution_plan import ExecutionPlan, ExecutionStep
 from app.schemas.execution_snapshot import ExecutionSnapshotCreate
 from app.runtime.plan_executor import execute_plan
 from app.crud.execution import create_replay_execution
+from app.constants import CURRENT_EXECUTION_SNAPSHOT_VERSION
 
 def serialize_execution_plan(
     plan: ExecutionPlan,
@@ -39,7 +40,12 @@ def deserialize_execution_plan(
     serialize_execution_plan(). Step arguments are restored unchanged,
     including nested $step_output references used for output chaining.
     """
-    data = json.loads(plan_snapshot)
+    try:
+        data = json.loads(plan_snapshot)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            "Invalid execution plan snapshot JSON"
+        ) from exc
 
     if not isinstance(data, dict):
         raise ValueError("Execution plan snapshot must contain a JSON object")
@@ -70,6 +76,40 @@ def deserialize_execution_plan(
 
     return ExecutionPlan(
         steps=steps,
+    )
+
+def _load_replayable_execution_plan(
+    db: Session,
+    execution_id: int,
+) -> ExecutionPlan:
+    """
+    Load and validate the persisted Runtime V4 plan used for replay.
+
+    Validation happens before a replay execution is created so invalid,
+    incompatible, or malformed snapshots cannot leave orphaned replay
+    execution records behind.
+    """
+
+    snapshot = get_execution_snapshot(
+        db,
+        execution_id,
+    )
+
+    if snapshot is None:
+        raise ValueError("Execution snapshot not found")
+
+    if snapshot.snapshot_version != CURRENT_EXECUTION_SNAPSHOT_VERSION:
+        raise ValueError(
+            "Unsupported execution snapshot version: "
+            f"{snapshot.snapshot_version}; "
+            f"supported version: {CURRENT_EXECUTION_SNAPSHOT_VERSION}"
+        )
+
+    if not snapshot.plan_snapshot:
+        raise ValueError("Execution snapshot does not contain a plan")
+
+    return deserialize_execution_plan(
+        snapshot.plan_snapshot,
     )
 
 def persist_execution_plan_snapshot(
@@ -141,20 +181,9 @@ def replay_execution_snapshot(
     the planner again. This keeps replay tied to the original execution
     plan rather than generating a new plan from current runtime state.
     """
-
-    snapshot = get_execution_snapshot(
+    plan = _load_replayable_execution_plan(
         db,
         execution_id,
-    )
-
-    if snapshot is None:
-        raise ValueError("Execution snapshot not found")
-
-    if not snapshot.plan_snapshot:
-        raise ValueError("Execution snapshot does not contain a plan")
-
-    plan = deserialize_execution_plan(
-        snapshot.plan_snapshot,
     )
 
     return execute_plan(
@@ -174,6 +203,13 @@ def replay_execution(
     its provenance through replay_of_execution_id and executes the stored
     Runtime V4 plan instead of invoking the planner again.
     """
+    # Validate the persisted snapshot before creating a replay execution.
+    # Compatibility or snapshot-data failures must not leave a pending
+    # replay execution record behind.
+    _load_replayable_execution_plan(
+        db,
+        source_execution.id,
+    )
 
     replay_execution = create_replay_execution(
         db,
