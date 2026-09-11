@@ -23,6 +23,7 @@ import json
 from app.crud.execution_snapshot import get_execution_snapshot
 from app.schemas.execution_snapshot import ExecutionSnapshotRead
 from app.services.execution_snapshot import replay_execution
+from app.services.execution_failure import classify_failure
 
 router = APIRouter(
     prefix="/executions",
@@ -356,4 +357,14 @@ def replay_execution_endpoint(
         raise HTTPException(
             status_code=409,
             detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        failure = classify_failure(exc)
+
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "failure_type": failure.failure_type.value,
+                "failure_message": failure.message,
+            },
         ) from exc

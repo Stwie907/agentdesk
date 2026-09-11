@@ -2032,3 +2032,142 @@ def test_replay_execution_returns_409_for_invalid_plan_snapshot_structure():
     finally:
         db.close()
         clear_test_db_override()
+
+
+def test_replay_execution_returns_structured_500_for_runtime_failure(
+    monkeypatch,
+):
+    from app.runtime.executor import ToolExecutionError
+
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        source_execution = (
+            db.query(Execution)
+            .filter(
+                Execution.id == data["execution_id"]
+            )
+            .first()
+        )
+
+        original_input = source_execution.input
+        original_output = source_execution.output
+        original_status = source_execution.status
+
+        snapshot = ExecutionSnapshot(
+            execution_id=data["execution_id"],
+            snapshot_version=CURRENT_EXECUTION_SNAPSHOT_VERSION,
+            input_snapshot=source_execution.input,
+            plan_snapshot=(
+                '{"steps":['
+                '{"tool":"calculator",'
+                '"arguments":{"expression":"40+2"},'
+                '"input":"calculate 40+2"}'
+                ']}'
+            ),
+            output_snapshot=source_execution.output,
+        )
+
+        db.add(snapshot)
+        db.commit()
+
+        def fail_tool(
+            tool_name,
+            tool_input,
+            allowed_tools=None,
+        ):
+            raise ToolExecutionError(
+                tool_name,
+                "simulated replay API failure",
+            )
+
+        monkeypatch.setattr(
+            "app.runtime.plan_executor.execute_tool",
+            fail_tool,
+        )
+
+        with TestClient(
+            app,
+            raise_server_exceptions=False,
+        ) as client:
+            response = client.post(
+                f"/executions/{data['execution_id']}/replay",
+            )
+
+            assert response.status_code == 500
+
+            assert response.headers[
+                "content-type"
+            ].startswith("application/json")
+
+            assert response.json() == {
+                "detail": {
+                    "failure_type": "tool_execution_error",
+                    "failure_message": (
+                        "Tool 'calculator' execution failed: "
+                        "simulated replay API failure"
+                    ),
+                }
+            }
+
+            history_response = client.get(
+                f"/executions/{data['execution_id']}/replays",
+            )
+
+            assert history_response.status_code == 200
+
+        db.expire_all()
+
+        replay_executions = (
+            db.query(Execution)
+            .filter(
+                Execution.replay_of_execution_id
+                == source_execution.id
+            )
+            .all()
+        )
+
+        assert len(replay_executions) == 1
+
+        failed_replay = replay_executions[0]
+
+        assert failed_replay.status == "failed"
+        assert failed_replay.output is None
+        assert (
+            failed_replay.failure_type
+            == "tool_execution_error"
+        )
+        assert (
+            failed_replay.failure_message
+            == (
+                "Tool 'calculator' execution failed: "
+                "simulated replay API failure"
+            )
+        )
+        assert (
+            failed_replay.replay_of_execution_id
+            == source_execution.id
+        )
+
+        db.expire_all()
+
+        source_execution = (
+            db.query(Execution)
+            .filter(
+                Execution.id == data["execution_id"]
+            )
+            .first()
+        )
+
+        assert source_execution.input == original_input
+        assert source_execution.output == original_output
+        assert source_execution.status == original_status
+        assert source_execution.replay_of_execution_id is None
+
+    finally:
+        db.close()
+        clear_test_db_override()
