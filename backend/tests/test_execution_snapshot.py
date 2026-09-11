@@ -1174,6 +1174,7 @@ def test_replay_execution_persists_runtime_failure(monkeypatch):
             db,
             execution_id,
             allowed_tools=None,
+            trace_execution_id=None,
         ):
             raise ToolExecutionError(
                 "calculator",

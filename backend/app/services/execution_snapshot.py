@@ -14,6 +14,7 @@ from app.runtime.plan_executor import execute_plan
 from app.crud.execution import create_replay_execution
 from app.constants import CURRENT_EXECUTION_SNAPSHOT_VERSION
 from app.services.execution_failure import classify_failure
+from app.services.execution_trace import TraceEvent, trace_event
 
 def serialize_execution_plan(
     plan: ExecutionPlan,
@@ -174,6 +175,7 @@ def replay_execution_snapshot(
     db: Session,
     execution_id: int,
     allowed_tools: list[str] | None = None,
+    trace_execution_id: int | None = None,
 ):
     """
     Replay a persisted Runtime V4 execution plan.
@@ -181,16 +183,88 @@ def replay_execution_snapshot(
     Replay uses the stored plan snapshot directly instead of invoking
     the planner again. This keeps replay tied to the original execution
     plan rather than generating a new plan from current runtime state.
+
+    When trace_execution_id is provided, Runtime V4 plan and step trace
+    events are persisted against that execution. Replay callers use the
+    newly created replay execution id so replay trace history remains
+    separate from the source execution.
     """
     plan = _load_replayable_execution_plan(
         db,
         execution_id,
     )
 
-    return execute_plan(
-        plan,
-        allowed_tools=allowed_tools,
+    def trace(event: TraceEvent, detail: str = ""):
+        if trace_execution_id is None:
+            return
+
+        trace_event(
+            db,
+            trace_execution_id,
+            event,
+            detail,
+        )
+
+    def on_step_started(step_index, step):
+        tool_detail = (
+            f" tool={step.tool}"
+            if step.tool is not None
+            else ""
+        )
+
+        trace(
+            TraceEvent.STEP_STARTED,
+            f"step={step_index}{tool_detail}",
+        )
+
+    def on_step_completed(step_index, result):
+        tool_detail = (
+            f" tool={result.step.tool}"
+            if result.step.tool is not None
+            else ""
+        )
+
+        trace(
+            TraceEvent.STEP_COMPLETED,
+            f"step={step_index}{tool_detail}",
+        )
+
+    def on_step_failed(step_index, step, exc):
+        tool_detail = (
+            f" tool={step.tool}"
+            if step.tool is not None
+            else ""
+        )
+
+        trace(
+            TraceEvent.STEP_FAILED,
+            f"step={step_index}{tool_detail}; error={exc}",
+        )
+
+    trace(
+        TraceEvent.PLAN_STARTED,
     )
+
+    try:
+        result = execute_plan(
+            plan,
+            allowed_tools=allowed_tools,
+            on_step_started=on_step_started,
+            on_step_completed=on_step_completed,
+            on_step_failed=on_step_failed,
+        )
+    except Exception as exc:
+        trace(
+            TraceEvent.PLAN_FAILED,
+            f"error={exc}",
+        )
+        raise
+
+    trace(
+        TraceEvent.PLAN_COMPLETED,
+    )
+
+    return result
 
 def replay_execution(
     db: Session,
@@ -222,6 +296,7 @@ def replay_execution(
             db,
             source_execution.id,
             allowed_tools=allowed_tools,
+            trace_execution_id=replay_execution.id,
         )
     except Exception as exc:
         failure = classify_failure(exc)
