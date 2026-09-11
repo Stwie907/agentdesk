@@ -13,6 +13,7 @@ from app.schemas.execution_snapshot import ExecutionSnapshotCreate
 from app.runtime.plan_executor import execute_plan
 from app.crud.execution import create_replay_execution
 from app.constants import CURRENT_EXECUTION_SNAPSHOT_VERSION
+from app.services.execution_failure import classify_failure
 
 def serialize_execution_plan(
     plan: ExecutionPlan,
@@ -216,11 +217,24 @@ def replay_execution(
         source_execution,
     )
 
-    result = replay_execution_snapshot(
-        db,
-        source_execution.id,
-        allowed_tools=allowed_tools,
-    )
+    try:
+        result = replay_execution_snapshot(
+            db,
+            source_execution.id,
+            allowed_tools=allowed_tools,
+        )
+    except Exception as exc:
+        failure = classify_failure(exc)
+
+        replay_execution.output = None
+        replay_execution.status = "failed"
+        replay_execution.failure_type = failure.failure_type.value
+        replay_execution.failure_message = failure.message
+
+        db.commit()
+        db.refresh(replay_execution)
+
+        raise
 
     replay_execution.output = (
         str(result.last_output)
