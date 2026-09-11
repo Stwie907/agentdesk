@@ -19,7 +19,10 @@ from app.services.execution_snapshot import (
     replay_execution_snapshot,
 )
 from app.services import agent_runner
-from app.crud.execution import create_replay_execution
+from app.crud.execution import (
+    create_replay_execution,
+    get_replays_by_execution,
+)
 from app.services.execution_snapshot import (
     serialize_execution_plan,
     deserialize_execution_plan,
@@ -1115,6 +1118,128 @@ def test_replay_execution_rejects_invalid_plan_structure_without_creating_replay
 
         assert source_execution.status == "completed"
         assert source_execution.output == "source output"
+        assert source_execution.replay_of_execution_id is None
+
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=test_engine)
+        test_engine.dispose()
+
+
+def test_replay_execution_persists_runtime_failure(monkeypatch):
+    import pytest
+
+    from app.runtime.executor import ToolExecutionError
+
+    Base.metadata.drop_all(bind=test_engine)
+    Base.metadata.create_all(bind=test_engine)
+
+    db = TestingSessionLocal()
+
+    try:
+        source_execution = Execution(
+            agent_id=1,
+            input="replay runtime failure source",
+            status="completed",
+            output="original output",
+        )
+
+        db.add(source_execution)
+        db.commit()
+        db.refresh(source_execution)
+
+        plan = ExecutionPlan(
+            steps=[
+                ExecutionStep(
+                    tool="calculator",
+                    arguments={
+                        "expression": "40+2",
+                    },
+                    input="calculate 40+2",
+                )
+            ]
+        )
+
+        create_execution_snapshot(
+            db,
+            ExecutionSnapshotCreate(
+                execution_id=source_execution.id,
+                input_snapshot=source_execution.input,
+                plan_snapshot=serialize_execution_plan(plan),
+                output_snapshot=source_execution.output,
+            ),
+        )
+
+        def fail_replay(
+            db,
+            execution_id,
+            allowed_tools=None,
+        ):
+            raise ToolExecutionError(
+                "calculator",
+                "simulated replay failure",
+            )
+
+        monkeypatch.setattr(
+            "app.services.execution_snapshot.replay_execution_snapshot",
+            fail_replay,
+        )
+
+        with pytest.raises(
+            ToolExecutionError,
+            match="simulated replay failure",
+        ):
+            replay_execution(
+                db,
+                source_execution,
+                allowed_tools=["calculator"],
+            )
+
+        replay_executions = (
+            db.query(Execution)
+            .filter(
+                Execution.replay_of_execution_id
+                == source_execution.id
+            )
+            .all()
+        )
+
+        assert len(replay_executions) == 1
+
+        failed_replay = replay_executions[0]
+
+        db.refresh(failed_replay)
+
+        assert failed_replay.status == "failed"
+        assert failed_replay.output is None
+        assert failed_replay.failure_type == "tool_execution_error"
+        assert (
+            failed_replay.failure_message
+            == "Tool 'calculator' execution failed: simulated replay failure"
+        )
+        assert (
+            failed_replay.replay_of_execution_id
+            == source_execution.id
+        )
+
+        replay_history = get_replays_by_execution(
+            db,
+            source_execution.id,
+        )
+
+        assert len(replay_history) == 1
+        assert replay_history[0].id == failed_replay.id
+        assert replay_history[0].status == "failed"
+        assert replay_history[0].failure_type == "tool_execution_error"
+        assert (
+            replay_history[0].replay_of_execution_id
+            == source_execution.id
+        )
+
+        db.refresh(source_execution)
+
+        assert source_execution.status == "completed"
+        assert source_execution.output == "original output"
         assert source_execution.replay_of_execution_id is None
 
     finally:
