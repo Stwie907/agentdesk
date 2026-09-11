@@ -2171,3 +2171,200 @@ def test_replay_execution_returns_structured_500_for_runtime_failure(
     finally:
         db.close()
         clear_test_db_override()
+
+
+
+def test_replay_execution_persists_runtime_v4_trace(monkeypatch):
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        snapshot = ExecutionSnapshot(
+            execution_id=data["execution_id"],
+            snapshot_version=CURRENT_EXECUTION_SNAPSHOT_VERSION,
+            input_snapshot="replay trace input",
+            plan_snapshot=(
+                '{"steps":['
+                '{"tool":"calculator",'
+                '"arguments":{"expression":"40+2"},'
+                '"input":"calculate 40+2"}'
+                ']}'
+            ),
+            output_snapshot="original output",
+        )
+
+        db.add(snapshot)
+        db.commit()
+
+        monkeypatch.setattr(
+            "app.runtime.plan_executor.execute_tool",
+            lambda tool_name, tool_input, allowed_tools=None: "42",
+        )
+
+        with TestClient(app) as client:
+            replay_response = client.post(
+                f"/executions/{data['execution_id']}/replay",
+            )
+
+            assert replay_response.status_code == 200
+
+            replay_id = replay_response.json()["id"]
+
+            trace_response = client.get(
+                f"/executions/{replay_id}/trace",
+            )
+
+        assert trace_response.status_code == 200
+
+        trace = trace_response.json()
+
+        assert [event["event"] for event in trace] == [
+            "plan_started",
+            "step_started",
+            "step_completed",
+            "plan_completed",
+        ]
+
+        assert all(
+            event["execution_id"] == replay_id
+            for event in trace
+        )
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+def test_replay_execution_persists_runtime_v4_failure_trace(monkeypatch):
+    from app.runtime.executor import ToolExecutionError
+
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        source_execution = (
+            db.query(Execution)
+            .filter(
+                Execution.id == data["execution_id"]
+            )
+            .first()
+        )
+
+        snapshot = ExecutionSnapshot(
+            execution_id=data["execution_id"],
+            snapshot_version=CURRENT_EXECUTION_SNAPSHOT_VERSION,
+            input_snapshot="replay failure trace input",
+            plan_snapshot=(
+                '{"steps":['
+                '{"tool":"calculator",'
+                '"arguments":{"expression":"40+2"},'
+                '"input":"calculate 40+2"}'
+                ']}'
+            ),
+            output_snapshot=source_execution.output,
+        )
+
+        db.add(snapshot)
+        db.commit()
+
+        def fail_tool(
+            tool_name,
+            tool_input,
+            allowed_tools=None,
+        ):
+            raise ToolExecutionError(
+                tool_name,
+                "simulated replay trace failure",
+            )
+
+        monkeypatch.setattr(
+            "app.runtime.plan_executor.execute_tool",
+            fail_tool,
+        )
+
+        with TestClient(
+            app,
+            raise_server_exceptions=False,
+        ) as client:
+            replay_response = client.post(
+                f"/executions/{data['execution_id']}/replay",
+            )
+
+            assert replay_response.status_code == 500
+
+            db.expire_all()
+
+            replay_execution = (
+                db.query(Execution)
+                .filter(
+                    Execution.replay_of_execution_id
+                    == data["execution_id"]
+                )
+                .first()
+            )
+
+            assert replay_execution is not None
+            assert replay_execution.status == "failed"
+
+            trace_response = client.get(
+                f"/executions/{replay_execution.id}/trace",
+            )
+
+            assert trace_response.status_code == 200
+
+            trace = trace_response.json()
+
+            assert [event["event"] for event in trace] == [
+                "plan_started",
+                "step_started",
+                "step_failed",
+                "plan_failed",
+            ]
+
+            assert trace[1]["step_index"] == 0
+            assert trace[1]["tool"] == "calculator"
+
+            assert trace[2]["step_index"] == 0
+            assert trace[2]["tool"] == "calculator"
+            assert (
+                trace[2]["error"]
+                == (
+                    "Tool 'calculator' execution failed: "
+                    "simulated replay trace failure"
+                )
+            )
+
+            assert (
+                trace[3]["error"]
+                == (
+                    "Tool 'calculator' execution failed: "
+                    "simulated replay trace failure"
+                )
+            )
+
+            assert all(
+                event["execution_id"]
+                == replay_execution.id
+                for event in trace
+            )
+
+        db.expire_all()
+
+        source_execution = (
+            db.query(Execution)
+            .filter(
+                Execution.id == data["execution_id"]
+            )
+            .first()
+        )
+
+        assert source_execution.replay_of_execution_id is None
+
+    finally:
+        db.close()
+        clear_test_db_override()
