@@ -277,11 +277,16 @@ def replay_execution(
     The source execution remains unchanged. The replay execution records
     its provenance through replay_of_execution_id and executes the stored
     Runtime V4 plan instead of invoking the planner again.
+
+    Every replay execution also persists its own Runtime V4 snapshot.
+    This keeps replay executions independently inspectable and allows
+    replay-of-replay without falling back to the original source snapshot.
     """
-    # Validate the persisted snapshot before creating a replay execution.
-    # Compatibility or snapshot-data failures must not leave a pending
-    # replay execution record behind.
-    _load_replayable_execution_plan(
+    # Validate and deserialize the source snapshot before creating the replay.
+    #
+    # Invalid, incompatible, or malformed snapshots must not leave an
+    # orphaned pending replay execution behind.
+    replay_plan = _load_replayable_execution_plan(
         db,
         source_execution.id,
     )
@@ -289,6 +294,16 @@ def replay_execution(
     replay_execution = create_replay_execution(
         db,
         source_execution,
+    )
+
+    # Persist the replay execution's own input + plan snapshot before
+    # execution starts. If runtime execution later fails, the failed replay
+    # still remains inspectable and can retain its own replay provenance.
+    persist_execution_plan_snapshot(
+        db,
+        replay_execution.id,
+        source_execution.input,
+        replay_plan,
     )
 
     try:
@@ -322,5 +337,13 @@ def replay_execution(
 
     db.commit()
     db.refresh(replay_execution)
+
+    # Attach the final replay output to the replay execution's own snapshot.
+    if replay_execution.output is not None:
+        persist_execution_output_snapshot(
+            db,
+            replay_execution.id,
+            replay_execution.output,
+        )
 
     return replay_execution

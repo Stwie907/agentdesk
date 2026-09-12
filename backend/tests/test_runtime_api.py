@@ -1,3 +1,4 @@
+import json
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -2364,6 +2365,93 @@ def test_replay_execution_persists_runtime_v4_failure_trace(monkeypatch):
         )
 
         assert source_execution.replay_of_execution_id is None
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+
+def test_replay_execution_persists_own_snapshot_for_replay_of_replay(
+    monkeypatch,
+):
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        source_execution = (
+            db.query(Execution)
+            .filter(Execution.id == data["execution_id"])
+            .first()
+        )
+
+        snapshot = ExecutionSnapshot(
+            execution_id=source_execution.id,
+            snapshot_version=CURRENT_EXECUTION_SNAPSHOT_VERSION,
+            input_snapshot=source_execution.input,
+            plan_snapshot=(
+                '{"steps":['
+                '{"tool":"calculator",'
+                '"arguments":{"expression":"40+2"},'
+                '"input":"calculate 40+2"}'
+                ']}'
+            ),
+            output_snapshot=source_execution.output,
+        )
+
+        db.add(snapshot)
+        db.commit()
+
+        monkeypatch.setattr(
+            "app.runtime.plan_executor.execute_tool",
+            lambda tool_name, tool_input, allowed_tools=None: "42",
+        )
+
+        with TestClient(app) as client:
+            first_replay_response = client.post(
+                f"/executions/{source_execution.id}/replay",
+            )
+
+            assert first_replay_response.status_code == 200
+
+            first_replay_id = first_replay_response.json()["id"]
+
+            snapshot_response = client.get(
+                f"/executions/{first_replay_id}/snapshot",
+            )
+
+            assert snapshot_response.status_code == 200
+
+            replay_snapshot = snapshot_response.json()
+
+            assert replay_snapshot["execution_id"] == first_replay_id
+            assert (
+                replay_snapshot["snapshot_version"]
+                == CURRENT_EXECUTION_SNAPSHOT_VERSION
+            )
+            assert replay_snapshot["input_snapshot"] == source_execution.input
+            assert json.loads(replay_snapshot["plan_snapshot"]) == json.loads(
+            snapshot.plan_snapshot
+        )
+            assert replay_snapshot["output_snapshot"] == "42"
+
+            second_replay_response = client.post(
+                f"/executions/{first_replay_id}/replay",
+            )
+
+            assert second_replay_response.status_code == 200
+
+            second_replay = second_replay_response.json()
+
+            assert second_replay["id"] != first_replay_id
+            assert (
+                second_replay["replay_of_execution_id"]
+                == first_replay_id
+            )
+            assert second_replay["status"] == "completed"
+            assert second_replay["output"] == "42"
 
     finally:
         db.close()
