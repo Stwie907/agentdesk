@@ -169,15 +169,34 @@ def plan(
 
     arguments = result.get("arguments")
 
+    structured_input = result.get("input", user_input)
+
+    # Issue #76: recover calculator arguments from structured input.
+    # Some LLM responses return:
+    #
+    #   arguments = {}
+    #   input = {"expression": "..."}
+    #
+    # Treat that as the calculator structured contract rather than
+    # accepting the empty arguments object as complete.
+    if (
+        tool_name == "calculator"
+        and arguments == {}
+        and isinstance(structured_input, dict)
+        and "expression" in structured_input
+    ):
+        arguments = {
+            "expression": structured_input["expression"],
+        }
+        structured_input = user_input
+
+
     # New structured contract.
     if isinstance(arguments, dict):
         return {
             "tool": tool_name,
             "arguments": arguments,
-            "input": result.get(
-                "input",
-                user_input,
-            ),
+            "input": structured_input,
         }
 
     # Backward compatibility with the legacy Planner contract.
@@ -329,6 +348,20 @@ def plan_execution(
                     "input",
                     user_input,
                 )
+
+                # Issue #76: some planner responses place calculator
+                # structured arguments under `input` while returning
+                # an empty `arguments` object.
+                if (
+                    tool_name == "calculator"
+                    and arguments == {}
+                    and isinstance(step_input, dict)
+                    and "expression" in step_input
+                ):
+                    arguments = {
+                        "expression": step_input["expression"],
+                    }
+                    step_input = user_input
 
                 steps.append(
                     ExecutionStep(
