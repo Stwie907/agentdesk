@@ -607,3 +607,103 @@ def test_plan_execution_falls_back_when_multi_step_response_has_no_valid_steps(
         "expression": "2+3",
     }
     assert step.input == "2+3"
+
+
+def test_planner_recovers_calculator_arguments_from_structured_input_when_arguments_empty(
+    monkeypatch,
+):
+    """
+    Regression: some planner responses may place calculator structured input
+    under `input` while returning an empty `arguments` object.
+
+    Runtime V4 must recover the calculator arguments instead of treating the
+    empty dict as a complete structured-tool contract.
+    """
+
+    class FakeResponse:
+        def json(self):
+            return {
+                "response": json.dumps(
+                    {
+                        "tool": "calculator",
+                        "arguments": {},
+                        "input": {
+                            "expression": "40+2",
+                        },
+                    }
+                )
+            }
+
+    def fake_post(*args, **kwargs):
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        planner.requests,
+        "post",
+        fake_post,
+    )
+
+    result = planner.plan(
+        "计算40+2",
+        allowed_tools=["calculator"],
+    )
+
+    assert result == {
+        "tool": "calculator",
+        "arguments": {
+            "expression": "40+2",
+        },
+        "input": "计算40+2",
+    }
+
+
+def test_plan_execution_recovers_calculator_arguments_from_structured_input_when_arguments_empty(
+    monkeypatch,
+):
+    """
+    Regression: Runtime V4 multi-step planning must normalize the same
+    empty-arguments / structured-input calculator shape before creating
+    ExecutionStep objects.
+    """
+
+    class FakeResponse:
+        def json(self):
+            return {
+                "response": json.dumps(
+                    {
+                        "steps": [
+                            {
+                                "tool": "calculator",
+                                "arguments": {},
+                                "input": {
+                                    "expression": "40+2",
+                                },
+                            }
+                        ]
+                    }
+                )
+            }
+
+    def fake_post(*args, **kwargs):
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        planner.requests,
+        "post",
+        fake_post,
+    )
+
+    execution_plan = planner.plan_execution(
+        "计算40+2",
+        allowed_tools=["calculator"],
+    )
+
+    assert len(execution_plan.steps) == 1
+
+    step = execution_plan.steps[0]
+
+    assert step.tool == "calculator"
+    assert step.arguments == {
+        "expression": "40+2",
+    }
+    assert step.input == "计算40+2"
