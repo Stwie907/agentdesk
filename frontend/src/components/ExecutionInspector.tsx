@@ -1,13 +1,41 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 
 import { ApiError, getExecutionInspection } from "../api/executions";
 import type { ExecutionInspection } from "../types/executions";
 
-export function ExecutionInspector() {
+type ExecutionInspectorProps = {
+  selectedExecutionId?: number | null;
+};
+
+export function ExecutionInspector({
+  selectedExecutionId = null,
+}: ExecutionInspectorProps) {
   const [executionId, setExecutionId] = useState("");
   const [inspection, setInspection] = useState<ExecutionInspection | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const loadExecution = useCallback(
+    async (parsedExecutionId: number) => {
+      setLoading(true);
+      setError(null);
+      setInspection(null);
+
+      try {
+        const result = await getExecutionInspection(parsedExecutionId);
+        setInspection(result);
+      } catch (requestError) {
+        if (requestError instanceof ApiError) {
+          setError(requestError.message);
+        } else {
+          setError("Unable to load execution.");
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -23,23 +51,17 @@ export function ExecutionInspector() {
       return;
     }
 
-    setLoading(true);
-    setError(null);
-    setInspection(null);
-
-    try {
-      const result = await getExecutionInspection(parsedExecutionId);
-      setInspection(result);
-    } catch (requestError) {
-      if (requestError instanceof ApiError) {
-        setError(requestError.message);
-      } else {
-        setError("Unable to load execution.");
-      }
-    } finally {
-      setLoading(false);
-    }
+    await loadExecution(parsedExecutionId);
   }
+
+  useEffect(() => {
+    if (selectedExecutionId === null) {
+      return;
+    }
+
+    setExecutionId(String(selectedExecutionId));
+    void loadExecution(selectedExecutionId);
+  }, [loadExecution, selectedExecutionId]);
 
   return (
     <section aria-labelledby="execution-inspector-heading">
