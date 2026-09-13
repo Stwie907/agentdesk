@@ -11,6 +11,7 @@ from app.schemas.execution import (
 from app.crud.execution import (
     create_execution,
     get_execution,
+    get_executions,
     get_replays_by_execution,
 )
 from fastapi import BackgroundTasks
@@ -60,8 +61,20 @@ def create(
         db_execution.id
     )
 
+@router.get(
+    "",
+    response_model=list[ExecutionRead],
+)
+def read_executions(
+    db: Session = Depends(get_db),
+):
+    """
+    Return execution history ordered from newest to oldest.
+    """
 
+    return get_executions(db)
     return db_execution
+
 
 
 @router.get(

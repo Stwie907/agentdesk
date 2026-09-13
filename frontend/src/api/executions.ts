@@ -98,3 +98,8 @@ export async function getExecutionInspection(
     replays,
   };
 }
+
+
+export function getExecutions(): Promise<Execution[]> {
+  return requestJson<Execution[]>("/executions");
+}

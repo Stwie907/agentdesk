@@ -38,6 +38,24 @@ def get_execution(
         .first()
     )
 
+def get_executions(
+    db: Session,
+):
+    """
+    Return all executions ordered from newest to oldest.
+
+    created_at is the primary ordering key. id is used as a stable
+    tie-breaker when multiple executions share the same timestamp.
+    """
+
+    return (
+        db.query(Execution)
+        .order_by(
+            Execution.created_at.desc(),
+            Execution.id.desc(),
+        )
+        .all()
+    )
 
 def get_executions_by_agent(
     db: Session,

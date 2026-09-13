@@ -2456,3 +2456,49 @@ def test_replay_execution_persists_own_snapshot_for_replay_of_replay(
     finally:
         db.close()
         clear_test_db_override()
+
+
+def test_get_executions_lists_recent_executions_in_descending_order():
+    setup_test_db_override()
+    reset_database()
+    create_test_data()
+
+    try:
+        with TestClient(app) as client:
+            response = client.get("/executions")
+
+        assert response.status_code == 200
+
+        body = response.json()
+
+        assert len(body) == 2
+
+        assert [execution["id"] for execution in body] == sorted(
+            [execution["id"] for execution in body],
+            reverse=True,
+        )
+
+        assert body[0]["status"] == "failed"
+        assert body[1]["status"] == "completed"
+
+        assert "retry_count" in body[0]
+        assert "failure_type" in body[0]
+        assert "failure_message" in body[0]
+        assert "replay_of_execution_id" in body[0]
+
+    finally:
+        clear_test_db_override()
+
+
+def test_get_executions_returns_empty_list_when_no_executions():
+    setup_test_db_override()
+    reset_database()
+
+    try:
+        with TestClient(app) as client:
+            response = client.get("/executions")
+
+        assert response.status_code == 200
+        assert response.json() == []
+    finally:
+        clear_test_db_override()
