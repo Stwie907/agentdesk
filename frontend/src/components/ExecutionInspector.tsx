@@ -1,6 +1,10 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
-import { ApiError, getExecutionInspection } from "../api/executions";
+import {
+  ApiError,
+  getExecutionInspection,
+  replayExecution,
+} from "../api/executions";
 import type { ExecutionInspection } from "../types/executions";
 
 type ExecutionInspectorProps = {
@@ -11,8 +15,10 @@ export function ExecutionInspector({
   selectedExecutionId = null,
 }: ExecutionInspectorProps) {
   const [executionId, setExecutionId] = useState("");
-  const [inspection, setInspection] = useState<ExecutionInspection | null>(null);
+  const [inspection, setInspection] =
+    useState<ExecutionInspection | null>(null);
   const [loading, setLoading] = useState(false);
+  const [replaying, setReplaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadExecution = useCallback(
@@ -52,6 +58,31 @@ export function ExecutionInspector({
     }
 
     await loadExecution(parsedExecutionId);
+  }
+
+  async function handleReplay() {
+    if (inspection === null || replaying) {
+      return;
+    }
+
+    setReplaying(true);
+    setError(null);
+
+    try {
+      const replay = await replayExecution(inspection.execution.id);
+
+      setExecutionId(String(replay.id));
+
+      await loadExecution(replay.id);
+    } catch (requestError) {
+      if (requestError instanceof ApiError) {
+        setError(requestError.message);
+      } else {
+        setError("Unable to replay execution.");
+      }
+    } finally {
+      setReplaying(false);
+    }
   }
 
   useEffect(() => {
@@ -139,6 +170,14 @@ export function ExecutionInspector({
               <dt>Created at</dt>
               <dd>{inspection.execution.created_at}</dd>
             </dl>
+
+            <button
+              type="button"
+              disabled={replaying}
+              onClick={() => void handleReplay()}
+            >
+              {replaying ? "Replaying..." : "Replay execution"}
+            </button>
           </section>
 
           <section aria-labelledby="execution-trace-heading">
@@ -157,21 +196,21 @@ export function ExecutionInspector({
                     {event.step_index !== null && (
                       <span>
                         {" "}
-                        — step {event.step_index}
+                        - step {event.step_index}
                       </span>
                     )}
 
                     {event.tool !== null && (
                       <span>
                         {" "}
-                        — tool {event.tool}
+                        - tool {event.tool}
                       </span>
                     )}
 
                     {event.error !== null && (
                       <span>
                         {" "}
-                        — error {event.error}
+                        - error {event.error}
                       </span>
                     )}
 
