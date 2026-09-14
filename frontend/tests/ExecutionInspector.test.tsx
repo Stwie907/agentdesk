@@ -212,3 +212,134 @@ test("shows a stable error when execution does not exist", async () => {
 
   expect(fetchMock).toHaveBeenCalledTimes(1);
 });
+
+test("replays the inspected execution and loads the replay result", async () => {
+  const fetchMock = vi.fn(
+    async (
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ): Promise<Response> => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (method === "POST" && url.endsWith("/executions/42/replay")) {
+        return jsonResponse({
+          id: 44,
+          agent_id: 1,
+          input: "calculate 40+2",
+          output: "42",
+          status: "completed",
+          retry_count: 0,
+          failure_type: null,
+          failure_message: null,
+          replay_of_execution_id: 42,
+          created_at: "2026-09-14T12:10:00",
+        });
+      }
+
+      if (url.endsWith("/executions/42/trace")) {
+        return jsonResponse([]);
+      }
+
+      if (url.endsWith("/executions/42/snapshot")) {
+        return jsonResponse({
+          id: 5,
+          execution_id: 42,
+          snapshot_version: 1,
+          input_snapshot: "calculate 40+2",
+          plan_snapshot:
+            '{"steps":[{"tool":"calculator","arguments":{"expression":"40+2"}}]}',
+          output_snapshot: "42",
+          created_at: "2026-09-14T12:00:00",
+        });
+      }
+
+      if (url.endsWith("/executions/42/replays")) {
+        return jsonResponse([]);
+      }
+
+      if (url.endsWith("/executions/42")) {
+        return jsonResponse({
+          id: 42,
+          agent_id: 1,
+          input: "source execution",
+          output: "42",
+          status: "completed",
+          retry_count: 0,
+          failure_type: null,
+          failure_message: null,
+          replay_of_execution_id: null,
+          created_at: "2026-09-14T12:00:00",
+        });
+      }
+
+      if (url.endsWith("/executions/44/trace")) {
+        return jsonResponse([]);
+      }
+
+      if (url.endsWith("/executions/44/snapshot")) {
+        return jsonResponse({
+          id: 6,
+          execution_id: 44,
+          snapshot_version: 1,
+          input_snapshot: "calculate 40+2",
+          plan_snapshot:
+            '{"steps":[{"tool":"calculator","arguments":{"expression":"40+2"}}]}',
+          output_snapshot: "42",
+          created_at: "2026-09-14T12:10:00",
+        });
+      }
+
+      if (url.endsWith("/executions/44/replays")) {
+        return jsonResponse([]);
+      }
+
+      if (url.endsWith("/executions/44")) {
+        return jsonResponse({
+          id: 44,
+          agent_id: 1,
+          input: "replayed execution",
+          output: "42",
+          status: "completed",
+          retry_count: 0,
+          failure_type: null,
+          failure_message: null,
+          replay_of_execution_id: 42,
+          created_at: "2026-09-14T12:10:00",
+        });
+      }
+
+      return jsonResponse(
+        {
+          detail: `Unexpected request: ${method} ${url}`,
+        },
+        500,
+      );
+    },
+  );
+
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(<ExecutionInspector selectedExecutionId={42} />);
+
+  expect(
+    await screen.findByText("source execution"),
+  ).toBeInTheDocument();
+
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Replay execution",
+    }),
+  );
+
+  expect(
+    await screen.findByText("replayed execution"),
+  ).toBeInTheDocument();
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    expect.stringContaining("/executions/42/replay"),
+    expect.objectContaining({
+      method: "POST",
+    }),
+  );
+});

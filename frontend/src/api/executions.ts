@@ -18,8 +18,14 @@ export class ApiError extends Error {
   }
 }
 
-async function requestJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`);
+async function requestJson<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
+  const response =
+    init === undefined
+      ? await fetch(`${API_BASE_URL}${path}`)
+      : await fetch(`${API_BASE_URL}${path}`, init);
 
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
@@ -72,6 +78,17 @@ export async function getExecutionSnapshot(
 
     throw error;
   }
+}
+
+export function replayExecution(
+  executionId: number,
+): Promise<Execution> {
+  return requestJson<Execution>(
+    `/executions/${executionId}/replay`,
+    {
+      method: "POST",
+    },
+  );
 }
 
 export function getExecutionReplays(
