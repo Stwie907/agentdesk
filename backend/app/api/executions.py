@@ -68,16 +68,19 @@ def create(
 def read_executions(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    status: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """
-    Return paginated execution history ordered from newest to oldest.
+    Return filtered and paginated execution history ordered from
+    newest to oldest.
     """
 
     return get_executions(
         db,
         limit=limit,
         offset=offset,
+        status=status,
     )
 
 
