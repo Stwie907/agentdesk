@@ -69,20 +69,21 @@ def read_executions(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     status: str | None = Query(default=None),
+    agent_id: int | None = Query(default=None, ge=1),
     db: Session = Depends(get_db),
 ):
     """
-    Return filtered and paginated execution history ordered from
-    newest to oldest.
-    """
+    Return paginated execution history ordered from newest to oldest.
 
+    History can be filtered by execution status and agent ID.
+    """
     return get_executions(
         db,
         limit=limit,
         offset=offset,
         status=status,
+        agent_id=agent_id,
     )
-
 
 
 @router.get(

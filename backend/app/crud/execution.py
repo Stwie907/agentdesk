@@ -43,25 +43,30 @@ def get_executions(
     limit: int = 20,
     offset: int = 0,
     status: str | None = None,
+    agent_id: int | None = None,
 ):
     """
-    Return executions ordered from newest to oldest.
+    Return execution history ordered from newest to oldest.
 
-    Results may be filtered by execution status and are paginated with
-    limit/offset so callers do not need to load the complete execution
-    history at once.
+    Results can be filtered by status and agent_id.
 
-    Filtering is applied before pagination so offsets are calculated
-    within the selected status.
+    Pagination is applied after filtering so limit/offset operate on the
+    filtered execution history rather than the complete execution table.
 
     created_at is the primary ordering key. id is used as a stable
     tie-breaker when multiple executions share the same timestamp.
     """
-
     query = db.query(Execution)
 
     if status is not None:
-        query = query.filter(Execution.status == status)
+        query = query.filter(
+            Execution.status == status
+        )
+
+    if agent_id is not None:
+        query = query.filter(
+            Execution.agent_id == agent_id
+        )
 
     return (
         query
@@ -73,6 +78,7 @@ def get_executions(
         .limit(limit)
         .all()
     )
+
 
 def get_executions_by_agent(
     db: Session,

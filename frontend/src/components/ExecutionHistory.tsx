@@ -21,6 +21,7 @@ export function ExecutionHistory({
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
+  const [agentIdFilter, setAgentIdFilter] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -32,10 +33,16 @@ export function ExecutionHistory({
       setHasMore(false);
 
       try {
+        const parsedAgentId =
+          agentIdFilter.trim() === ""
+            ? undefined
+            : Number(agentIdFilter);
+
         const result = await getExecutions(
           pageSize,
           0,
           statusFilter || undefined,
+          parsedAgentId,
         );
 
         if (!cancelled) {
@@ -58,7 +65,7 @@ export function ExecutionHistory({
     return () => {
       cancelled = true;
     };
-  }, [pageSize, statusFilter]);
+  }, [pageSize, statusFilter, agentIdFilter]);
 
   async function handleLoadMore() {
     if (loadingMore) {
@@ -69,12 +76,17 @@ export function ExecutionHistory({
     setError(null);
 
     try {
+      const parsedAgentId =
+        agentIdFilter.trim() === ""
+          ? undefined
+          : Number(agentIdFilter);
+
       const nextPage = await getExecutions(
         pageSize,
         executions.length,
         statusFilter || undefined,
+        parsedAgentId,
       );
-
       setExecutions((currentExecutions) => [
         ...currentExecutions,
         ...nextPage,
@@ -125,6 +137,22 @@ export function ExecutionHistory({
             cancelled
           </option>
         </select>
+      </div>
+
+      <div>
+        <label htmlFor="execution-history-agent-id">
+          Agent ID
+        </label>
+
+        <input
+          id="execution-history-agent-id"
+          type="number"
+          min="1"
+          value={agentIdFilter}
+          onChange={(event) =>
+            setAgentIdFilter(event.target.value)
+          }
+        />
       </div>
 
       {loading && (
