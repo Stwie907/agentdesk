@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -66,14 +66,19 @@ def create(
     response_model=list[ExecutionRead],
 )
 def read_executions(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
     """
-    Return execution history ordered from newest to oldest.
+    Return paginated execution history ordered from newest to oldest.
     """
 
-    return get_executions(db)
-    return db_execution
+    return get_executions(
+        db,
+        limit=limit,
+        offset=offset,
+    )
 
 
 

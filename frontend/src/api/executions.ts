@@ -99,7 +99,11 @@ export async function getExecutionInspection(
   };
 }
 
-
-export function getExecutions(): Promise<Execution[]> {
-  return requestJson<Execution[]>("/executions");
+export function getExecutions(
+  limit = 20,
+  offset = 0,
+): Promise<Execution[]> {
+  return requestJson<Execution[]>(
+    `/executions?limit=${limit}&offset=${offset}`,
+  );
 }

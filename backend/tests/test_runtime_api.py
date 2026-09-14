@@ -2502,3 +2502,34 @@ def test_get_executions_returns_empty_list_when_no_executions():
         assert response.json() == []
     finally:
         clear_test_db_override()
+
+
+
+def test_get_executions_supports_limit_and_offset():
+    setup_test_db_override()
+    reset_database()
+    create_test_data()
+
+    try:
+        with TestClient(app) as client:
+            first_page_response = client.get(
+                "/executions?limit=1&offset=0"
+            )
+            second_page_response = client.get(
+                "/executions?limit=1&offset=1"
+            )
+
+        assert first_page_response.status_code == 200
+        assert second_page_response.status_code == 200
+
+        first_page = first_page_response.json()
+        second_page = second_page_response.json()
+
+        assert len(first_page) == 1
+        assert len(second_page) == 1
+
+        assert first_page[0]["id"] > second_page[0]["id"]
+        assert first_page[0]["status"] == "failed"
+        assert second_page[0]["status"] == "completed"
+    finally:
+        clear_test_db_override()
