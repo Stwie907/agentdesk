@@ -1,4 +1,7 @@
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 
 import { getExecutions } from "../api/executions";
 import type { Execution } from "../types/executions";
@@ -17,13 +20,23 @@ export function ExecutionHistory({
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("");
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadExecutions() {
+      setLoading(true);
+      setError(null);
+      setExecutions([]);
+      setHasMore(false);
+
       try {
-        const result = await getExecutions(pageSize, 0);
+        const result = await getExecutions(
+          pageSize,
+          0,
+          statusFilter || undefined,
+        );
 
         if (!cancelled) {
           setExecutions(result);
@@ -45,7 +58,7 @@ export function ExecutionHistory({
     return () => {
       cancelled = true;
     };
-  }, [pageSize]);
+  }, [pageSize, statusFilter]);
 
   async function handleLoadMore() {
     if (loadingMore) {
@@ -59,6 +72,7 @@ export function ExecutionHistory({
       const nextPage = await getExecutions(
         pageSize,
         executions.length,
+        statusFilter || undefined,
       );
 
       setExecutions((currentExecutions) => [
@@ -76,18 +90,61 @@ export function ExecutionHistory({
 
   return (
     <section aria-labelledby="execution-history-heading">
-      <h2 id="execution-history-heading">Execution History</h2>
+      <h2 id="execution-history-heading">
+        Execution History
+      </h2>
 
-      {loading && <p>Loading executions...</p>}
+      <div>
+        <label htmlFor="execution-history-status">
+          Status
+        </label>
+
+        <select
+          id="execution-history-status"
+          value={statusFilter}
+          onChange={(event) =>
+            setStatusFilter(event.target.value)
+          }
+        >
+          <option value="">
+            All statuses
+          </option>
+          <option value="pending">
+            pending
+          </option>
+          <option value="running">
+            running
+          </option>
+          <option value="completed">
+            completed
+          </option>
+          <option value="failed">
+            failed
+          </option>
+          <option value="cancelled">
+            cancelled
+          </option>
+        </select>
+      </div>
+
+      {loading && (
+        <p>
+          Loading executions...
+        </p>
+      )}
 
       {!loading && error !== null && (
-        <p role="alert">{error}</p>
+        <p role="alert">
+          {error}
+        </p>
       )}
 
       {!loading &&
         error === null &&
         executions.length === 0 && (
-          <p>No executions found.</p>
+          <p>
+            No executions found.
+          </p>
         )}
 
       {!loading && executions.length > 0 && (
@@ -104,11 +161,15 @@ export function ExecutionHistory({
                   Execution {execution.id}
                 </button>
 
-                {" — "}
-                <span>{execution.status}</span>
+                {" – "}
+                <span>
+                  {execution.status}
+                </span>
 
-                {" — "}
-                <span>{execution.input}</span>
+                {" – "}
+                <span>
+                  {execution.input}
+                </span>
               </li>
             ))}
           </ul>
@@ -119,7 +180,9 @@ export function ExecutionHistory({
               disabled={loadingMore}
               onClick={() => void handleLoadMore()}
             >
-              {loadingMore ? "Loading..." : "Load more"}
+              {loadingMore
+                ? "Loading..."
+                : "Load more"}
             </button>
           )}
         </>

@@ -3,6 +3,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import {
   afterEach,
@@ -81,11 +82,17 @@ test("loads and renders recent executions", async () => {
     }),
   ).toBeInTheDocument();
 
-  expect(screen.getByText("completed", { exact: true }))
-    .toBeInTheDocument();
+  expect(
+    within(
+      screen.getByRole("button", { name: "Execution 131" }).closest("li")!,
+    ).getByText("completed", { exact: true }),
+  ).toBeInTheDocument();
 
-  expect(screen.getByText("failed", { exact: true }))
-    .toBeInTheDocument();
+  expect(
+    within(
+      screen.getByRole("button", { name: "Execution 130" }).closest("li")!,
+    ).getByText("failed", { exact: true }),
+  ).toBeInTheDocument();
 
   expect(fetchMock).toHaveBeenCalledTimes(1);
 });
@@ -261,4 +268,119 @@ test("loads execution history in pages and appends the next page", async () => {
       name: "Load more",
     }),
   ).not.toBeInTheDocument();
+});
+
+
+test("filters execution history by status and restarts pagination", async () => {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+
+    if (url.endsWith("/executions?limit=2&offset=0")) {
+      return jsonResponse([
+        {
+          id: 131,
+          agent_id: 1,
+          input: "completed execution",
+          output: "42",
+          status: "completed",
+          retry_count: 0,
+          failure_type: null,
+          failure_message: null,
+          replay_of_execution_id: null,
+          created_at: "2026-09-13T14:34:17",
+        },
+        {
+          id: 130,
+          agent_id: 1,
+          input: "failed execution",
+          output: null,
+          status: "failed",
+          retry_count: 0,
+          failure_type: "tool_arguments_error",
+          failure_message: "missing required argument",
+          replay_of_execution_id: null,
+          created_at: "2026-09-13T12:07:02",
+        },
+      ]);
+    }
+
+    if (
+      url.endsWith(
+        "/executions?status=completed&limit=2&offset=0",
+      )
+    ) {
+      return jsonResponse([
+        {
+          id: 131,
+          agent_id: 1,
+          input: "completed execution",
+          output: "42",
+          status: "completed",
+          retry_count: 0,
+          failure_type: null,
+          failure_message: null,
+          replay_of_execution_id: null,
+          created_at: "2026-09-13T14:34:17",
+        },
+      ]);
+    }
+
+    return jsonResponse(
+      {
+        detail: `Unexpected request: ${url}`,
+      },
+      500,
+    );
+  });
+
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(
+    <ExecutionHistory
+      onSelectExecution={() => undefined}
+      pageSize={2}
+    />,
+  );
+
+  expect(
+    await screen.findByRole("button", {
+      name: "Execution 131",
+    }),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.getByRole("button", {
+      name: "Execution 130",
+    }),
+  ).toBeInTheDocument();
+
+  fireEvent.change(
+    screen.getByLabelText("Status"),
+    {
+      target: {
+        value: "completed",
+      },
+    },
+  );
+
+  await waitFor(() => {
+    expect(
+      screen.queryByRole("button", {
+        name: "Execution 130",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  expect(
+    screen.getByRole("button", {
+      name: "Execution 131",
+    }),
+  ).toBeInTheDocument();
+
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    2,
+    expect.stringContaining(
+      "/executions?status=completed&limit=2&offset=0",
+    ),
+  );
 });

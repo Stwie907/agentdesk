@@ -2533,3 +2533,30 @@ def test_get_executions_supports_limit_and_offset():
         assert second_page[0]["status"] == "completed"
     finally:
         clear_test_db_override()
+
+
+
+def test_get_executions_filters_by_status():
+    setup_test_db_override()
+    reset_database()
+    create_test_data()
+
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                "/executions?status=completed&limit=20&offset=0"
+            )
+
+        assert response.status_code == 200
+
+        body = response.json()
+
+        assert len(body) == 1
+        assert body[0]["status"] == "completed"
+
+        assert all(
+            execution["status"] == "completed"
+            for execution in body
+        )
+    finally:
+        clear_test_db_override()

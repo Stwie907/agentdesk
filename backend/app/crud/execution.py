@@ -42,19 +42,29 @@ def get_executions(
     db: Session,
     limit: int = 20,
     offset: int = 0,
+    status: str | None = None,
 ):
     """
     Return executions ordered from newest to oldest.
 
-    Results are paginated with limit/offset so callers do not need to
-    load the complete execution history at once.
+    Results may be filtered by execution status and are paginated with
+    limit/offset so callers do not need to load the complete execution
+    history at once.
+
+    Filtering is applied before pagination so offsets are calculated
+    within the selected status.
 
     created_at is the primary ordering key. id is used as a stable
     tie-breaker when multiple executions share the same timestamp.
     """
 
+    query = db.query(Execution)
+
+    if status is not None:
+        query = query.filter(Execution.status == status)
+
     return (
-        db.query(Execution)
+        query
         .order_by(
             Execution.created_at.desc(),
             Execution.id.desc(),

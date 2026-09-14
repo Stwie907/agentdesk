@@ -42,8 +42,12 @@ async function requestJson<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-export function getExecution(executionId: number): Promise<Execution> {
-  return requestJson<Execution>(`/executions/${executionId}`);
+export function getExecution(
+  executionId: number,
+): Promise<Execution> {
+  return requestJson<Execution>(
+    `/executions/${executionId}`,
+  );
 }
 
 export function getExecutionTrace(
@@ -102,8 +106,14 @@ export async function getExecutionInspection(
 export function getExecutions(
   limit = 20,
   offset = 0,
+  status?: string,
 ): Promise<Execution[]> {
+  const statusQuery =
+    status !== undefined && status !== ""
+      ? `status=${encodeURIComponent(status)}&`
+      : "";
+
   return requestJson<Execution[]>(
-    `/executions?limit=${limit}&offset=${offset}`,
+    `/executions?${statusQuery}limit=${limit}&offset=${offset}`,
   );
 }
