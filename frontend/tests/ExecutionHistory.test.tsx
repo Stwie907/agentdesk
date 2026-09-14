@@ -13,10 +13,10 @@ import {
 
 import { ExecutionHistory } from "../src/components/ExecutionHistory";
 
-function jsonResponse(body: unknown): Response {
+function jsonResponse(body: unknown, status = 200): Response {
   return {
-    ok: true,
-    status: 200,
+    ok: status >= 200 && status < 300,
+    status,
     json: async () => body,
   } as Response;
 }
@@ -145,4 +145,120 @@ test("renders an empty history state", async () => {
       screen.getByText("No executions found."),
     ).toBeInTheDocument();
   });
+});
+
+test("loads execution history in pages and appends the next page", async () => {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+
+    if (url.endsWith("/executions?limit=2&offset=0")) {
+      return jsonResponse([
+        {
+          id: 131,
+          agent_id: 1,
+          input: "first page execution",
+          output: "42",
+          status: "completed",
+          retry_count: 0,
+          failure_type: null,
+          failure_message: null,
+          replay_of_execution_id: null,
+          created_at: "2026-09-13T14:34:17",
+        },
+        {
+          id: 130,
+          agent_id: 1,
+          input: "second execution",
+          output: null,
+          status: "failed",
+          retry_count: 0,
+          failure_type: "tool_arguments_error",
+          failure_message: "missing required argument",
+          replay_of_execution_id: null,
+          created_at: "2026-09-13T12:07:02",
+        },
+      ]);
+    }
+
+    if (url.endsWith("/executions?limit=2&offset=2")) {
+      return jsonResponse([
+        {
+          id: 129,
+          agent_id: 1,
+          input: "older execution",
+          output: "10",
+          status: "completed",
+          retry_count: 0,
+          failure_type: null,
+          failure_message: null,
+          replay_of_execution_id: null,
+          created_at: "2026-09-12T10:00:00",
+        },
+      ]);
+    }
+
+    return jsonResponse(
+      {
+        detail: `Unexpected request: ${url}`,
+      },
+      500,
+    );
+  });
+
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(
+    <ExecutionHistory
+      onSelectExecution={() => undefined}
+      pageSize={2}
+    />,
+  );
+
+  expect(
+    await screen.findByRole("button", {
+      name: "Execution 131",
+    }),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.getByRole("button", {
+      name: "Execution 130",
+    }),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.queryByRole("button", {
+      name: "Execution 129",
+    }),
+  ).not.toBeInTheDocument();
+
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Load more",
+    }),
+  );
+
+  expect(
+    await screen.findByRole("button", {
+      name: "Execution 129",
+    }),
+  ).toBeInTheDocument();
+
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    1,
+    expect.stringContaining("/executions?limit=2&offset=0"),
+  );
+
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    2,
+    expect.stringContaining("/executions?limit=2&offset=2"),
+  );
+
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+
+  expect(
+    screen.queryByRole("button", {
+      name: "Load more",
+    }),
+  ).not.toBeInTheDocument();
 });

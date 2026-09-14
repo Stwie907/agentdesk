@@ -40,9 +40,14 @@ def get_execution(
 
 def get_executions(
     db: Session,
+    limit: int = 20,
+    offset: int = 0,
 ):
     """
-    Return all executions ordered from newest to oldest.
+    Return executions ordered from newest to oldest.
+
+    Results are paginated with limit/offset so callers do not need to
+    load the complete execution history at once.
 
     created_at is the primary ordering key. id is used as a stable
     tie-breaker when multiple executions share the same timestamp.
@@ -54,6 +59,8 @@ def get_executions(
             Execution.created_at.desc(),
             Execution.id.desc(),
         )
+        .offset(offset)
+        .limit(limit)
         .all()
     )
 
