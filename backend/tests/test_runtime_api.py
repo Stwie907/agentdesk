@@ -2560,3 +2560,191 @@ def test_get_executions_filters_by_status():
         )
     finally:
         clear_test_db_override()
+
+def test_get_executions_filters_by_agent():
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        source_agent = (
+            db.query(Agent)
+            .filter(Agent.id == data["agent_id"])
+            .first()
+        )
+
+        assert source_agent is not None
+
+        other_agent = Agent(
+            project_id=source_agent.project_id,
+            name="other-history-agent",
+            description="Agent excluded by execution history filter",
+            model="qwen2.5:7b",
+        )
+        db.add(other_agent)
+        db.commit()
+        db.refresh(other_agent)
+
+        other_execution = Execution(
+            agent_id=other_agent.id,
+            input="other agent execution",
+            output="other result",
+            status="completed",
+        )
+        db.add(other_execution)
+        db.commit()
+        db.refresh(other_execution)
+
+        with TestClient(app) as client:
+            response = client.get(
+                f"/executions?agent_id={data['agent_id']}&limit=20&offset=0"
+            )
+
+        assert response.status_code == 200
+
+        body = response.json()
+
+        assert len(body) == 2
+        assert all(
+            execution["agent_id"] == data["agent_id"]
+            for execution in body
+        )
+        assert all(
+            execution["id"] != other_execution.id
+            for execution in body
+        )
+
+    finally:
+        db.close()
+        clear_test_db_override()
+
+
+
+def test_get_executions_combines_agent_status_and_pagination():
+    setup_test_db_override()
+    reset_database()
+    data = create_test_data()
+
+    db = TestingSessionLocal()
+
+    try:
+        source_agent = (
+            db.query(Agent)
+            .filter(Agent.id == data["agent_id"])
+            .first()
+        )
+
+        assert source_agent is not None
+
+        source_execution_2 = Execution(
+            agent_id=source_agent.id,
+            input="source completed execution 2",
+            output="source result 2",
+            status="completed",
+        )
+
+        source_execution_3 = Execution(
+            agent_id=source_agent.id,
+            input="source completed execution 3",
+            output="source result 3",
+            status="completed",
+        )
+
+        other_agent = Agent(
+            project_id=source_agent.project_id,
+            name="combined-filter-other-agent",
+            description="Agent excluded by combined execution history filter",
+            model="qwen2.5:7b",
+        )
+
+        db.add(other_agent)
+        db.commit()
+        db.refresh(other_agent)
+
+        other_execution = Execution(
+            agent_id=other_agent.id,
+            input="other completed execution",
+            output="other result",
+            status="completed",
+        )
+
+        db.add_all(
+            [
+                source_execution_2,
+                source_execution_3,
+                other_execution,
+            ]
+        )
+        db.commit()
+
+        expected_ids = [
+            execution.id
+            for execution in (
+                db.query(Execution)
+                .filter(
+                    Execution.agent_id == source_agent.id,
+                    Execution.status == "completed",
+                )
+                .order_by(
+                    Execution.created_at.desc(),
+                    Execution.id.desc(),
+                )
+                .all()
+            )
+        ]
+
+        with TestClient(app) as client:
+            first_page_response = client.get(
+                (
+                    f"/executions?agent_id={source_agent.id}"
+                    "&status=completed"
+                    "&limit=2"
+                    "&offset=0"
+                )
+            )
+
+            second_page_response = client.get(
+                (
+                    f"/executions?agent_id={source_agent.id}"
+                    "&status=completed"
+                    "&limit=2"
+                    "&offset=2"
+                )
+            )
+
+        assert first_page_response.status_code == 200
+        assert second_page_response.status_code == 200
+
+        first_page = first_page_response.json()
+        second_page = second_page_response.json()
+
+        combined = first_page + second_page
+
+        assert len(first_page) == 2
+        assert len(second_page) == 1
+
+        assert [
+            execution["id"]
+            for execution in combined
+        ] == expected_ids
+
+        assert all(
+            execution["agent_id"] == source_agent.id
+            for execution in combined
+        )
+
+        assert all(
+            execution["status"] == "completed"
+            for execution in combined
+        )
+
+        assert other_execution.id not in {
+            execution["id"]
+            for execution in combined
+        }
+
+    finally:
+        db.close()
+        clear_test_db_override()

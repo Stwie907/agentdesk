@@ -384,3 +384,366 @@ test("filters execution history by status and restarts pagination", async () => 
     ),
   );
 });
+
+
+test("filters execution history by agent and restarts pagination", async () => {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), "http://localhost");
+
+    if (
+      url.pathname.endsWith("/executions") &&
+      url.searchParams.get("agent_id") === "1"
+    ) {
+      return jsonResponse([
+        {
+          id: 131,
+          agent_id: 1,
+          input: "agent one execution",
+          output: "42",
+          status: "completed",
+          retry_count: 0,
+          failure_type: null,
+          failure_message: null,
+          replay_of_execution_id: null,
+          created_at: "2026-09-13T14:34:17",
+        },
+      ]);
+    }
+
+    if (
+      url.pathname.endsWith("/executions") &&
+      url.searchParams.get("agent_id") === null
+    ) {
+      return jsonResponse([
+        {
+          id: 131,
+          agent_id: 1,
+          input: "agent one execution",
+          output: "42",
+          status: "completed",
+          retry_count: 0,
+          failure_type: null,
+          failure_message: null,
+          replay_of_execution_id: null,
+          created_at: "2026-09-13T14:34:17",
+        },
+        {
+          id: 130,
+          agent_id: 2,
+          input: "agent two execution",
+          output: null,
+          status: "failed",
+          retry_count: 0,
+          failure_type: "tool_arguments_error",
+          failure_message: "missing required argument",
+          replay_of_execution_id: null,
+          created_at: "2026-09-13T12:07:02",
+        },
+      ]);
+    }
+
+    return jsonResponse(
+      {
+        detail: `Unexpected request: ${url.toString()}`,
+      },
+      500,
+    );
+  });
+
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(
+    <ExecutionHistory
+      onSelectExecution={() => undefined}
+      pageSize={2}
+    />,
+  );
+
+  expect(
+    await screen.findByRole("button", {
+      name: "Execution 131",
+    }),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.getByRole("button", {
+      name: "Execution 130",
+    }),
+  ).toBeInTheDocument();
+
+  fireEvent.change(
+    screen.getByLabelText("Agent ID"),
+    {
+      target: {
+        value: "1",
+      },
+    },
+  );
+
+  await waitFor(() => {
+    expect(
+      screen.queryByRole("button", {
+        name: "Execution 130",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  expect(
+    screen.getByRole("button", {
+      name: "Execution 131",
+    }),
+  ).toBeInTheDocument();
+
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+
+  const secondRequestUrl = String(fetchMock.mock.calls[1][0]);
+
+  expect(secondRequestUrl).toContain("agent_id=1");
+  expect(secondRequestUrl).toContain("limit=2");
+  expect(secondRequestUrl).toContain("offset=0");
+});
+
+
+test("combines status and agent filters with pagination", async () => {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), "http://localhost");
+
+    const status = url.searchParams.get("status");
+    const agentId = url.searchParams.get("agent_id");
+    const offset = url.searchParams.get("offset");
+
+    if (
+      status === null &&
+      agentId === null &&
+      offset === "0"
+    ) {
+      return jsonResponse([
+        {
+          id: 131,
+          agent_id: 1,
+          input: "agent one completed execution",
+          output: "42",
+          status: "completed",
+          retry_count: 0,
+          failure_type: null,
+          failure_message: null,
+          replay_of_execution_id: null,
+          created_at: "2026-09-13T14:34:17",
+        },
+        {
+          id: 130,
+          agent_id: 2,
+          input: "agent two failed execution",
+          output: null,
+          status: "failed",
+          retry_count: 0,
+          failure_type: "tool_arguments_error",
+          failure_message: "missing required argument",
+          replay_of_execution_id: null,
+          created_at: "2026-09-13T12:07:02",
+        },
+      ]);
+    }
+
+    if (
+      status === "completed" &&
+      agentId === null &&
+      offset === "0"
+    ) {
+      return jsonResponse([
+        {
+          id: 131,
+          agent_id: 1,
+          input: "agent one completed execution",
+          output: "42",
+          status: "completed",
+          retry_count: 0,
+          failure_type: null,
+          failure_message: null,
+          replay_of_execution_id: null,
+          created_at: "2026-09-13T14:34:17",
+        },
+        {
+          id: 129,
+          agent_id: 2,
+          input: "agent two completed execution",
+          output: "10",
+          status: "completed",
+          retry_count: 0,
+          failure_type: null,
+          failure_message: null,
+          replay_of_execution_id: null,
+          created_at: "2026-09-12T10:00:00",
+        },
+      ]);
+    }
+
+    if (
+      status === "completed" &&
+      agentId === "1" &&
+      offset === "0"
+    ) {
+      return jsonResponse([
+        {
+          id: 131,
+          agent_id: 1,
+          input: "agent one newest execution",
+          output: "42",
+          status: "completed",
+          retry_count: 0,
+          failure_type: null,
+          failure_message: null,
+          replay_of_execution_id: null,
+          created_at: "2026-09-13T14:34:17",
+        },
+        {
+          id: 128,
+          agent_id: 1,
+          input: "agent one older execution",
+          output: "20",
+          status: "completed",
+          retry_count: 0,
+          failure_type: null,
+          failure_message: null,
+          replay_of_execution_id: null,
+          created_at: "2026-09-12T09:00:00",
+        },
+      ]);
+    }
+
+    if (
+      status === "completed" &&
+      agentId === "1" &&
+      offset === "2"
+    ) {
+      return jsonResponse([
+        {
+          id: 127,
+          agent_id: 1,
+          input: "agent one oldest execution",
+          output: "15",
+          status: "completed",
+          retry_count: 0,
+          failure_type: null,
+          failure_message: null,
+          replay_of_execution_id: null,
+          created_at: "2026-09-11T09:00:00",
+        },
+      ]);
+    }
+
+    return jsonResponse(
+      {
+        detail: `Unexpected request: ${url.toString()}`,
+      },
+      500,
+    );
+  });
+
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(
+    <ExecutionHistory
+      onSelectExecution={() => undefined}
+      pageSize={2}
+    />,
+  );
+
+  expect(
+    await screen.findByRole("button", {
+      name: "Execution 131",
+    }),
+  ).toBeInTheDocument();
+
+  fireEvent.change(
+    screen.getByLabelText("Status"),
+    {
+      target: {
+        value: "completed",
+      },
+    },
+  );
+
+  expect(
+    await screen.findByRole("button", {
+      name: "Execution 129",
+    }),
+  ).toBeInTheDocument();
+
+  fireEvent.change(
+    screen.getByLabelText("Agent ID"),
+    {
+      target: {
+        value: "1",
+      },
+    },
+  );
+
+  expect(
+    await screen.findByRole("button", {
+      name: "Execution 128",
+    }),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.queryByRole("button", {
+      name: "Execution 129",
+    }),
+  ).not.toBeInTheDocument();
+
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Load more",
+    }),
+  );
+
+  expect(
+    await screen.findByRole("button", {
+      name: "Execution 127",
+    }),
+  ).toBeInTheDocument();
+
+  const combinedFirstPageUrl = new URL(
+    String(fetchMock.mock.calls[2][0]),
+    "http://localhost",
+  );
+
+  expect(
+    combinedFirstPageUrl.searchParams.get("status"),
+  ).toBe("completed");
+
+  expect(
+    combinedFirstPageUrl.searchParams.get("agent_id"),
+  ).toBe("1");
+
+  expect(
+    combinedFirstPageUrl.searchParams.get("limit"),
+  ).toBe("2");
+
+  expect(
+    combinedFirstPageUrl.searchParams.get("offset"),
+  ).toBe("0");
+
+  const combinedSecondPageUrl = new URL(
+    String(fetchMock.mock.calls[3][0]),
+    "http://localhost",
+  );
+
+  expect(
+    combinedSecondPageUrl.searchParams.get("status"),
+  ).toBe("completed");
+
+  expect(
+    combinedSecondPageUrl.searchParams.get("agent_id"),
+  ).toBe("1");
+
+  expect(
+    combinedSecondPageUrl.searchParams.get("limit"),
+  ).toBe("2");
+
+  expect(
+    combinedSecondPageUrl.searchParams.get("offset"),
+  ).toBe("2");
+
+  expect(fetchMock).toHaveBeenCalledTimes(4);
+});

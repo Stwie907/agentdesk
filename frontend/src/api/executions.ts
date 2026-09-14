@@ -107,13 +107,22 @@ export function getExecutions(
   limit = 20,
   offset = 0,
   status?: string,
+  agentId?: number,
 ): Promise<Execution[]> {
-  const statusQuery =
-    status !== undefined && status !== ""
-      ? `status=${encodeURIComponent(status)}&`
-      : "";
+  const queryParts: string[] = [];
+
+  if (status !== undefined && status !== "") {
+    queryParts.push(`status=${encodeURIComponent(status)}`);
+  }
+
+  if (agentId !== undefined) {
+    queryParts.push(`agent_id=${agentId}`);
+  }
+
+  queryParts.push(`limit=${limit}`);
+  queryParts.push(`offset=${offset}`);
 
   return requestJson<Execution[]>(
-    `/executions?${statusQuery}limit=${limit}&offset=${offset}`,
+    `/executions?${queryParts.join("&")}`,
   );
 }
