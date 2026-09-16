@@ -18,7 +18,12 @@ import type { ExecutionInspection } from "../types/executions";
 type ExecutionInspectorProps = {
   selectedExecutionId?: number | null;
 };
+const AUTO_REFRESH_INTERVAL_MS = 2000;
 
+const ACTIVE_EXECUTION_STATUSES = new Set([
+  "pending",
+  "running",
+]);
 export function ExecutionInspector({
   selectedExecutionId = null,
 }: ExecutionInspectorProps) {
@@ -203,6 +208,8 @@ export function ExecutionInspector({
     }
   }
 
+
+
   useEffect(() => {
     if (selectedExecutionId === null) {
       return;
@@ -211,6 +218,91 @@ export function ExecutionInspector({
     setExecutionId(String(selectedExecutionId));
     void loadExecution(selectedExecutionId);
   }, [loadExecution, selectedExecutionId]);
+
+  const inspectedExecutionId =
+    inspection?.execution.id ?? null;
+
+  const inspectedExecutionStatus =
+    inspection?.execution.status ?? null;
+
+  const actionInProgress =
+    loading ||
+    refreshing ||
+    replaying ||
+    cancelling ||
+    retrying;
+
+  useEffect(() => {
+    if (
+      inspectedExecutionId === null ||
+      inspectedExecutionStatus === null ||
+      !ACTIVE_EXECUTION_STATUSES.has(
+        inspectedExecutionStatus,
+      ) ||
+      actionInProgress
+    ) {
+      return;
+    }
+
+    let disposed = false;
+    let requestInFlight = false;
+
+    const intervalId = window.setInterval(() => {
+      if (requestInFlight) {
+        return;
+      }
+
+      requestInFlight = true;
+
+      void getExecutionInspection(
+        inspectedExecutionId,
+      )
+        .then((result) => {
+          if (disposed) {
+            return;
+          }
+
+          setInspection((currentInspection) => {
+            if (
+              currentInspection === null ||
+              currentInspection.execution.id !==
+                inspectedExecutionId
+            ) {
+              return currentInspection;
+            }
+
+            return result;
+          });
+
+          setError(null);
+        })
+        .catch((requestError: unknown) => {
+          if (disposed) {
+            return;
+          }
+
+          if (requestError instanceof ApiError) {
+            setError(requestError.message);
+          } else {
+            setError(
+              "Unable to auto-refresh execution.",
+            );
+          }
+        })
+        .finally(() => {
+          requestInFlight = false;
+        });
+    }, AUTO_REFRESH_INTERVAL_MS);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, [
+    actionInProgress,
+    inspectedExecutionId,
+    inspectedExecutionStatus,
+  ]);
 
   return (
     <section aria-labelledby="execution-inspector-heading">
