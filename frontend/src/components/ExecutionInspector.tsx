@@ -1,10 +1,17 @@
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 
 import {
   ApiError,
+  cancelExecution,
   getExecutionInspection,
   replayExecution,
 } from "../api/executions";
+
 import type { ExecutionInspection } from "../types/executions";
 
 type ExecutionInspectorProps = {
@@ -19,6 +26,7 @@ export function ExecutionInspector({
     useState<ExecutionInspection | null>(null);
   const [loading, setLoading] = useState(false);
   const [replaying, setReplaying] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadExecution = useCallback(
@@ -69,7 +77,9 @@ export function ExecutionInspector({
     setError(null);
 
     try {
-      const replay = await replayExecution(inspection.execution.id);
+      const replay = await replayExecution(
+        inspection.execution.id,
+      );
 
       setExecutionId(String(replay.id));
 
@@ -82,6 +92,46 @@ export function ExecutionInspector({
       }
     } finally {
       setReplaying(false);
+    }
+  }
+
+  async function handleCancel() {
+    if (
+      inspection === null ||
+      cancelling ||
+      inspection.execution.status !== "pending"
+    ) {
+      return;
+    }
+
+    setCancelling(true);
+    setError(null);
+
+    try {
+      const cancelledExecution = await cancelExecution(
+        inspection.execution.id,
+      );
+
+      setExecutionId(String(cancelledExecution.id));
+
+      setInspection((currentInspection) => {
+        if (currentInspection === null) {
+          return null;
+        }
+
+        return {
+          ...currentInspection,
+          execution: cancelledExecution,
+        };
+      });
+    } catch (requestError) {
+      if (requestError instanceof ApiError) {
+        setError(requestError.message);
+      } else {
+        setError("Unable to cancel execution.");
+      }
+    } finally {
+      setCancelling(false);
     }
   }
 
@@ -178,6 +228,18 @@ export function ExecutionInspector({
             >
               {replaying ? "Replaying..." : "Replay execution"}
             </button>
+
+            {inspection.execution.status === "pending" && (
+              <button
+                type="button"
+                disabled={cancelling}
+                onClick={() => void handleCancel()}
+              >
+                {cancelling
+                  ? "Cancelling..."
+                  : "Cancel execution"}
+              </button>
+            )}
           </section>
 
           <section aria-labelledby="execution-trace-heading">

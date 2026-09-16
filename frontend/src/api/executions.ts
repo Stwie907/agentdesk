@@ -91,6 +91,17 @@ export function replayExecution(
   );
 }
 
+export function cancelExecution(
+  executionId: number,
+): Promise<Execution> {
+  return requestJson<Execution>(
+    `/executions/${executionId}/cancel`,
+    {
+      method: "POST",
+    },
+  );
+}
+
 export function getExecutionReplays(
   executionId: number,
 ): Promise<Execution[]> {
