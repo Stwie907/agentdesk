@@ -28,6 +28,7 @@ export function ExecutionInspector({
   const [loading, setLoading] = useState(false);
   const [replaying, setReplaying] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,6 +69,31 @@ export function ExecutionInspector({
     }
 
     await loadExecution(parsedExecutionId);
+  }
+
+  async function handleRefresh() {
+    if (inspection === null || refreshing) {
+      return;
+    }
+
+    setRefreshing(true);
+    setError(null);
+
+    try {
+      const result = await getExecutionInspection(
+        inspection.execution.id,
+      );
+
+      setInspection(result);
+    } catch (requestError) {
+      if (requestError instanceof ApiError) {
+        setError(requestError.message);
+      } else {
+        setError("Unable to refresh execution.");
+      }
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   async function handleReplay() {
@@ -262,6 +288,20 @@ export function ExecutionInspector({
               <dt>Created at</dt>
               <dd>{inspection.execution.created_at}</dd>
             </dl>
+
+            <button
+              type="button"
+              disabled={
+                loading ||
+                refreshing ||
+                replaying ||
+                cancelling ||
+                retrying
+              }
+              onClick={() => void handleRefresh()}
+            >
+              {refreshing ? "Refreshing..." : "Refresh execution"}
+            </button>
 
             <button
               type="button"
