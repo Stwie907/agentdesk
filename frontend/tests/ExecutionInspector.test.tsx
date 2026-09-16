@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -24,6 +25,7 @@ function jsonResponse(
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -733,3 +735,116 @@ test("refreshes the inspected execution data", async () => {
 
   expect(fetchMock).toHaveBeenCalledTimes(8);
 });
+
+test(
+  "automatically refreshes a pending inspected execution",
+  async () => {
+    vi.useFakeTimers();
+
+    let executionReadCount = 0;
+
+    const fetchMock = vi.fn(
+      async (
+        input: RequestInfo | URL,
+        init?: RequestInit,
+      ): Promise<Response> => {
+        const url = String(input);
+        const method = init?.method ?? "GET";
+
+        if (
+          method === "GET" &&
+          url.endsWith("/executions/42")
+        ) {
+          executionReadCount += 1;
+
+          if (executionReadCount === 1) {
+            return jsonResponse({
+              id: 42,
+              agent_id: 1,
+              input: "auto refresh execution",
+              output: null,
+              status: "pending",
+              retry_count: 0,
+              failure_type: null,
+              failure_message: null,
+              replay_of_execution_id: null,
+              created_at: "2026-09-16T12:00:00",
+            });
+          }
+
+          return jsonResponse({
+            id: 42,
+            agent_id: 1,
+            input: "auto refresh execution",
+            output: "auto refreshed output",
+            status: "completed",
+            retry_count: 0,
+            failure_type: null,
+            failure_message: null,
+            replay_of_execution_id: null,
+            created_at: "2026-09-16T12:00:00",
+          });
+        }
+
+        if (url.endsWith("/executions/42/trace")) {
+          return jsonResponse([]);
+        }
+
+        if (url.endsWith("/executions/42/snapshot")) {
+          return jsonResponse(
+            {
+              detail: "Execution snapshot not found",
+            },
+            404,
+          );
+        }
+
+        if (url.endsWith("/executions/42/replays")) {
+          return jsonResponse([]);
+        }
+
+        return jsonResponse(
+          {
+            detail: `Unexpected request: ${method} ${url}`,
+          },
+          500,
+        );
+      },
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <ExecutionInspector
+        selectedExecutionId={42}
+      />,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByText("pending", {
+        selector: "dd",
+      }),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+
+    expect(
+      screen.getByText("auto refreshed output"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText("completed", {
+        selector: "dd",
+      }),
+    ).toBeInTheDocument();
+
+    expect(executionReadCount).toBe(2);
+  },
+);
