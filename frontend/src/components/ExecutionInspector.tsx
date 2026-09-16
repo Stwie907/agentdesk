@@ -10,6 +10,7 @@ import {
   cancelExecution,
   getExecutionInspection,
   replayExecution,
+  retryExecution,
 } from "../api/executions";
 
 import type { ExecutionInspection } from "../types/executions";
@@ -27,6 +28,7 @@ export function ExecutionInspector({
   const [loading, setLoading] = useState(false);
   const [replaying, setReplaying] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadExecution = useCallback(
@@ -135,6 +137,46 @@ export function ExecutionInspector({
     }
   }
 
+  async function handleRetry() {
+    if (
+      inspection === null ||
+      retrying ||
+      inspection.execution.status !== "failed"
+    ) {
+      return;
+    }
+
+    setRetrying(true);
+    setError(null);
+
+    try {
+      const retriedExecution = await retryExecution(
+        inspection.execution.id,
+      );
+
+      setExecutionId(String(retriedExecution.id));
+
+      setInspection((currentInspection) => {
+        if (currentInspection === null) {
+          return null;
+        }
+
+        return {
+          ...currentInspection,
+          execution: retriedExecution,
+        };
+      });
+    } catch (requestError) {
+      if (requestError instanceof ApiError) {
+        setError(requestError.message);
+      } else {
+        setError("Unable to retry execution.");
+      }
+    } finally {
+      setRetrying(false);
+    }
+  }
+
   useEffect(() => {
     if (selectedExecutionId === null) {
       return;
@@ -229,7 +271,17 @@ export function ExecutionInspector({
               {replaying ? "Replaying..." : "Replay execution"}
             </button>
 
-            {inspection.execution.status === "pending" && (
+            {inspection.execution.status === "failed" && (
+          <button
+            type="button"
+            disabled={retrying}
+            onClick={() => void handleRetry()}
+          >
+            {retrying ? "Retrying..." : "Retry execution"}
+          </button>
+        )}
+
+        {inspection.execution.status === "pending" && (
               <button
                 type="button"
                 disabled={cancelling}
