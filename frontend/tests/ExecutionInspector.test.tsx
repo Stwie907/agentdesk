@@ -453,3 +453,126 @@ test("cancels a pending execution from the inspector", async () => {
     }),
   ).not.toBeInTheDocument();
 });
+
+test("retries a failed execution from the inspector", async () => {
+  const fetchMock = vi.fn(
+    async (
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ): Promise<Response> => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (
+        method === "POST" &&
+        url.endsWith("/executions/42/retry")
+      ) {
+        return jsonResponse({
+          id: 42,
+          agent_id: 1,
+          input: "failed execution",
+          output: null,
+          status: "pending",
+          retry_count: 0,
+          failure_type: null,
+          failure_message: null,
+          replay_of_execution_id: null,
+          created_at: "2026-09-16T12:00:00",
+        });
+      }
+
+      if (url.endsWith("/executions/42/trace")) {
+        return jsonResponse([]);
+      }
+
+      if (url.endsWith("/executions/42/snapshot")) {
+        return jsonResponse(
+          {
+            detail: "Execution snapshot not found",
+          },
+          404,
+        );
+      }
+
+      if (url.endsWith("/executions/42/replays")) {
+        return jsonResponse([]);
+      }
+
+      if (url.endsWith("/executions/42")) {
+        return jsonResponse({
+          id: 42,
+          agent_id: 1,
+          input: "failed execution",
+          output: null,
+          status: "failed",
+          retry_count: 2,
+          failure_type: "tool_error",
+          failure_message: "calculator failed",
+          replay_of_execution_id: null,
+          created_at: "2026-09-16T12:00:00",
+        });
+      }
+
+      return jsonResponse(
+        {
+          detail: `Unexpected request: ${method} ${url}`,
+        },
+        500,
+      );
+    },
+  );
+
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(
+    <ExecutionInspector selectedExecutionId={42} />,
+  );
+
+  expect(
+    await screen.findByText("failed execution"),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.getByText("failed", {
+      selector: "dd",
+    }),
+  ).toBeInTheDocument();
+
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Retry execution",
+    }),
+  );
+
+  expect(
+    await screen.findByText("pending", {
+      selector: "dd",
+    }),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.queryByText("tool_error", {
+      selector: "dd",
+    }),
+  ).not.toBeInTheDocument();
+
+  expect(
+    screen.queryByText("calculator failed", {
+      selector: "dd",
+    }),
+  ).not.toBeInTheDocument();
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    expect.stringContaining("/executions/42/retry"),
+    expect.objectContaining({
+      method: "POST",
+    }),
+  );
+
+  expect(
+    screen.queryByRole("button", {
+      name: "Retry execution",
+    }),
+  ).not.toBeInTheDocument();
+});
+
