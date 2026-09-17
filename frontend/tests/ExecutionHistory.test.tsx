@@ -747,3 +747,446 @@ test("combines status and agent filters with pagination", async () => {
 
   expect(fetchMock).toHaveBeenCalledTimes(4);
 });
+
+
+test(
+  "preserves the active status filter when an execution update no longer matches",
+  async () => {
+    const execution42 = {
+      id: 42,
+      agent_id: 1,
+      input: "first completed execution",
+      output: "42",
+      status: "completed",
+      retry_count: 0,
+      failure_type: null,
+      failure_message: null,
+      replay_of_execution_id: null,
+      created_at: "2026-09-17T12:00:00",
+    };
+
+    const execution41 = {
+      id: 41,
+      agent_id: 1,
+      input: "second completed execution",
+      output: "41",
+      status: "completed",
+      retry_count: 0,
+      failure_type: null,
+      failure_message: null,
+      replay_of_execution_id: null,
+      created_at: "2026-09-17T11:00:00",
+    };
+
+    const updatedExecution42 = {
+      ...execution42,
+      output: null,
+      status: "pending",
+    };
+
+    const fetchMock = vi.fn(
+      async (
+        input: RequestInfo | URL,
+      ): Promise<Response> => {
+        const url = new URL(
+          String(input),
+          "http://localhost",
+        );
+
+        if (
+          url.pathname.endsWith("/executions") &&
+          url.searchParams.get("status") ===
+            "completed"
+        ) {
+          return jsonResponse([
+            execution42,
+            execution41,
+          ]);
+        }
+
+        if (url.pathname.endsWith("/executions")) {
+          return jsonResponse([]);
+        }
+
+        return jsonResponse(
+          {
+            detail: `Unexpected request: ${url.toString()}`,
+          },
+          500,
+        );
+      },
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const onSelectExecution = vi.fn();
+
+    const { rerender } = render(
+      <ExecutionHistory
+        onSelectExecution={onSelectExecution}
+        pageSize={2}
+      />,
+    );
+
+    expect(
+      await screen.findByText("No executions found."),
+    ).toBeInTheDocument();
+
+    fireEvent.change(
+      screen.getByLabelText("Status"),
+      {
+        target: {
+          value: "completed",
+        },
+      },
+    );
+
+    expect(
+      await screen.findByRole("button", {
+        name: "Execution 42",
+      }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", {
+        name: "Execution 41",
+      }),
+    ).toBeInTheDocument();
+
+    const requestCountBeforeUpdate =
+      fetchMock.mock.calls.length;
+
+    rerender(
+      <ExecutionHistory
+        onSelectExecution={onSelectExecution}
+        pageSize={2}
+        updatedExecution={updatedExecution42}
+      />,
+    );
+
+    expect(
+      screen.getByLabelText("Status"),
+    ).toHaveValue("completed");
+
+    expect(
+      screen.queryByRole("button", {
+        name: "Execution 42",
+      }),
+    ).not.toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", {
+        name: "Execution 41",
+      }),
+    ).toBeInTheDocument();
+
+    expect(fetchMock).toHaveBeenCalledTimes(
+      requestCountBeforeUpdate,
+    );
+  },
+);
+
+
+test(
+  "preserves the active agent filter when an execution update no longer matches",
+  async () => {
+    const execution42 = {
+      id: 42,
+      agent_id: 1,
+      input: "agent one execution",
+      output: "42",
+      status: "completed",
+      retry_count: 0,
+      failure_type: null,
+      failure_message: null,
+      replay_of_execution_id: null,
+      created_at: "2026-09-17T12:00:00",
+    };
+
+    const execution41 = {
+      id: 41,
+      agent_id: 1,
+      input: "another agent one execution",
+      output: "41",
+      status: "completed",
+      retry_count: 0,
+      failure_type: null,
+      failure_message: null,
+      replay_of_execution_id: null,
+      created_at: "2026-09-17T11:00:00",
+    };
+
+    const updatedExecution42 = {
+      ...execution42,
+      agent_id: 2,
+    };
+
+    const fetchMock = vi.fn(
+      async (
+        input: RequestInfo | URL,
+      ): Promise<Response> => {
+        const url = new URL(
+          String(input),
+          "http://localhost",
+        );
+
+        if (
+          url.pathname.endsWith("/executions") &&
+          url.searchParams.get("agent_id") === "1"
+        ) {
+          return jsonResponse([
+            execution42,
+            execution41,
+          ]);
+        }
+
+        if (url.pathname.endsWith("/executions")) {
+          return jsonResponse([]);
+        }
+
+        return jsonResponse(
+          {
+            detail: `Unexpected request: ${url.toString()}`,
+          },
+          500,
+        );
+      },
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const onSelectExecution = vi.fn();
+
+    const { rerender } = render(
+      <ExecutionHistory
+        onSelectExecution={onSelectExecution}
+        pageSize={2}
+      />,
+    );
+
+    expect(
+      await screen.findByText("No executions found."),
+    ).toBeInTheDocument();
+
+    fireEvent.change(
+      screen.getByLabelText("Agent ID"),
+      {
+        target: {
+          value: "1",
+        },
+      },
+    );
+
+    expect(
+      await screen.findByRole("button", {
+        name: "Execution 42",
+      }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", {
+        name: "Execution 41",
+      }),
+    ).toBeInTheDocument();
+
+    const requestCountBeforeUpdate =
+      fetchMock.mock.calls.length;
+
+    rerender(
+      <ExecutionHistory
+        onSelectExecution={onSelectExecution}
+        pageSize={2}
+        updatedExecution={updatedExecution42}
+      />,
+    );
+
+    expect(
+      screen.getByLabelText("Agent ID"),
+    ).toHaveValue(1);
+
+    expect(
+      screen.queryByRole("button", {
+        name: "Execution 42",
+      }),
+    ).not.toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", {
+        name: "Execution 41",
+      }),
+    ).toBeInTheDocument();
+
+    expect(fetchMock).toHaveBeenCalledTimes(
+      requestCountBeforeUpdate,
+    );
+  },
+);
+
+
+test(
+  "preserves loaded history pages when synchronizing an execution update",
+  async () => {
+    const execution42 = {
+      id: 42,
+      agent_id: 1,
+      input: "first page execution",
+      output: "42",
+      status: "completed",
+      retry_count: 0,
+      failure_type: null,
+      failure_message: null,
+      replay_of_execution_id: null,
+      created_at: "2026-09-17T12:00:00",
+    };
+
+    const execution41 = {
+      id: 41,
+      agent_id: 1,
+      input: "second first page execution",
+      output: "41",
+      status: "completed",
+      retry_count: 0,
+      failure_type: null,
+      failure_message: null,
+      replay_of_execution_id: null,
+      created_at: "2026-09-17T11:00:00",
+    };
+
+    const execution40 = {
+      id: 40,
+      agent_id: 2,
+      input: "second page execution",
+      output: "40",
+      status: "completed",
+      retry_count: 0,
+      failure_type: null,
+      failure_message: null,
+      replay_of_execution_id: null,
+      created_at: "2026-09-17T10:00:00",
+    };
+
+    const updatedExecution42 = {
+      ...execution42,
+      input: "updated first page execution",
+      output: "updated output",
+    };
+
+    const fetchMock = vi.fn(
+      async (
+        input: RequestInfo | URL,
+      ): Promise<Response> => {
+        const url = new URL(
+          String(input),
+          "http://localhost",
+        );
+
+        if (!url.pathname.endsWith("/executions")) {
+          return jsonResponse(
+            {
+              detail: `Unexpected request: ${url.toString()}`,
+            },
+            500,
+          );
+        }
+
+        const offset =
+          url.searchParams.get("offset") ?? "0";
+
+        if (offset === "0") {
+          return jsonResponse([
+            execution42,
+            execution41,
+          ]);
+        }
+
+        if (offset === "2") {
+          return jsonResponse([
+            execution40,
+          ]);
+        }
+
+        return jsonResponse([]);
+      },
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const onSelectExecution = vi.fn();
+
+    const { rerender } = render(
+      <ExecutionHistory
+        onSelectExecution={onSelectExecution}
+        pageSize={2}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("button", {
+        name: "Execution 42",
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Load more",
+      }),
+    );
+
+    expect(
+      await screen.findByRole("button", {
+        name: "Execution 40",
+      }),
+    ).toBeInTheDocument();
+
+    const requestCountBeforeUpdate =
+      fetchMock.mock.calls.length;
+
+    rerender(
+      <ExecutionHistory
+        onSelectExecution={onSelectExecution}
+        pageSize={2}
+        updatedExecution={updatedExecution42}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Execution 42",
+      }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", {
+        name: "Execution 41",
+      }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", {
+        name: "Execution 40",
+      }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText(
+        "updated first page execution",
+        {
+          selector: "span",
+        },
+      ),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.queryByText(
+        "first page execution",
+        {
+          selector: "span",
+        },
+      ),
+    ).not.toBeInTheDocument();
+
+    expect(fetchMock).toHaveBeenCalledTimes(
+      requestCountBeforeUpdate,
+    );
+  },
+);
