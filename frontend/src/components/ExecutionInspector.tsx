@@ -13,10 +13,14 @@ import {
   retryExecution,
 } from "../api/executions";
 
-import type { ExecutionInspection } from "../types/executions";
+import type {
+  Execution,
+  ExecutionInspection,
+} from "../types/executions";
 
 type ExecutionInspectorProps = {
   selectedExecutionId?: number | null;
+  onExecutionUpdated?: (execution: Execution) => void;
 };
 const AUTO_REFRESH_INTERVAL_MS = 2000;
 
@@ -26,6 +30,7 @@ const ACTIVE_EXECUTION_STATUSES = new Set([
 ]);
 export function ExecutionInspector({
   selectedExecutionId = null,
+  onExecutionUpdated,
 }: ExecutionInspectorProps) {
   const [executionId, setExecutionId] = useState("");
   const [inspection, setInspection] =
@@ -58,6 +63,14 @@ export function ExecutionInspector({
     },
     [],
   );
+
+  useEffect(() => {
+    if (inspection === null) {
+      return;
+    }
+
+    onExecutionUpdated?.(inspection.execution);
+  }, [inspection, onExecutionUpdated]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

@@ -9,11 +9,13 @@ import type { Execution } from "../types/executions";
 type ExecutionHistoryProps = {
   onSelectExecution: (executionId: number) => void;
   pageSize?: number;
+  updatedExecution?: Execution | null;
 };
 
 export function ExecutionHistory({
   onSelectExecution,
   pageSize = 20,
+  updatedExecution = null,
 }: ExecutionHistoryProps) {
   const [executions, setExecutions] = useState<Execution[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +24,57 @@ export function ExecutionHistory({
   const [hasMore, setHasMore] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
   const [agentIdFilter, setAgentIdFilter] = useState("");
+
+  useEffect(() => {
+    if (updatedExecution === null) {
+      return;
+    }
+
+    const parsedAgentId =
+      agentIdFilter.trim() === ""
+        ? undefined
+        : Number(agentIdFilter);
+
+    const matchesStatusFilter =
+      statusFilter === "" ||
+      updatedExecution.status === statusFilter;
+
+    const matchesAgentFilter =
+      parsedAgentId === undefined ||
+      updatedExecution.agent_id === parsedAgentId;
+
+    setExecutions((currentExecutions) => {
+      const hasMatchingExecution =
+        currentExecutions.some(
+          (execution) =>
+            execution.id === updatedExecution.id,
+        );
+
+      if (!hasMatchingExecution) {
+        return currentExecutions;
+      }
+
+      if (
+        !matchesStatusFilter ||
+        !matchesAgentFilter
+      ) {
+        return currentExecutions.filter(
+          (execution) =>
+            execution.id !== updatedExecution.id,
+        );
+      }
+
+      return currentExecutions.map((execution) =>
+        execution.id === updatedExecution.id
+          ? updatedExecution
+          : execution,
+      );
+    });
+  }, [
+    agentIdFilter,
+    statusFilter,
+    updatedExecution,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
