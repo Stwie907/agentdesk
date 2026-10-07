@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { ExecutionHistory } from "../components/ExecutionHistory";
 import { ExecutionInspector } from "../components/ExecutionInspector";
+import { TaskSubmission } from "../components/TaskSubmission";
 import type { Execution } from "../types/executions";
 
 export function HomePage() {
@@ -13,13 +14,24 @@ export function HomePage() {
     Execution | null
   >(null);
 
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+
+  function handleTaskSubmitted(executionId: number) {
+    setUpdatedExecution(null);
+    setSelectedExecutionId(executionId);
+    setHistoryRefreshKey((current) => current + 1);
+  }
+
   return (
     <>
       <h1>AgentDesk</h1>
 
+      <TaskSubmission onSubmitted={handleTaskSubmitted} />
+
       <ExecutionHistory
         onSelectExecution={setSelectedExecutionId}
         updatedExecution={updatedExecution}
+        refreshKey={historyRefreshKey}
       />
 
       <ExecutionInspector

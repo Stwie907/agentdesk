@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -10,12 +11,14 @@ type ExecutionHistoryProps = {
   onSelectExecution: (executionId: number) => void;
   pageSize?: number;
   updatedExecution?: Execution | null;
+  refreshKey?: number;
 };
 
 export function ExecutionHistory({
   onSelectExecution,
   pageSize = 20,
   updatedExecution = null,
+  refreshKey = 0,
 }: ExecutionHistoryProps) {
   const [executions, setExecutions] = useState<Execution[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,6 +27,7 @@ export function ExecutionHistory({
   const [hasMore, setHasMore] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
   const [agentIdFilter, setAgentIdFilter] = useState("");
+  const requestVersion = useRef(0);
 
   useEffect(() => {
     if (updatedExecution === null) {
@@ -78,9 +82,11 @@ export function ExecutionHistory({
 
   useEffect(() => {
     let cancelled = false;
+    requestVersion.current += 1;
 
     async function loadExecutions() {
       setLoading(true);
+      setLoadingMore(false);
       setError(null);
       setExecutions([]);
       setHasMore(false);
@@ -117,14 +123,16 @@ export function ExecutionHistory({
 
     return () => {
       cancelled = true;
+      requestVersion.current += 1;
     };
-  }, [pageSize, statusFilter, agentIdFilter]);
+  }, [pageSize, statusFilter, agentIdFilter, refreshKey]);
 
   async function handleLoadMore() {
-    if (loadingMore) {
+    if (loading || loadingMore) {
       return;
     }
 
+    const currentRequestVersion = requestVersion.current;
     setLoadingMore(true);
     setError(null);
 
@@ -140,6 +148,11 @@ export function ExecutionHistory({
         statusFilter || undefined,
         parsedAgentId,
       );
+
+      if (currentRequestVersion !== requestVersion.current) {
+        return;
+      }
+
       setExecutions((currentExecutions) => [
         ...currentExecutions,
         ...nextPage,
@@ -147,9 +160,13 @@ export function ExecutionHistory({
 
       setHasMore(nextPage.length === pageSize);
     } catch {
-      setError("Unable to load execution history.");
+      if (currentRequestVersion === requestVersion.current) {
+        setError("Unable to load execution history.");
+      }
     } finally {
-      setLoadingMore(false);
+      if (currentRequestVersion === requestVersion.current) {
+        setLoadingMore(false);
+      }
     }
   }
 

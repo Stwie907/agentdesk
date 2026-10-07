@@ -5,6 +5,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
+      "/agents": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
       "/executions": {
         target: "http://127.0.0.1:8000",
         changeOrigin: true,
