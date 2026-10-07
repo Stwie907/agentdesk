@@ -2,9 +2,15 @@ import json
 
 from app.runtime.planner import plan
 import app.runtime.planner as planner
+from app.services import llm_provider
 
 
-class FakeResponse:
+class SuccessfulResponse:
+    def raise_for_status(self):
+        pass
+
+
+class FakeResponse(SuccessfulResponse):
     def __init__(self, tool, tool_input):
         self.tool = tool
         self.tool_input = tool_input
@@ -28,7 +34,7 @@ def test_planner_calculator(monkeypatch):
         )
 
     monkeypatch.setattr(
-        planner.requests,
+        llm_provider.requests,
         "post",
         fake_post,
     )
@@ -50,7 +56,7 @@ def test_planner_datetime(monkeypatch):
         )
 
     monkeypatch.setattr(
-        planner.requests,
+        llm_provider.requests,
         "post",
         fake_post,
     )
@@ -74,7 +80,7 @@ def test_planner_rejects_disallowed_tool(monkeypatch):
         )
 
     monkeypatch.setattr(
-        planner.requests,
+        llm_provider.requests,
         "post",
         fake_post,
     )
@@ -102,7 +108,7 @@ def test_planner_prompt_only_contains_allowed_tools(
         )
 
     monkeypatch.setattr(
-        planner.requests,
+        llm_provider.requests,
         "post",
         fake_post,
     )
@@ -135,7 +141,7 @@ def test_planner_no_allowed_tools_skips_llm(
         )
 
     monkeypatch.setattr(
-        planner.requests,
+        llm_provider.requests,
         "post",
         fake_post,
     )
@@ -164,7 +170,7 @@ def test_planner_none_permissions_keeps_backward_compatibility(
         )
 
     monkeypatch.setattr(
-        planner.requests,
+        llm_provider.requests,
         "post",
         fake_post,
     )
@@ -194,7 +200,7 @@ def test_planner_discovers_dynamically_registered_tool(monkeypatch):
 
     captured = {}
 
-    class FakeResponse:
+    class FakeResponse(SuccessfulResponse):
         def json(self):
             return {
                 "response": '{"tool": "echo", "input": "hello"}'
@@ -205,7 +211,7 @@ def test_planner_discovers_dynamically_registered_tool(monkeypatch):
         return FakeResponse()
 
     monkeypatch.setattr(
-        planner.requests,
+        llm_provider.requests,
         "post",
         fake_post,
     )
@@ -222,7 +228,7 @@ def test_planner_discovers_dynamically_registered_tool(monkeypatch):
     assert "Echo the provided input." in captured["prompt"]
 
 def test_planner_supports_structured_arguments(monkeypatch):
-    class FakeResponse:
+    class FakeResponse(SuccessfulResponse):
         def json(self):
             return {
                 "response": json.dumps(
@@ -239,7 +245,7 @@ def test_planner_supports_structured_arguments(monkeypatch):
         return FakeResponse()
 
     monkeypatch.setattr(
-        planner.requests,
+        llm_provider.requests,
         "post",
         fake_post,
     )
@@ -256,7 +262,7 @@ def test_planner_supports_structured_arguments(monkeypatch):
 
 
 def test_planner_no_tool_uses_empty_arguments(monkeypatch):
-    class FakeResponse:
+    class FakeResponse(SuccessfulResponse):
         def json(self):
             return {
                 "response": json.dumps(
@@ -271,7 +277,7 @@ def test_planner_no_tool_uses_empty_arguments(monkeypatch):
         return FakeResponse()
 
     monkeypatch.setattr(
-        planner.requests,
+        llm_provider.requests,
         "post",
         fake_post,
     )
@@ -286,7 +292,7 @@ def test_planner_no_tool_uses_empty_arguments(monkeypatch):
 
 
 def test_planner_v4_legacy_calculator_normalizes_arguments(monkeypatch):
-    class FakeResponse:
+    class FakeResponse(SuccessfulResponse):
         def json(self):
             return {
                 "response": json.dumps(
@@ -301,7 +307,7 @@ def test_planner_v4_legacy_calculator_normalizes_arguments(monkeypatch):
         return FakeResponse()
 
     monkeypatch.setattr(
-        planner.requests,
+        llm_provider.requests,
         "post",
         fake_post,
     )
@@ -321,7 +327,7 @@ def test_planner_v4_legacy_calculator_normalizes_arguments(monkeypatch):
 
 
 def test_planner_v4_legacy_datetime_normalizes_arguments(monkeypatch):
-    class FakeResponse:
+    class FakeResponse(SuccessfulResponse):
         def json(self):
             return {
                 "response": json.dumps(
@@ -336,7 +342,7 @@ def test_planner_v4_legacy_datetime_normalizes_arguments(monkeypatch):
         return FakeResponse()
 
     monkeypatch.setattr(
-        planner.requests,
+        llm_provider.requests,
         "post",
         fake_post,
     )
@@ -354,7 +360,7 @@ def test_planner_v4_legacy_datetime_normalizes_arguments(monkeypatch):
 
 
 def test_planner_v4_no_tool_has_stable_contract(monkeypatch):
-    class FakeResponse:
+    class FakeResponse(SuccessfulResponse):
         def json(self):
             return {
                 "response": json.dumps(
@@ -369,7 +375,7 @@ def test_planner_v4_no_tool_has_stable_contract(monkeypatch):
         return FakeResponse()
 
     monkeypatch.setattr(
-        planner.requests,
+        llm_provider.requests,
         "post",
         fake_post,
     )
@@ -386,7 +392,7 @@ def test_planner_v4_no_tool_has_stable_contract(monkeypatch):
     }
 
 def test_plan_execution_wraps_legacy_single_step(monkeypatch):
-    class FakeResponse:
+    class FakeResponse(SuccessfulResponse):
         def json(self):
             return {
                 "response": json.dumps(
@@ -404,7 +410,7 @@ def test_plan_execution_wraps_legacy_single_step(monkeypatch):
         return FakeResponse()
 
     monkeypatch.setattr(
-        planner.requests,
+        llm_provider.requests,
         "post",
         fake_post,
     )
@@ -449,7 +455,7 @@ def test_plan_execution_wraps_legacy_single_step(monkeypatch):
     assert step.input == "1+1"
 
 def test_plan_execution_supports_multi_step_response(monkeypatch):
-    class FakeResponse:
+    class FakeResponse(SuccessfulResponse):
         def json(self):
             return {
                 "response": json.dumps(
@@ -480,7 +486,7 @@ def test_plan_execution_supports_multi_step_response(monkeypatch):
         return FakeResponse()
 
     monkeypatch.setattr(
-        planner.requests,
+        llm_provider.requests,
         "post",
         fake_post,
     )
@@ -507,7 +513,7 @@ def test_plan_execution_supports_multi_step_response(monkeypatch):
 def test_plan_execution_rejects_disallowed_tool_in_multi_step_response(
     monkeypatch,
 ):
-    class FakeResponse:
+    class FakeResponse(SuccessfulResponse):
         def json(self):
             return {
                 "response": json.dumps(
@@ -534,7 +540,7 @@ def test_plan_execution_rejects_disallowed_tool_in_multi_step_response(
         return FakeResponse()
 
     monkeypatch.setattr(
-        planner.requests,
+        llm_provider.requests,
         "post",
         fake_post,
     )
@@ -556,7 +562,7 @@ def test_plan_execution_rejects_disallowed_tool_in_multi_step_response(
 def test_plan_execution_falls_back_when_multi_step_response_has_no_valid_steps(
     monkeypatch,
 ):
-    class FakeResponse:
+    class FakeResponse(SuccessfulResponse):
         def json(self):
             return {
                 "response": json.dumps(
@@ -582,7 +588,7 @@ def test_plan_execution_falls_back_when_multi_step_response_has_no_valid_steps(
     }
 
     monkeypatch.setattr(
-        planner.requests,
+        llm_provider.requests,
         "post",
         fake_post,
     )
@@ -620,7 +626,7 @@ def test_planner_recovers_calculator_arguments_from_structured_input_when_argume
     empty dict as a complete structured-tool contract.
     """
 
-    class FakeResponse:
+    class FakeResponse(SuccessfulResponse):
         def json(self):
             return {
                 "response": json.dumps(
@@ -638,7 +644,7 @@ def test_planner_recovers_calculator_arguments_from_structured_input_when_argume
         return FakeResponse()
 
     monkeypatch.setattr(
-        planner.requests,
+        llm_provider.requests,
         "post",
         fake_post,
     )
@@ -666,7 +672,7 @@ def test_plan_execution_recovers_calculator_arguments_from_structured_input_when
     ExecutionStep objects.
     """
 
-    class FakeResponse:
+    class FakeResponse(SuccessfulResponse):
         def json(self):
             return {
                 "response": json.dumps(
@@ -688,7 +694,7 @@ def test_plan_execution_recovers_calculator_arguments_from_structured_input_when
         return FakeResponse()
 
     monkeypatch.setattr(
-        planner.requests,
+        llm_provider.requests,
         "post",
         fake_post,
     )

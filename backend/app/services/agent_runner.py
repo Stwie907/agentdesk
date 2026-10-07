@@ -1,33 +1,16 @@
-import requests
-
+from app.config import get_llm_settings
 from app.runtime.plan_executor import execute_plan
 from app.database import SessionLocal
 from app.services.execution_trace import TraceEvent, trace_event
 from app.runtime.planner import plan_execution
+from app.services.llm_provider import generate_text
 from app.services.execution_snapshot import (
     persist_execution_plan_snapshot,
     persist_execution_output_snapshot,
 )
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-
-
 def call_llm(model: str, prompt: str) -> str:
-    response = requests.post(
-        OLLAMA_URL,
-        json={
-            "model": model,
-            "prompt": prompt,
-            "stream": False,
-        },
-        timeout=120,
-    )
-
-    response.raise_for_status()
-
-    data = response.json()
-
-    return data["response"]
+    return generate_text(model, prompt)
 
 
 def run_agent(
@@ -51,6 +34,9 @@ def run_agent(
 
     When execution_id is provided, runtime trace events are persisted.
     """
+
+    settings = get_llm_settings()
+    mock_mode = settings.provider == "mock"
 
     def trace(event: TraceEvent, message: str):
         if execution_id is None:
@@ -110,7 +96,7 @@ def run_agent(
 
     trace(
         TraceEvent.PLAN_STARTED,
-        "",
+        "provider=mock; planner=demo_rules" if mock_mode else "",
     )
 
 
@@ -259,7 +245,7 @@ def run_agent(
 
     trace(
         TraceEvent.LLM_CALLED,
-        f"model={model}",
+        f"provider=mock; simulated=true; model={model}" if mock_mode else f"model={model}",
     )
 
     result = call_llm(
@@ -269,7 +255,7 @@ def run_agent(
 
     trace(
         TraceEvent.LLM_COMPLETED,
-        f"model={model}",
+        f"provider=mock; simulated=true; model={model}" if mock_mode else f"model={model}",
     )
 
     if execution_id is not None:
