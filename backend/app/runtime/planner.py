@@ -1,16 +1,15 @@
 import json
 
-import requests
-
-from app.runtime.execution_plan import ExecutionPlan, execution_plan_from_task
+from app.config import get_llm_settings
 from app.runtime.execution_plan import (
     ExecutionPlan,
     ExecutionStep,
     execution_plan_from_task,
 )
 from app.tools.registry import get_tool_metadata, list_tool_metadata
+from app.runtime.mock_planner import plan_mock_task
+from app.services.llm_provider import generate_text
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
 
 def normalize_allowed_tools(
     allowed_tools: list[str] | None,
@@ -101,6 +100,11 @@ def plan(
             "input": user_input,
         }
 
+    settings = get_llm_settings()
+
+    if settings.provider == "mock":
+        return plan_mock_task(user_input, available_tools)
+
     tools_prompt = build_tools_prompt(
         available_tools
     )
@@ -136,16 +140,7 @@ def plan(
 {user_input}
 """
 
-    response = requests.post(
-        OLLAMA_URL,
-        json={
-            "model": "qwen2.5:7b",
-            "prompt": prompt,
-            "stream": False,
-        },
-    )
-
-    text = response.json()["response"]
+    text = generate_text(settings.planner_model, prompt)
 
     try:
         result = json.loads(text)
@@ -259,6 +254,14 @@ def plan_execution(
             user_input=user_input,
         )
 
+    settings = get_llm_settings()
+
+    if settings.provider == "mock":
+        return execution_plan_from_task(
+            plan_mock_task(user_input, available_tools),
+            user_input=user_input,
+        )
+
     tools_prompt = build_tools_prompt(
         available_tools
     )
@@ -305,16 +308,7 @@ def plan_execution(
 {user_input}
 """.strip()
 
-    response = requests.post(
-        OLLAMA_URL,
-        json={
-            "model": "qwen2.5:7b",
-            "prompt": prompt,
-            "stream": False,
-        },
-    )
-
-    text = response.json()["response"]
+    text = generate_text(settings.planner_model, prompt)
 
     try:
         result = json.loads(text)
