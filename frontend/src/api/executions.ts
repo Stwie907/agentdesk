@@ -18,7 +18,7 @@ export class ApiError extends Error {
   }
 }
 
-async function requestJson<T>(
+export async function requestJson<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
