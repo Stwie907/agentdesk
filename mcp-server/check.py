@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 
 from mcp import Client, StdioServerParameters
+from tracking import DemoTracking, TRACKING_NO_PATTERN
 
 
 class CheckError(RuntimeError):
@@ -85,8 +86,53 @@ async def check_server(server_path: Path, timeout: float = 30) -> dict:
                         f"{label} must return a tool error, not successful order data")
                 checks.append(label)
 
+            matches = [tool for tool in listing.tools if tool.name == "track_order"]
+            require(len(matches) == 1, "Discovery must include exactly one track_order tool")
+            tracking_tool = matches[0]
+            schema = tracking_tool.input_schema
+            field = schema.get("properties", {}).get("tracking_no", {})
+            require(schema.get("type") == "object" and schema.get("required") == ["tracking_no"]
+                    and field.get("type") == "string" and field.get("pattern") == TRACKING_NO_PATTERN
+                    and bool(tracking_tool.output_schema), "track_order schemas are incompatible")
+            checks.append("tracking_discovery_and_schemas")
+            hints = tracking_tool.annotations
+            require(hints is not None and hints.read_only_hint is True
+                    and hints.destructive_hint is False and hints.idempotent_hint is True
+                    and hints.open_world_hint is False, "Tracking must be a local read-only tool")
+            checks.append("tracking_read_only_metadata")
+
+            tracking_samples = []
+            for tracking_no, order_id, status, event_count in (
+                ("DEMO-TRACK-1001", "DEMO-1001", "in_transit", 3),
+                ("DEMO-TRACK-1002", "DEMO-1002", "label_created", 1),
+            ):
+                result = await client.call_tool("track_order", {"tracking_no": tracking_no})
+                require(not result.is_error and isinstance(result.structured_content, dict),
+                        f"{tracking_no} returned no structured shipment")
+                shipment = DemoTracking.model_validate(result.structured_content)
+                require(shipment.tracking_no == tracking_no and shipment.order_id == order_id
+                        and shipment.status == status and shipment.carrier == "Demo Courier"
+                        and len(shipment.events) == event_count, "Tracking differs from its fixed fixture")
+                tracking_samples.append({"tracking_no": tracking_no, "status": status, "source": shipment.source})
+                checks.append("lookup_" + tracking_no.lower().replace("-", "_"))
+
+            missing = await client.call_tool("track_order", {"tracking_no": "DEMO-TRACK-9999"})
+            require(missing.is_error and missing.structured_content is None
+                    and "not found" in error_text(missing), "Unknown tracking numbers must return a tool error")
+            checks.append("unknown_tracking_error")
+            for label, arguments in (
+                ("invalid_tracking_error", {"tracking_no": "DEMO-1001"}),
+                ("missing_tracking_argument_error", {}),
+                ("wrong_tracking_type_error", {"tracking_no": 1001}),
+            ):
+                result = await client.call_tool("track_order", arguments)
+                require(result.is_error and result.structured_content is None and bool(error_text(result)),
+                        f"{label} must be a tool error")
+                checks.append(label)
+
             return {"status": "passed", "transport": "stdio", "protocol_version": client.protocol_version,
-                    "tool_names": names, "checks_passed": len(checks), "checks": checks, "sample_orders": samples}
+                    "tool_names": names, "checks_passed": len(checks), "checks": checks,
+                    "sample_orders": samples, "sample_shipments": tracking_samples}
 
 
 def describe_error(exc: BaseException) -> str:

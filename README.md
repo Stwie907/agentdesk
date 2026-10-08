@@ -15,7 +15,8 @@ sh deployment/start-demo.sh
 ```
 
 The script builds both services, waits for healthy containers, and creates a
-calculator-enabled `Demo Agent` and a separate `MCP Order Agent`. It explicitly selects Mock mode; a language
+calculator-enabled `Demo Agent`, `MCP Order Agent`, and `MCP Logistics Agent`.
+It explicitly selects Mock mode; a language
 model and API key are not needed. The initial build downloads container images
 and dependencies. Once built, Mock task execution makes no LLM requests.
 
@@ -45,6 +46,28 @@ docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend 
 Equivalent: `make mcp-runtime-check`. The initializer preserves existing Agent
 permissions and only gives `get_order` permission to the new order demo Agent.
 
+Select `MCP Logistics Agent` for `Track order DEMO-TRACK-1001` or
+`查询物流DEMO-TRACK-1002`. The real `track_order(tracking_no)` MCP tool returns
+JSON with a synthetic carrier, order id, shipment status, and a UTC event timeline.
+It requires a tracking number rather than an order id. Every response is marked
+`source: demo_fixture`; no carrier or live logistics service is contacted.
+
+| Tracking number | Linked demo order | Status | Timeline events |
+| --- | --- | --- | --- |
+| DEMO-TRACK-1001 | DEMO-1001 | in_transit | 3 |
+| DEMO-TRACK-1002 | DEMO-1002 | label_created | 1 |
+
+`Track order DEMO-TRACK-9999` creates a failed execution with a visible tool error.
+Tracking Trace, Snapshot, Replay, and current permission checks use the same
+Runtime pipeline as order lookup. Run the logistics API check after startup:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_mcp_tracking --base-url http://frontend
+```
+
+Equivalent: `make mcp-tracking-check`. Existing Agent permissions are preserved.
+
 SQLite is stored in a Docker named volume. `docker compose down` stops the
 services while retaining this data. Container data is separate from the native
 backend's `backend/agentdesk.db`.
@@ -71,7 +94,7 @@ This deterministic suite evaluates the current runtime. Router/RAG accuracy,
 hallucination scoring, and token accounting remain future evaluation work.
 See [the evaluation guide](evaluation/README.md) for metrics and troubleshooting.
 
-## Local MCP order server
+## Local MCP business tools
 
 Check the standalone MCP server independently with Docker:
 
@@ -79,15 +102,16 @@ Check the standalone MCP server independently with Docker:
 sh deployment/check-mcp.sh
 ```
 
-The official MCP Python SDK launches the independent order server over stdio,
-discovers `get_order(order_id)`, and checks structured replies and tool errors.
+The official MCP Python SDK launches the independent server over stdio,
+discovers `get_order(order_id)` and `track_order(tracking_no)`, and runs 16 checks
+covering structured replies and tool errors.
 It uses synthetic local fixtures marked `source: demo_fixture`, requires no
 model or external business API, and has no published port. The optional MCP
 check container is removed after the command completes.
 
-Run `make mcp-test` for order data, SDK, and real subprocess protocol tests.
+Run `make mcp-test` for order/tracking data, SDK, and real subprocess protocol tests.
 See [the MCP guide](mcp-server/README.md) for runtime integration and native setup.
-Later milestones will add `track_order(tracking_no)` and `create_ticket(problem)`.
+The next business-tool milestone is `create_ticket(problem)`.
 
 ## Repository layout
 
@@ -112,9 +136,10 @@ RAG and additional MCP business tools remain future milestones.
 | `make demo-check` | Check the running Mock demo through the frontend proxy. |
 | `make evaluate` | Evaluate the running Mock demo and save JSON/Markdown reports. |
 | `make evaluation-test` | Test evaluator scoring and error handling without Docker. |
-| `make mcp-check` | Verify the standalone MCP order server in Docker. |
-| `make mcp-test` | Run order data and MCP protocol tests in Docker. |
+| `make mcp-check` | Verify both standalone MCP business tools in Docker. |
+| `make mcp-test` | Run order/tracking data and MCP protocol tests in Docker. |
 | `make mcp-runtime-check` | Check order tasks, permissions, traces, errors, snapshots, and replay through the running Mock API. |
+| `make mcp-tracking-check` | Check shipment tasks, permissions, traces, errors, snapshots, and replay through the running Mock API. |
 | `make stop` | Stop services while retaining the data volume. |
 
 The application keeps Ollama as its default provider. The Mock Compose override

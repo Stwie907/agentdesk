@@ -92,8 +92,8 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         report = await check_server(ROOT / "server.py")
         self.assertEqual(report["status"], "passed")
         self.assertEqual(report["transport"], "stdio")
-        self.assertEqual(report["checks_passed"], 8)
-        self.assertEqual(report["tool_names"], ["get_order"])
+        self.assertEqual(report["checks_passed"], 16)
+        self.assertEqual(report["tool_names"], ["get_order", "track_order"])
 
     async def test_reconnection_uses_unchanged_fixture_data(self):
         async with Client(mcp) as first:

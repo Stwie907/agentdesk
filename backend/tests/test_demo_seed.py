@@ -14,6 +14,7 @@ from app.seed_demo import (
     DEMO_PROJECT_NAME,
     DEMO_USERNAME,
     MCP_AGENT_NAME,
+    TRACKING_AGENT_NAME,
     seed_demo,
 )
 
@@ -48,6 +49,10 @@ def test_seed_creates_connected_calculator_demo_records(demo_db):
     assert order_agent.name == MCP_AGENT_NAME
     assert order_agent.project_id == project.id
     assert json.loads(order_agent.allowed_tools) == ["get_order"]
+    tracking_agent = demo_db.get(Agent, result["tracking_agent_id"])
+    assert tracking_agent.name == TRACKING_AGENT_NAME
+    assert tracking_agent.project_id == project.id
+    assert json.loads(tracking_agent.allowed_tools) == ["track_order"]
 
 
 def test_repeated_seed_reuses_records_and_preserves_changed_agent_settings(demo_db):
@@ -60,7 +65,7 @@ def test_repeated_seed_reuses_records_and_preserves_changed_agent_settings(demo_
     assert seed_demo(demo_db) == first
     assert demo_db.query(User).count() == 1
     assert demo_db.query(Project).count() == 1
-    assert demo_db.query(Agent).count() == 2
+    assert demo_db.query(Agent).count() == 3
     assert demo_db.get(Agent, first["agent_id"]).allowed_tools == "[]"
     assert demo_db.get(Agent, first["agent_id"]).model == "user-selected-model"
 
@@ -88,7 +93,7 @@ def test_seed_preserves_unrelated_user_project_and_agent(demo_db):
     assert result["agent_id"] != existing_ids[2]
     assert demo_db.query(User).count() == 2
     assert demo_db.query(Project).count() == 2
-    assert demo_db.query(Agent).count() == 3
+    assert demo_db.query(Agent).count() == 4
     assert demo_db.get(Agent, existing_ids[2]).model == "existing-model"
     assert demo_db.get(Agent, existing_ids[2]).allowed_tools == "[]"
 
@@ -118,3 +123,14 @@ def test_repeated_seed_preserves_mcp_agent_permission_changes(demo_db):
     demo_db.commit()
     assert seed_demo(demo_db) == first
     assert demo_db.get(Agent, first["mcp_agent_id"]).allowed_tools == "[]"
+
+
+def test_repeated_seed_preserves_logistics_agent_settings(demo_db):
+    first = seed_demo(demo_db)
+    agent = demo_db.get(Agent, first["tracking_agent_id"])
+    agent.allowed_tools = "[]"
+    agent.model = "user-selected-model"
+    demo_db.commit()
+    assert seed_demo(demo_db) == first
+    assert demo_db.get(Agent, first["tracking_agent_id"]).allowed_tools == "[]"
+    assert demo_db.get(Agent, first["tracking_agent_id"]).model == "user-selected-model"

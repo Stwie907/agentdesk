@@ -15,6 +15,7 @@ RUN python -m venv /opt/agentdesk-mcp \
     && /opt/agentdesk-mcp/bin/python -m pip install --no-cache-dir --requirement /tmp/mcp-requirements.txt
 
 COPY mcp-server/client.py mcp-server/server.py mcp-server/orders.py mcp-server/fixtures.json /mcp-server/
+COPY mcp-server/tracking.py mcp-server/tracking-fixtures.json /mcp-server/
 COPY backend/app ./app
 
 RUN mkdir -p /data

@@ -65,6 +65,8 @@ jobs:
         run: make evaluate
       - name: Check MCP order tasks, permissions, traces, failures, and replay
         run: make mcp-runtime-check
+      - name: Check MCP tracking tasks, permissions, errors, snapshots, and replay
+        run: make mcp-tracking-check
       - name: Upload evaluation reports
         if: always()
         uses: actions/upload-artifact@v7
@@ -97,9 +99,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate MCP profile
         run: docker compose --profile mcp config --quiet
-      - name: Test order data and MCP protocol behavior
+      - name: Test order and tracking data plus MCP protocol behavior
         run: make mcp-test
-      - name: Check the standalone stdio order server
+      - name: Check the standalone stdio business tools
         run: make mcp-check
       - name: Clean up MCP CI containers
         if: always()

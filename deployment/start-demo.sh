@@ -15,4 +15,5 @@ printf '%s\n' \
     'Workbench: http://localhost:5173' \
     'API docs:  http://localhost:8000/docs' \
     'Select Demo Agent, then submit Calculate 40 + 2 or Hello AgentDesk.' \
-    'Select MCP Order Agent, then submit Get order DEMO-1001.'
+    'Select MCP Order Agent, then submit Get order DEMO-1001.' \
+    'Select MCP Logistics Agent, then submit Track order DEMO-TRACK-1001.'
