@@ -67,6 +67,8 @@ jobs:
         run: make mcp-runtime-check
       - name: Check MCP tracking tasks, permissions, errors, snapshots, and replay
         run: make mcp-tracking-check
+      - name: Check MCP ticket writes, deduplication, permissions, and replay
+        run: make mcp-ticket-check
       - name: Upload evaluation reports
         if: always()
         uses: actions/upload-artifact@v7
@@ -81,6 +83,8 @@ jobs:
           make demo
           docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
             python -m app.check_demo --base-url http://frontend --verify-persistence
+          docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+            python -m app.check_mcp_ticket --base-url http://frontend --verify-persistence
       - name: Show container logs
         if: always()
         run: |
@@ -99,7 +103,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate MCP profile
         run: docker compose --profile mcp config --quiet
-      - name: Test order and tracking data plus MCP protocol behavior
+      - name: Test business data plus MCP protocol behavior
         run: make mcp-test
       - name: Check the standalone stdio business tools
         run: make mcp-check

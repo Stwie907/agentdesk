@@ -2,7 +2,7 @@ import re
 from typing import Any
 
 
-# The demo planner supports fixed arithmetic, order, and tracking rules.
+# The demo planner supports fixed arithmetic, order, tracking, and ticket rules.
 # Selected tools execute normally; this is not general language planning.
 NUMBER = r"[+-]?[0-9]+(?:\.[0-9]+)?"
 CALCULATION = re.compile(
@@ -17,6 +17,7 @@ TRACKING_LOOKUP = re.compile(
     r"(?:track\s+order\s+|查询物流\s*)(DEMO-TRACK-[0-9]{4})[?？]?",
     re.IGNORECASE,
 )
+TICKET_CREATION = re.compile(r"(?:create\s+ticket\s+|创建工单\s*)(.+)", re.IGNORECASE | re.DOTALL)
 
 
 def plan_mock_task(
@@ -28,6 +29,13 @@ def plan_mock_task(
         "arguments": {},
         "input": user_input,
     }
+    ticket = TICKET_CREATION.fullmatch(user_input.strip())
+    if ticket is not None and "create_ticket" in allowed_tools:
+        problem = ticket.group(1).strip()
+        if 1 <= len(problem) <= 2000:
+            task["tool"] = "create_ticket"
+            task["arguments"] = {"problem": problem}
+            return task
     shipment = TRACKING_LOOKUP.fullmatch(user_input.strip())
     if shipment is not None and "track_order" in allowed_tools:
         task["tool"] = "track_order"

@@ -2,7 +2,8 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    MCP_PYTHON=/opt/agentdesk-mcp/bin/python
+    MCP_PYTHON=/opt/agentdesk-mcp/bin/python \
+    MCP_TICKET_DB=/data/mcp-tickets.db
 
 WORKDIR /app
 
@@ -16,6 +17,7 @@ RUN python -m venv /opt/agentdesk-mcp \
 
 COPY mcp-server/client.py mcp-server/server.py mcp-server/orders.py mcp-server/fixtures.json /mcp-server/
 COPY mcp-server/tracking.py mcp-server/tracking-fixtures.json /mcp-server/
+COPY mcp-server/tickets.py /mcp-server/
 COPY backend/app ./app
 
 RUN mkdir -p /data

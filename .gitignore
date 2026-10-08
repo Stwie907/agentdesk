@@ -11,3 +11,4 @@ coverage/
 .venv/
 .pytest_cache/
 /evaluation/reports/
+/mcp-server/data/

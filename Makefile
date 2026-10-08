@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check
+.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check
 
 help:
 	@printf '%s\n' \
@@ -15,10 +15,11 @@ help:
 		'  demo-check  Check the workbench, Mock tasks, snapshots, and replay' \
 		'  evaluate  Evaluate the running Mock demo and save reports' \
 		'  evaluation-test  Test the evaluator without a running backend' \
-		'  mcp-check  Verify standalone order and tracking tools over stdio' \
-		'  mcp-test  Run order/tracking data and MCP protocol tests in Docker'
+		'  mcp-check  Verify standalone business tools over stdio' \
+		'  mcp-test  Run business data and MCP protocol tests in Docker'
 	@printf '%s\n' '  mcp-runtime-check  Check MCP order tasks and replay through the running Mock API'
 	@printf '%s\n' '  mcp-tracking-check  Check MCP shipment tasks and replay through the running Mock API'
+	@printf '%s\n' '  mcp-ticket-check  Check MCP ticket writes, deduplication, permissions, and replay'
 
 check:
 	@test -f README.md
@@ -87,6 +88,12 @@ check:
 	@test -f backend/app/check_mcp_tracking.py
 	@test -f backend/tests/test_mcp_tracking.py
 	@test -f backend/tests/test_mcp_tracking_api.py
+	@test -f mcp-server/tickets.py
+	@test -f mcp-server/tests/test_tickets.py
+	@test -f backend/app/tools/mcp_ticket.py
+	@test -f backend/app/check_mcp_ticket.py
+	@test -f backend/tests/test_mcp_ticket.py
+	@test -f backend/tests/test_mcp_ticket_api.py
 
 test: check
 	@python -m unittest discover -s evaluation/tests -v
@@ -132,3 +139,7 @@ mcp-runtime-check:
 mcp-tracking-check:
 	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
 		python -m app.check_mcp_tracking --base-url http://frontend
+
+mcp-ticket-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_mcp_ticket --base-url http://frontend

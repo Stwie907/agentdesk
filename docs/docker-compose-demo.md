@@ -2,7 +2,7 @@
 
 This guide runs the existing FastAPI, React/Vite, and SQLite application with
 Docker Compose. Mock mode uses deterministic planning and marked replies; the
-Calculator, MCP order, and tracking tools execute through Runtime V4. No local model or API key is
+Calculator, MCP order, tracking, and ticket tools execute through Runtime V4. No local model or API key is
 needed for Mock task execution.
 
 ## Requirements
@@ -33,7 +33,8 @@ and preserves existing Agent settings.
 The initializer creates a User named `agentdesk-demo`, an `AgentDesk Demo`
 Project, a `Demo Agent` with Calculator permission, and a separate `MCP Order Agent`
 with `get_order` permission. It also creates `MCP Logistics Agent` with only
-`track_order` permission. It prints their actual
+`track_order` permission, plus `MCP Ticket Agent` with only `create_ticket`
+permission. It prints their actual
 IDs. Do not assume that the Agent ID is `1` in an existing volume.
 
 Open `http://localhost:5173` and select `Demo Agent`. Submit these new tasks:
@@ -79,6 +80,21 @@ carrier, locations, and event times are fixed synthetic data, not live carrier
 information. Order and tracking permissions are independent. Existing Agent
 settings are preserved; the order Agent is not granted tracking automatically.
 
+Select `MCP Ticket Agent` for synthetic local support tickets:
+
+| Task | Expected result |
+| --- | --- |
+| `Create ticket Demo parcel is delayed.` | Completed JSON with a ticket ID, `status: open`, UTC creation time, and `source: demo_ticket_store`. |
+| Repeat the same problem | The same ticket ID and timestamp; no duplicate record. |
+| `创建工单示例订单需要帮助。` | A different ticket for the different problem. |
+| Replay a successful ticket execution | A linked execution with its own trace/snapshot and the original ticket. |
+
+Ticket creation writes only to the local demo SQLite store. The server trims
+leading/trailing problem whitespace; the same trimmed problem is deduplicated
+across the whole store. Case and internal whitespace remain significant. Inputs
+must be non-blank strings of at most 2000 characters. Order/tracking permissions
+do not grant write access. Existing Agent settings remain preserved.
+
 ## Check services and run the smoke check
 
 ```sh
@@ -117,6 +133,18 @@ execution/replay IDs. Keep `MCP Order Agent` without tracking permission for the
 negative permission scenario. This check creates demo executions. Equivalent:
 `make mcp-tracking-check`.
 
+Run the ticket acceptance check:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_mcp_ticket --base-url http://frontend
+```
+
+Expected JSON includes `status: passed`, `checks_passed: 5`, ticket IDs, and the
+execution/replay IDs. Keep `MCP Logistics Agent` without `create_ticket`
+permission for the negative planning scenario. The check creates two distinct
+demo tickets, repeats one problem, and replays it. Equivalent: `make mcp-ticket-check`.
+
 The following addresses have different purposes:
 
 | Address | Purpose |
@@ -137,6 +165,9 @@ final replies, and the existing retry policy with the default LLM timeout.
 Compose fixes the container database URL to `sqlite:////data/agentdesk.db` and
 mounts `/data` from the project's `agentdesk-data` named volume. Native
 `backend/agentdesk.db` is a separate database and is not copied into the image.
+The image also sets `MCP_TICKET_DB=/data/mcp-tickets.db`; this dedicated MCP store
+uses the same persistent volume. Native MCP tickets instead default to
+`mcp-server/data/tickets.db`, also excluded from Git and image builds.
 
 Stop containers while retaining data:
 
@@ -151,6 +182,18 @@ docker compose down
 sh deployment/start-demo.sh
 docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend python -m app.check_demo --base-url http://frontend --verify-persistence
 ```
+
+After the initial ticket acceptance check, verify its persistence after the same
+service recreation:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_mcp_ticket --base-url http://frontend --verify-persistence
+```
+
+This compares newly returned tickets against saved execution outputs. Losing the
+MCP database produces different ticket IDs and fails the check, even if backend
+execution history survives. Normal shutdown retains both databases.
 
 The persistence option checks that earlier Calculator, Mock chat, and linked
 replay records and their snapshots are present before creating new test tasks.
@@ -222,6 +265,10 @@ native backend settings. The script does not require a `.env` file.
   the arithmetic demo.
 - Missing `MCP Order Agent`: run `docker compose exec -T backend python -m app.seed_demo`.
 - Missing `MCP Logistics Agent`: rerun the initializer after rebuilding the backend.
+- Missing `MCP Ticket Agent`: rerun the initializer after rebuilding the backend.
+- Ticket creation errors: verify the dedicated MCP database path is writable and
+  the Agent explicitly permits `create_ticket`. Native overrides must be absolute
+  file paths. Blank or oversized Mock commands select no tool.
 - MCP import/client errors: rebuild with `sh deployment/start-demo.sh`; the updated
   image includes the isolated SDK. Native setups require the separate environment
   described in the backend guide.
@@ -238,8 +285,10 @@ end. Normal local shutdown retains the volume.
 CI installs the separate SDK environment for real backend API tests, runs the
 integrated MCP check in `compose-demo`, and retains standalone protocol checks
 and tests in `mcp-tools`.
-Both order and tracking acceptance checks run in `compose-demo`. Standalone
-protocol checking covers 16 checks and the MCP test suite contains 36 tests.
+Order, tracking, and ticket acceptance checks run in `compose-demo`, including
+ticket persistence after recreation. Standalone protocol checking covers 25
+checks and the MCP test suite contains 52 tests. Ticket protocol tests use
+temporary databases independently of the application's store.
 
 References: [Compose startup order](https://docs.docker.com/compose/how-tos/startup-order/),
 [Compose networking](https://docs.docker.com/compose/how-tos/networking/), and

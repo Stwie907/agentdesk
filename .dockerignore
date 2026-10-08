@@ -12,6 +12,8 @@
 **/dist
 **/coverage
 **/*.db
+**/*.db-*
+mcp-server/data
 **/*.sqlite
 **/*.sqlite3
 *.zip

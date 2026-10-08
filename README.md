@@ -15,7 +15,8 @@ sh deployment/start-demo.sh
 ```
 
 The script builds both services, waits for healthy containers, and creates a
-calculator-enabled `Demo Agent`, `MCP Order Agent`, and `MCP Logistics Agent`.
+calculator-enabled `Demo Agent`, `MCP Order Agent`, `MCP Logistics Agent`, and
+`MCP Ticket Agent`.
 It explicitly selects Mock mode; a language
 model and API key are not needed. The initial build downloads container images
 and dependencies. Once built, Mock task execution makes no LLM requests.
@@ -68,9 +69,33 @@ docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend 
 
 Equivalent: `make mcp-tracking-check`. Existing Agent permissions are preserved.
 
+Select `MCP Ticket Agent` for `Create ticket Demo parcel is delayed.` or
+`创建工单示例订单需要帮助。`. The real `create_ticket(problem)` tool writes to a
+separate local SQLite ticket store and returns JSON containing `ticket_id`,
+`problem`, `status: open`, `created_at`, and `source: demo_ticket_store`.
+It contacts no external support service. Only this Agent is given ticket write
+permission; existing Agent settings are preserved.
+
+Submitting the same problem again, after trimming leading/trailing whitespace,
+returns the original ticket and timestamp. Replay calls MCP again but reuses the
+stored ticket. Different problems create different tickets. Problems must be
+non-blank strings of at most 2000 characters; this is a local demo deduplication
+contract rather than customer-scoped ticket management.
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_mcp_ticket --base-url http://frontend
+```
+
+Equivalent: `make mcp-ticket-check`. It checks English/Chinese creation, duplicate
+submission, linked replay, and planning without write permission. After running
+this check, stop and restart the demo, then repeat it with `--verify-persistence`
+to verify the ticket IDs and contents survive service recreation.
+
 SQLite is stored in a Docker named volume. `docker compose down` stops the
-services while retaining this data. Container data is separate from the native
-backend's `backend/agentdesk.db`.
+services while retaining application data and `/data/mcp-tickets.db`. Native MCP
+tickets default to `mcp-server/data/tickets.db`; both native databases are separate
+from the container data. The MCP server owns ticket persistence.
 
 See [Docker Compose instructions](docs/docker-compose-demo.md),
 [backend setup](backend/README.md), and [frontend setup](frontend/README.md).
@@ -103,15 +128,19 @@ sh deployment/check-mcp.sh
 ```
 
 The official MCP Python SDK launches the independent server over stdio,
-discovers `get_order(order_id)` and `track_order(tracking_no)`, and runs 16 checks
+discovers `get_order(order_id)`, `track_order(tracking_no)`, and
+`create_ticket(problem)`, and runs 25 checks
 covering structured replies and tool errors.
-It uses synthetic local fixtures marked `source: demo_fixture`, requires no
+Lookups use fixtures marked `source: demo_fixture`; ticket checks write to an
+isolated temporary store marked `source: demo_ticket_store`. The check requires no
 model or external business API, and has no published port. The optional MCP
 check container is removed after the command completes.
 
-Run `make mcp-test` for order/tracking data, SDK, and real subprocess protocol tests.
+Run `make mcp-test` for business data, SQLite deduplication/concurrency, SDK, and
+real subprocess protocol tests.
 See [the MCP guide](mcp-server/README.md) for runtime integration and native setup.
-The next business-tool milestone is `create_ticket(problem)`.
+All three initial MCP business tools are implemented. Remote server configuration
+and connection pooling remain future MCP work.
 
 ## Repository layout
 
@@ -119,7 +148,7 @@ The next business-tool milestone is `create_ticket(problem)`.
 - `frontend/`: React, TypeScript, and Vite execution workbench with Nginx hosting.
 - `docs/`: project and deployment documentation.
 - `deployment/`: the portable Mock demo startup script.
-- `mcp-server/`: independent stdio order server, demo fixtures, protocol check, and tests.
+- `mcp-server/`: independent stdio business tools, lookup fixtures, SQLite ticket store, and protocol tests.
 - `evaluation/`: a fixed Mock dataset, HTTP evaluator, reports, and evaluator tests.
 
 RAG and additional MCP business tools remain future milestones.
@@ -136,10 +165,11 @@ RAG and additional MCP business tools remain future milestones.
 | `make demo-check` | Check the running Mock demo through the frontend proxy. |
 | `make evaluate` | Evaluate the running Mock demo and save JSON/Markdown reports. |
 | `make evaluation-test` | Test evaluator scoring and error handling without Docker. |
-| `make mcp-check` | Verify both standalone MCP business tools in Docker. |
-| `make mcp-test` | Run order/tracking data and MCP protocol tests in Docker. |
+| `make mcp-check` | Verify all three standalone MCP business tools in Docker. |
+| `make mcp-test` | Run business data, ticket storage, and MCP protocol tests in Docker. |
 | `make mcp-runtime-check` | Check order tasks, permissions, traces, errors, snapshots, and replay through the running Mock API. |
 | `make mcp-tracking-check` | Check shipment tasks, permissions, traces, errors, snapshots, and replay through the running Mock API. |
+| `make mcp-ticket-check` | Check ticket creation, duplicate submission, write permissions, traces, snapshots, and replay. |
 | `make stop` | Stop services while retaining the data volume. |
 
 The application keeps Ollama as its default provider. The Mock Compose override
