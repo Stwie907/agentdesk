@@ -10,3 +10,4 @@ coverage/
 .vscode/
 .venv/
 .pytest_cache/
+/evaluation/reports/

@@ -39,6 +39,24 @@ services:
       timeout: 5s
       retries: 12
       start_period: 5s
+  evaluation:
+    profiles: ["evaluation"]
+    build:
+      context: ./backend
+    working_dir: /
+    environment:
+      EVALUATION_REVISION: ${EVALUATION_REVISION:-unknown}
+    volumes:
+      - ./evaluation:/evaluation:ro
+      - ./evaluation/reports:/reports
+    command:
+      - python
+      - -m
+      - evaluation.run
+      - --base-url
+      - http://frontend
+      - --output-dir
+      - /reports
 
 volumes:
   agentdesk-data:
