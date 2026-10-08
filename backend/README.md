@@ -183,6 +183,35 @@ At `http://localhost:5173`, select the Agent and submit `计算40+2`. Confirm
 `completed`, output `42`, the Mock marker in the trace, and a stored snapshot.
 Submit `Hello AgentDesk` to see the explicitly marked fixed reply.
 
+## Persistent Agent memory
+
+The workbench uses the existing SQLite memory table and service policy:
+
+| Endpoint | Behavior |
+| --- | --- |
+| `POST /memories` | Existing positive integer `agent_id`; string content trimmed to 1–2000 characters. Returns a new or reused record. |
+| `GET /memories/{agent_id}` | Existing positive Agent ID; ordered records for that Agent only. An unknown Agent returns 404. |
+| `DELETE /memories/item/{memory_id}?agent_id={agent_id}` | Removes the record only if it belongs to the supplied Agent; a mismatch or absent record returns 404. |
+
+Invalid input returns 422. Exact duplicate content reuses its ID/timestamp.
+Canonical `User's name is ...` writes replace an earlier name memory using the
+same policy as automatic extraction. Old clients may omit the delete scope;
+the frontend always supplies it. These APIs do not implement authentication.
+
+Internal conversation extraction, existing saved content, keyword retrieval,
+and Ollama prompt injection retain their current behavior. The manual API limit
+does not truncate legacy or automatically extracted records. Memory retrieval
+events remain available in `GET /execution-logs/{execution_id}`. Mock always
+returns its fixed marked reply, even when relevant context was loaded.
+
+Run `python -m app.check_memory --base-url http://frontend` from the Mock backend
+container. After a successful initial check and service recreation, add
+`--verify-persistence`. It validates the stored marker before writing, compares
+the original ID/content/timestamp, and cleans up its temporary scope-test record.
+The existing application data volume holds memories; no migration or new
+dependency is required. Redis/PostgreSQL adapters and semantic retrieval remain
+future work.
+
 ## Health and tests
 
 `GET /health` continues to return `{"status": "ok"}`.
@@ -234,6 +263,8 @@ five-scenario logistics acceptance check through the Mock API.
 `python -m app.check_mcp_ticket --base-url http://frontend` checks five ticket
 scenarios. After the initial check and service recreation, add
 `--verify-persistence` to confirm ticket IDs/content and execution history survive.
+`python -m app.check_memory --base-url http://frontend` checks six memory scenarios;
+its persistence option fails if the original demo memory was lost after restart.
 
 The backend image now builds from the repository root to include the separate MCP
 environment. For a manual build, run `docker build -f backend/Dockerfile .` from

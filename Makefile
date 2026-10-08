@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check
+.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check
 
 help:
 	@printf '%s\n' \
@@ -20,6 +20,7 @@ help:
 	@printf '%s\n' '  mcp-runtime-check  Check MCP order tasks and replay through the running Mock API'
 	@printf '%s\n' '  mcp-tracking-check  Check MCP shipment tasks and replay through the running Mock API'
 	@printf '%s\n' '  mcp-ticket-check  Check MCP ticket writes, deduplication, permissions, and replay'
+	@printf '%s\n' '  memory-check  Check Agent memory storage, scope, deletion, and Runtime retrieval'
 
 check:
 	@test -f README.md
@@ -94,6 +95,13 @@ check:
 	@test -f backend/app/check_mcp_ticket.py
 	@test -f backend/tests/test_mcp_ticket.py
 	@test -f backend/tests/test_mcp_ticket_api.py
+	@test -f backend/app/check_memory.py
+	@test -f backend/tests/test_memory_api_contract.py
+	@test -f frontend/src/components/MemoryPanel.tsx
+	@test -f frontend/src/api/memories.ts
+	@test -f frontend/src/types/memories.ts
+	@test -f frontend/tests/MemoryPanel.test.tsx
+	@test -f frontend/tests/MemorySelection.test.tsx
 
 test: check
 	@python -m unittest discover -s evaluation/tests -v
@@ -143,3 +151,7 @@ mcp-tracking-check:
 mcp-ticket-check:
 	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
 		python -m app.check_mcp_ticket --base-url http://frontend
+
+memory-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_memory --base-url http://frontend

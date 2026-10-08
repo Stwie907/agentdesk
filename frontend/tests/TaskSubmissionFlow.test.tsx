@@ -21,6 +21,7 @@ test.each(["completed", "failed"])(
       if (url.pathname === "/agents" && method === "GET") {
         return jsonResponse([testAgent]);
       }
+      if (url.pathname === "/memories/7") return jsonResponse([]);
       if (url.pathname === "/agents/7/chat" && method === "POST") {
         submitted = true;
         return jsonResponse({
@@ -81,6 +82,7 @@ test("keeps active history filters when the submitted execution does not match",
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), "http://localhost");
     if (url.pathname === "/agents") return jsonResponse([testAgent]);
+    if (url.pathname === "/memories/7") return jsonResponse([]);
     if (url.pathname === "/agents/7/chat" && init?.method === "POST") {
       submitted = true;
       return jsonResponse({ execution_id: 101, response: "42", status: "completed" });

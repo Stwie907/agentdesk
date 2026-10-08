@@ -6,9 +6,10 @@ import type { Agent, AgentChatResponse } from "../types/agents";
 
 type TaskSubmissionProps = {
   onSubmitted: (executionId: number) => void;
+  onAgentSelected?: (agentId: number | null) => void;
 };
 
-export function TaskSubmission({ onSubmitted }: TaskSubmissionProps) {
+export function TaskSubmission({ onSubmitted, onAgentSelected }: TaskSubmissionProps) {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [agentId, setAgentId] = useState("");
   const [message, setMessage] = useState("");
@@ -57,6 +58,11 @@ export function TaskSubmission({ onSubmitted }: TaskSubmissionProps) {
 
   const selectedAgent = agents.find((agent) => String(agent.id) === agentId);
   const formDisabled = loadingAgents || agentError !== null || submitting;
+  const selectedAgentId = loadingAgents || agentError !== null ? null : selectedAgent?.id ?? null;
+
+  useEffect(() => {
+    onAgentSelected?.(selectedAgentId);
+  }, [onAgentSelected, selectedAgentId]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
