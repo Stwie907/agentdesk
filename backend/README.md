@@ -19,7 +19,8 @@ Activate with `source .venv/Scripts/activate` in Windows Git Bash, or
 python -m pip install -r requirements.txt
 ```
 
-An existing environment can be reused; this feature adds no dependencies.
+The backend dependencies are unchanged. MCP tools use a separate SDK environment;
+see the native MCP setup below.
 
 ## LLM configuration
 
@@ -74,7 +75,9 @@ by setting `LLM_PROVIDER=ollama` and restarting the backend.
 Mock mode makes no LLM HTTP requests. Its rule-based planner supports one binary
 arithmetic operation with signed numbers, optional decimal notation, and `+`, `-`,
 `*`, or `/`. Inputs may start with `计算` or `Calculate`. It respects Calculator
-permissions. Other input produces a no-tool plan and a fixed reply. Mock mode does
+permissions. It also recognizes `Get order DEMO-1001` and `查询订单DEMO-1001`
+when the Agent allows `get_order`; these call the real MCP order server.
+Other input produces a no-tool plan and a fixed reply. Mock mode does
 not perform general reasoning, datetime selection, or multi-step natural-language
 planning.
 
@@ -84,12 +87,45 @@ planning.
 | `Calculate 40 + 2` | Agent allows `calculator`. | Real Calculator output: `42`. |
 | `Hello AgentDesk` | Any Agent. | `[MOCK] AgentDesk demo response. No language model was called.` |
 | `计算40+2` | Calculator not allowed. | Fixed `[MOCK]` reply; no tool runs. |
+| `Get order DEMO-1001` | Agent allows `get_order`; MCP environment installed. | JSON order with `source: demo_fixture` and status `shipped`. |
+| `查询订单DEMO-1002` | Agent allows `get_order`; MCP environment installed. | JSON order with status `processing`. |
+| `Get order DEMO-9999` | Agent allows `get_order`. | Failed execution with `tool_execution_error`. |
+| `Get order DEMO-1001` | Order tool not allowed. | Fixed `[MOCK]` reply; no MCP call. |
 
 Calculator outputs are real tool results. The Inspector's `plan_started` trace
 contains `provider=mock; planner=demo_rules`. Simulated chat replies carry the
 `[MOCK]` prefix. Execution history, traces, and snapshots use the existing Runtime
 V4 pipeline. Calculator replay re-executes the stored tool plan and returns `42`
 without calling the planner or a model again.
+
+## Native MCP setup
+
+Keep MCP dependencies separate because the SDK and backend have different
+`httpx2` requirements. From the repository root, with Python 3.11 or newer:
+
+```sh
+python -m venv mcp-server/.venv
+mcp-server/.venv/Scripts/python.exe -m pip install -r mcp-server/requirements.txt
+```
+
+Linux/macOS uses `mcp-server/.venv/bin/python`. The backend automatically finds
+this environment; the backend's own virtual environment stays active. For another
+location, export `MCP_PYTHON` as its absolute Python executable path in the terminal
+that starts Uvicorn. `MCP_TIMEOUT_SECONDS` defaults to 30 and must be positive and
+finite. Docker supplies the isolated SDK environment automatically.
+
+Create an Agent with `allowed_tools: ["get_order"]`, or run `python -m app.seed_demo`
+to create `MCP Order Agent`. A single order-tool step returns validated JSON
+directly, without a model rewriting its values. Ollama receives tool metadata and
+structured argument examples; Mock uses fixed lookup rules.
+
+The adapter calls a fixed local MCP client with stdin JSON rather than shell
+commands. The client discovers the server's tool, validates its contract and typed
+response, and closes the server after each call. Errors use the existing tool
+failure contract. Normal and replay Trace include arguments/results. Replay uses
+the saved plan, current permissions, and current fixtures; it does not reuse cached
+output. The first adapter starts a client/server pair per call. Pooling and
+configurable remote MCP servers remain future work.
 
 ## Workbench demo
 
@@ -124,7 +160,9 @@ python -m pytest
 
 Tests isolate the LLM environment and select providers explicitly. A shell setting
 of `LLM_PROVIDER=mock` does not change the existing Ollama contract tests. The suite
-does not require a live model.
+does not require a live model. Real MCP API tests run when the separate environment
+is available (or `MCP_PYTHON` is set); otherwise they report explicit skips.
+CI installs the separate environment and runs these tests.
 
 ## Containers
 
@@ -144,10 +182,18 @@ reuses the matching demo User, Project, and Agent on repeated runs. It creates a
 `Demo Agent` with Calculator permission and `qwen2.5:7b` as its normal Ollama
 model. It preserves existing Agent settings and rejects a conflicting demo User
 identity rather than modifying that User.
+It also creates a separate `MCP Order Agent` with `get_order` permission and
+preserves that Agent's settings on later initializer runs.
 
 The smoke command `python -m app.check_demo --base-url http://frontend` runs
 inside the Mock backend container and checks the built workbench, API proxy,
 Calculator task, marked reply, trace, snapshots, and replay.
+`python -m app.check_mcp_runtime --base-url http://frontend` separately checks
+order tasks, permissions, failed lookups, MCP traces, snapshots, and linked replay.
+
+The backend image now builds from the repository root to include the separate MCP
+environment. For a manual build, run `docker build -f backend/Dockerfile .` from
+the repository root.
 
 See [the Docker Compose guide](../docs/docker-compose-demo.md) for complete
 commands, switching providers, persistence verification, and troubleshooting.

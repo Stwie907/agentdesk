@@ -1,4 +1,4 @@
-"""Create an idempotent demo User, Project, and calculator-enabled Agent."""
+"""Create idempotent calculator and MCP order Agents in a demo workspace."""
 
 import json
 
@@ -16,6 +16,7 @@ DEMO_USERNAME = "agentdesk-demo"
 DEMO_EMAIL = "demo@agentdesk.local"
 DEMO_PROJECT_NAME = "AgentDesk Demo"
 DEMO_AGENT_NAME = "Demo Agent"
+MCP_AGENT_NAME = "MCP Order Agent"
 
 
 def seed_demo(db: Session) -> dict[str, int]:
@@ -62,7 +63,23 @@ def seed_demo(db: Session) -> dict[str, int]:
             db.add(agent)
             db.flush()
 
-        result = {"user_id": user.id, "project_id": project.id, "agent_id": agent.id}
+        order_agent = db.query(Agent).filter(
+            Agent.project_id == project.id,
+            Agent.name == MCP_AGENT_NAME,
+        ).first()
+        if order_agent is None:
+            order_agent = Agent(
+                project_id=project.id,
+                name=MCP_AGENT_NAME,
+                description="Read-only synthetic demo orders through the local MCP server.",
+                model="qwen2.5:7b",
+                allowed_tools=json.dumps(["get_order"]),
+            )
+            db.add(order_agent)
+            db.flush()
+
+        result = {"user_id": user.id, "project_id": project.id, "agent_id": agent.id,
+                  "mcp_agent_id": order_agent.id}
         db.commit()
         return result
     except Exception:
@@ -74,7 +91,7 @@ def main() -> None:
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
         result = seed_demo(db)
-    print(json.dumps({"agent_name": DEMO_AGENT_NAME, **result}))
+    print(json.dumps({"agent_name": DEMO_AGENT_NAME, "mcp_agent_name": MCP_AGENT_NAME, **result}))
 
 
 if __name__ == "__main__":

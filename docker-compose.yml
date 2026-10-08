@@ -1,13 +1,15 @@
 services:
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       DATABASE_URL: sqlite:////data/agentdesk.db
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       OLLAMA_BASE_URL: ${COMPOSE_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_PLANNER_MODEL: ${OLLAMA_PLANNER_MODEL:-qwen2.5:7b}
       OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-120}
+      MCP_TIMEOUT_SECONDS: ${MCP_TIMEOUT_SECONDS:-30}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -42,7 +44,8 @@ services:
   evaluation:
     profiles: ["evaluation"]
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     working_dir: /
     environment:
       EVALUATION_REVISION: ${EVALUATION_REVISION:-unknown}

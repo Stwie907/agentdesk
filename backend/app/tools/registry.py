@@ -3,6 +3,7 @@ from typing import Dict, List, Optional
 from app.tools.base import BaseTool
 from app.tools.calculator import CalculatorTool
 from app.tools.datetime_tool import DateTimeTool
+from app.tools.mcp_order import MCPOrderTool
 
 
 _registry: Dict[str, BaseTool] = {}
@@ -73,3 +74,4 @@ def list_tool_metadata() -> List[dict]:
 # Register built-in AgentDesk tools.
 register_tool(CalculatorTool())
 register_tool(DateTimeTool())
+register_tool(MCPOrderTool())

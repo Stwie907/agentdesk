@@ -1,5 +1,7 @@
 from app.config import get_llm_settings
 from app.runtime.plan_executor import execute_plan
+from app.runtime.trace_details import step_trace_detail
+from app.tools.registry import get_tool
 from app.database import SessionLocal
 from app.services.execution_trace import TraceEvent, trace_event
 from app.runtime.planner import plan_execution
@@ -101,15 +103,9 @@ def run_agent(
 
 
     def on_step_started(step_index, step):
-        tool_detail = (
-            f" tool={step.tool}"
-            if step.tool is not None
-            else ""
-        )
-
         trace(
             TraceEvent.STEP_STARTED,
-            f"step={step_index}{tool_detail}",
+            step_trace_detail(step_index, step),
         )
 
         if step.tool is not None:
@@ -128,15 +124,9 @@ def run_agent(
                 f"tool={step.tool}; result={step_result.output}",
             )
 
-        tool_detail = (
-            f" tool={step.tool}"
-            if step.tool is not None
-            else ""
-        )
-
         trace(
             TraceEvent.STEP_COMPLETED,
-            f"step={step_index}{tool_detail}",
+            step_trace_detail(step_index, step, step_result.output),
         )
 
     failed_step = {
@@ -147,15 +137,9 @@ def run_agent(
     def on_step_failed(step_index, step, exc):
         failed_step["index"] = step_index
 
-        tool_detail = (
-            f" tool={step.tool}"
-            if step.tool is not None
-            else ""
-        )
-
         trace(
             TraceEvent.STEP_FAILED,
-            f"step={step_index}{tool_detail}; error={exc}",
+            f"{step_trace_detail(step_index, step)}; error={exc}",
         )
 
     try:
@@ -186,11 +170,12 @@ def run_agent(
 
     tool_result = plan_result.last_output
 
-    # Calculator output is deterministic,
-    # so it can be returned directly.
+    # Direct-result policy lives on each registered tool so new deterministic
+    # tools do not require another Agent-specific branch or an LLM rewrite.
+    direct_tool = get_tool(execution_plan.steps[0].tool) if len(execution_plan.steps) == 1 else None
     if (
-        len(execution_plan.steps) == 1
-        and execution_plan.steps[0].tool == "calculator"
+        direct_tool is not None
+        and direct_tool.return_direct
     ):
         final_result = str(tool_result)
 
