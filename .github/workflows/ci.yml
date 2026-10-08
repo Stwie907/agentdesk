@@ -69,6 +69,8 @@ jobs:
         run: make mcp-tracking-check
       - name: Check MCP ticket writes, deduplication, permissions, and replay
         run: make mcp-ticket-check
+      - name: Check Agent memory storage, scope, deletion, and Runtime retrieval
+        run: make memory-check
       - name: Upload evaluation reports
         if: always()
         uses: actions/upload-artifact@v7
@@ -85,6 +87,8 @@ jobs:
             python -m app.check_demo --base-url http://frontend --verify-persistence
           docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
             python -m app.check_mcp_ticket --base-url http://frontend --verify-persistence
+          docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+            python -m app.check_memory --base-url http://frontend --verify-persistence
       - name: Show container logs
         if: always()
         run: |

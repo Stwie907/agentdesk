@@ -95,6 +95,32 @@ across the whole store. Case and internal whitespace remain significant. Inputs
 must be non-blank strings of at most 2000 characters. Order/tracking permissions
 do not grant write access. Existing Agent settings remain preserved.
 
+## Manage Agent memories
+
+Select `Demo Agent` in the task form. In **Agent Memory**, save
+`I prefer concise Python answers.`. Confirm that the saved row has a Memory ID,
+then save the same content again: its ID remains the same. Select another Agent
+to see that Agent's list. Return to `Demo Agent` and use **Reload memories** to
+see the original record. **Delete memory** asks for confirmation before removal.
+
+Manual content is trimmed and must contain 1 to 2000 characters. Lists and
+workbench delete requests include the selected Agent's scope. Switching Agents
+clears drafts and ignores old request results. Existing name replacement and
+conversation extraction behavior are preserved. This panel adds no login or
+multi-user authorization.
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_memory --base-url http://frontend
+```
+
+Expected JSON includes `status: passed`, `checks_passed: 6`, and the Memory and
+execution IDs. The check verifies trimming, duplicate reuse, isolation, invalid
+input, scoped deletion, and relevant Runtime retrieval. It retains one stable
+demo memory and removes its temporary record. Equivalent: `make memory-check`.
+The Mock reply remains fixed; successful retrieval is verified in execution
+logs. This check does not evaluate model recall.
+
 ## Check services and run the smoke check
 
 ```sh
@@ -195,6 +221,17 @@ This compares newly returned tickets against saved execution outputs. Losing the
 MCP database produces different ticket IDs and fails the check, even if backend
 execution history survives. Normal shutdown retains both databases.
 
+After running the initial memory check, verify its record after the same restart:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_memory --base-url http://frontend --verify-persistence
+```
+
+The demo memory must already exist before the check writes anything. Its ID,
+content, and creation time must match the repeated save. Agent memories share
+`/data/agentdesk.db`; keep the same Compose project and volume across restarts.
+
 The persistence option checks that earlier Calculator, Mock chat, and linked
 replay records and their snapshots are present before creating new test tasks.
 Keep the same repository directory and Compose project name across runs so
@@ -286,7 +323,8 @@ CI installs the separate SDK environment for real backend API tests, runs the
 integrated MCP check in `compose-demo`, and retains standalone protocol checks
 and tests in `mcp-tools`.
 Order, tracking, and ticket acceptance checks run in `compose-demo`, including
-ticket persistence after recreation. Standalone protocol checking covers 25
+ticket persistence after recreation. Memory acceptance also runs before and
+after recreation. Standalone protocol checking covers 25
 checks and the MCP test suite contains 52 tests. Ticket protocol tests use
 temporary databases independently of the application's store.
 

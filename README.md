@@ -100,6 +100,36 @@ from the container data. The MCP server owns ticket persistence.
 See [Docker Compose instructions](docs/docker-compose-demo.md),
 [backend setup](backend/README.md), and [frontend setup](frontend/README.md).
 
+## Agent Memory workbench
+
+Select an Agent in the task form to view its persistent memories. Enter
+`I prefer concise Python answers.` in **Memory content**, then select **Save
+memory**. The panel supports reload, empty/error states, duplicate reuse, and
+confirmed deletion. Switching Agents starts a new draft and ignores old requests.
+
+Manual writes require an existing Agent and trimmed content of 1 to 2000
+characters. Exact duplicates reuse the same record. Canonical name memories use
+the existing replacement policy. Lists and workbench deletes are Agent-scoped;
+this scope check does not add authentication or multi-user authorization.
+Existing conversation extraction and keyword retrieval remain unchanged.
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_memory --base-url http://frontend
+```
+
+Equivalent: `make memory-check`. Six scenarios check trimming, duplicate reuse,
+Agent isolation, validation, scoped deletion, and Runtime retrieval. The check
+leaves one stable demo memory, cleans up its temporary record, and creates a
+marked Mock execution. After stopping and restarting the services, repeat with
+`--verify-persistence`; missing data fails before any replacement write.
+
+Memory uses the application's existing SQLite volume. Mock replies stay fixed
+even when relevant memory is loaded; the check verifies retrieval in execution
+logs and the saved snapshot. Ollama receives relevant context through the existing
+runtime. Redis/PostgreSQL adapters, semantic retrieval, and a user-level profile
+store remain future Memory work.
+
 ## Runtime evaluation
 
 After starting the Mock demo, run this from the repository root:
@@ -170,6 +200,7 @@ RAG and additional MCP business tools remain future milestones.
 | `make mcp-runtime-check` | Check order tasks, permissions, traces, errors, snapshots, and replay through the running Mock API. |
 | `make mcp-tracking-check` | Check shipment tasks, permissions, traces, errors, snapshots, and replay through the running Mock API. |
 | `make mcp-ticket-check` | Check ticket creation, duplicate submission, write permissions, traces, snapshots, and replay. |
+| `make memory-check` | Check Agent memory storage, isolation, validation, deletion, and Runtime retrieval. |
 | `make stop` | Stop services while retaining the data volume. |
 
 The application keeps Ollama as its default provider. The Mock Compose override

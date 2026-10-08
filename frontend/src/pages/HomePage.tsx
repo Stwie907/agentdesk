@@ -2,10 +2,12 @@ import { useState } from "react";
 
 import { ExecutionHistory } from "../components/ExecutionHistory";
 import { ExecutionInspector } from "../components/ExecutionInspector";
+import { MemoryPanel } from "../components/MemoryPanel";
 import { TaskSubmission } from "../components/TaskSubmission";
 import type { Execution } from "../types/executions";
 
 export function HomePage() {
+  const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
   const [selectedExecutionId, setSelectedExecutionId] = useState<
     number | null
   >(null);
@@ -26,7 +28,9 @@ export function HomePage() {
     <>
       <h1>AgentDesk</h1>
 
-      <TaskSubmission onSubmitted={handleTaskSubmitted} />
+      <TaskSubmission onSubmitted={handleTaskSubmitted} onAgentSelected={setSelectedAgentId} />
+
+      <MemoryPanel agentId={selectedAgentId} />
 
       <ExecutionHistory
         onSelectExecution={setSelectedExecutionId}
