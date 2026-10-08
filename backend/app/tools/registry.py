@@ -4,6 +4,7 @@ from app.tools.base import BaseTool
 from app.tools.calculator import CalculatorTool
 from app.tools.datetime_tool import DateTimeTool
 from app.tools.mcp_order import MCPOrderTool
+from app.tools.mcp_tracking import MCPTrackingTool
 
 
 _registry: Dict[str, BaseTool] = {}
@@ -75,3 +76,4 @@ def list_tool_metadata() -> List[dict]:
 register_tool(CalculatorTool())
 register_tool(DateTimeTool())
 register_tool(MCPOrderTool())
+register_tool(MCPTrackingTool())

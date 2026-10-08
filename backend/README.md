@@ -77,6 +77,8 @@ arithmetic operation with signed numbers, optional decimal notation, and `+`, `-
 `*`, or `/`. Inputs may start with `计算` or `Calculate`. It respects Calculator
 permissions. It also recognizes `Get order DEMO-1001` and `查询订单DEMO-1001`
 when the Agent allows `get_order`; these call the real MCP order server.
+`Track order DEMO-TRACK-1001` and `查询物流DEMO-TRACK-1002` use the real tracking
+tool when the Agent allows `track_order`.
 Other input produces a no-tool plan and a fixed reply. Mock mode does
 not perform general reasoning, datetime selection, or multi-step natural-language
 planning.
@@ -91,6 +93,9 @@ planning.
 | `查询订单DEMO-1002` | Agent allows `get_order`; MCP environment installed. | JSON order with status `processing`. |
 | `Get order DEMO-9999` | Agent allows `get_order`. | Failed execution with `tool_execution_error`. |
 | `Get order DEMO-1001` | Order tool not allowed. | Fixed `[MOCK]` reply; no MCP call. |
+| `Track order DEMO-TRACK-1001` | Agent allows `track_order`; MCP environment installed. | Synthetic JSON shipment, `in_transit`, and 3 UTC events. |
+| `查询物流DEMO-TRACK-1002` | Agent allows `track_order`; MCP environment installed. | Synthetic JSON shipment, `label_created`, and 1 event. |
+| `Track order DEMO-TRACK-9999` | Agent allows `track_order`. | Failed execution with `tool_execution_error`. |
 
 Calculator outputs are real tool results. The Inspector's `plan_started` trace
 contains `provider=mock; planner=demo_rules`. Simulated chat replies carry the
@@ -126,6 +131,14 @@ failure contract. Normal and replay Trace include arguments/results. Replay uses
 the saved plan, current permissions, and current fixtures; it does not reuse cached
 output. The first adapter starts a client/server pair per call. Pooling and
 configurable remote MCP servers remain future work.
+
+Tracking uses the same fixed client and isolated SDK environment. Create an Agent
+with `allowed_tools: ["track_order"]`, or select the seeded `MCP Logistics Agent`.
+An order permission does not grant tracking permission. Validated shipment JSON
+returns directly and includes `source: demo_fixture`, carrier, linked order,
+status, and ordered UTC events. The backend does not read shipment fixtures.
+Tracking uses existing planner metadata recovery, Trace, Snapshot, and Replay;
+the Agent runner and replay executor require no tool-specific changes.
 
 ## Workbench demo
 
@@ -184,12 +197,16 @@ model. It preserves existing Agent settings and rejects a conflicting demo User
 identity rather than modifying that User.
 It also creates a separate `MCP Order Agent` with `get_order` permission and
 preserves that Agent's settings on later initializer runs.
+It also creates `MCP Logistics Agent` with only `track_order` permission. Existing
+calculator, order, and logistics Agent settings are preserved on repeated runs.
 
 The smoke command `python -m app.check_demo --base-url http://frontend` runs
 inside the Mock backend container and checks the built workbench, API proxy,
 Calculator task, marked reply, trace, snapshots, and replay.
 `python -m app.check_mcp_runtime --base-url http://frontend` separately checks
 order tasks, permissions, failed lookups, MCP traces, snapshots, and linked replay.
+`python -m app.check_mcp_tracking --base-url http://frontend` performs the equivalent
+five-scenario logistics acceptance check through the Mock API.
 
 The backend image now builds from the repository root to include the separate MCP
 environment. For a manual build, run `docker build -f backend/Dockerfile .` from

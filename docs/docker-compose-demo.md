@@ -2,7 +2,7 @@
 
 This guide runs the existing FastAPI, React/Vite, and SQLite application with
 Docker Compose. Mock mode uses deterministic planning and marked replies; the
-Calculator and MCP order tools execute through Runtime V4. No local model or API key is
+Calculator, MCP order, and tracking tools execute through Runtime V4. No local model or API key is
 needed for Mock task execution.
 
 ## Requirements
@@ -32,7 +32,8 @@ and preserves existing Agent settings.
 
 The initializer creates a User named `agentdesk-demo`, an `AgentDesk Demo`
 Project, a `Demo Agent` with Calculator permission, and a separate `MCP Order Agent`
-with `get_order` permission. It prints their actual
+with `get_order` permission. It also creates `MCP Logistics Agent` with only
+`track_order` permission. It prints their actual
 IDs. Do not assume that the Agent ID is `1` in an existing volume.
 
 Open `http://localhost:5173` and select `Demo Agent`. Submit these new tasks:
@@ -64,6 +65,20 @@ permissions and does not add order permission to `Demo Agent`. Traces include
 arguments/results or errors. Replay uses the saved plan and current permissions.
 The existing eight-case arithmetic/chat evaluation suite remains separate.
 
+Select `MCP Logistics Agent` for shipment queries:
+
+| Task | Expected result |
+| --- | --- |
+| `Track order DEMO-TRACK-1001` | Completed JSON, `in_transit`, linked order `DEMO-1001`, and 3 UTC events. |
+| `查询物流DEMO-TRACK-1002` | Completed JSON, `label_created`, linked order `DEMO-1002`, and 1 event. |
+| `Track order DEMO-TRACK-9999` | Failed execution with `tool_execution_error` and a not-found message. |
+| Replay a successful tracking execution | A new linked execution with its own arguments/result trace and snapshot. |
+
+Tracking numbers use `DEMO-TRACK-1001`; order ids use `DEMO-1001`. The example
+carrier, locations, and event times are fixed synthetic data, not live carrier
+information. Order and tracking permissions are independent. Existing Agent
+settings are preserved; the order Agent is not granted tracking automatically.
+
 ## Check services and run the smoke check
 
 ```sh
@@ -89,6 +104,18 @@ Expected JSON includes `status: passed`, `transport: stdio`, `checks_passed: 5`,
 and actual execution/replay IDs. The check creates demo executions. It also checks
 that `Demo Agent` has no order permission and uses a no-tool Mock response; keep
 its original Calculator-only permissions for this check.
+
+Run the logistics acceptance check:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_mcp_tracking --base-url http://frontend
+```
+
+Expected JSON includes `status: passed`, `checks_passed: 5`, and actual tracking
+execution/replay IDs. Keep `MCP Order Agent` without tracking permission for the
+negative permission scenario. This check creates demo executions. Equivalent:
+`make mcp-tracking-check`.
 
 The following addresses have different purposes:
 
@@ -194,6 +221,7 @@ native backend settings. The script does not require a `.env` file.
   existing settings; restore Calculator permission explicitly before checking
   the arithmetic demo.
 - Missing `MCP Order Agent`: run `docker compose exec -T backend python -m app.seed_demo`.
+- Missing `MCP Logistics Agent`: rerun the initializer after rebuilding the backend.
 - MCP import/client errors: rebuild with `sh deployment/start-demo.sh`; the updated
   image includes the isolated SDK. Native setups require the separate environment
   described in the backend guide.
@@ -210,6 +238,8 @@ end. Normal local shutdown retains the volume.
 CI installs the separate SDK environment for real backend API tests, runs the
 integrated MCP check in `compose-demo`, and retains standalone protocol checks
 and tests in `mcp-tools`.
+Both order and tracking acceptance checks run in `compose-demo`. Standalone
+protocol checking covers 16 checks and the MCP test suite contains 36 tests.
 
 References: [Compose startup order](https://docs.docker.com/compose/how-tos/startup-order/),
 [Compose networking](https://docs.docker.com/compose/how-tos/networking/), and

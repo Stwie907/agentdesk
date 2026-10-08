@@ -7,6 +7,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir --requirement requirements.txt
 
 COPY orders.py server.py client.py check.py fixtures.json ./
+COPY tracking.py tracking-fixtures.json ./
 COPY tests ./tests
 
 CMD ["python", "check.py"]
