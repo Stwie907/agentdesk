@@ -35,6 +35,25 @@ backend's `backend/agentdesk.db`.
 See [Docker Compose instructions](docs/docker-compose-demo.md),
 [backend setup](backend/README.md), and [frontend setup](frontend/README.md).
 
+## Runtime evaluation
+
+After starting the Mock demo, run this from the repository root:
+
+```sh
+sh deployment/evaluate-demo.sh
+```
+
+The evaluator uses Python inside a temporary Docker container. It runs eight
+fixed Runtime V4 cases through the frontend API proxy and writes
+`evaluation/reports/report.json` and `evaluation/reports/report.md` on your
+computer. Cases check outputs, tool selection, trace order, snapshots, and replay.
+Reports include execution success rate, exact output accuracy, overall pass
+rate, and POST latency. A failed check makes the command exit with status 1.
+
+This deterministic suite evaluates the current runtime. Router/RAG accuracy,
+hallucination scoring, and token accounting remain future evaluation work.
+See [the evaluation guide](evaluation/README.md) for metrics and troubleshooting.
+
 ## Repository layout
 
 - `backend/`: FastAPI APIs, Agent runtime, demo commands, persistence, and tests.
@@ -42,7 +61,7 @@ See [Docker Compose instructions](docs/docker-compose-demo.md),
 - `docs/`: project and deployment documentation.
 - `deployment/`: the portable Mock demo startup script.
 - `mcp-server/`: reserved for MCP server code.
-- `evaluation/`: reserved for evaluation assets.
+- `evaluation/`: a fixed Mock dataset, HTTP evaluator, reports, and evaluator tests.
 
 RAG and MCP integrations are not implemented yet.
 
@@ -56,6 +75,8 @@ RAG and MCP integrations are not implemented yet.
 | `make start` | Start the base Compose services and wait for health; Ollama is the default. |
 | `make demo` | Build, start, and seed the explicit Mock demo. |
 | `make demo-check` | Check the running Mock demo through the frontend proxy. |
+| `make evaluate` | Evaluate the running Mock demo and save JSON/Markdown reports. |
+| `make evaluation-test` | Test evaluator scoring and error handling without Docker. |
 | `make stop` | Stop services while retaining the data volume. |
 
 The application keeps Ollama as its default provider. The Mock Compose override

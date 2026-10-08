@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: help check test lint build start stop demo demo-check
+.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test
 
 help:
 	@printf '%s\n' \
@@ -12,7 +12,9 @@ help:
 		'  start  Start service containers' \
 		'  stop   Stop service containers, retaining demo data' \
 		'  demo   Build and start the Mock demo with a Demo Agent' \
-		'  demo-check  Check the workbench, Mock tasks, snapshots, and replay'
+		'  demo-check  Check the workbench, Mock tasks, snapshots, and replay' \
+		'  evaluate  Evaluate the running Mock demo and save reports' \
+		'  evaluation-test  Test the evaluator without a running backend'
 
 check:
 	@test -f README.md
@@ -50,8 +52,15 @@ check:
 	@test -f frontend/README.md
 	@test -f deployment/start-demo.sh
 	@test -f docs/docker-compose-demo.md
+	@test -f deployment/evaluate-demo.sh
+	@test -f evaluation/__init__.py
+	@test -f evaluation/dataset.json
+	@test -f evaluation/run.py
+	@test -f evaluation/tests/test_run.py
+	@test -f evaluation/README.md
 
 test: check
+	@python -m unittest discover -s evaluation/tests -v
 	@cd backend && python -m pytest
 	@cd frontend && npm test
 
@@ -73,3 +82,9 @@ demo:
 demo-check:
 	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
 		python -m app.check_demo --base-url http://frontend
+
+evaluate:
+	sh deployment/evaluate-demo.sh
+
+evaluation-test:
+	python -m unittest discover -s evaluation/tests -v
