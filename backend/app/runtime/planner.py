@@ -64,6 +64,16 @@ def build_tools_prompt(
             metadata["input_schema"],
             ensure_ascii=False,
         )
+        argument_examples = {
+            name: metadata["input_schema"].get("properties", {}).get(name, {}).get(
+                "examples", [f"<{name}>"],
+            )[0]
+            for name in metadata["input_schema"].get("required", [])
+        }
+        response_example = json.dumps({
+            "tool": metadata["name"], "arguments": argument_examples,
+            "input": "<original user request>",
+        }, ensure_ascii=False)
 
         sections.append(
             f"""
@@ -71,10 +81,7 @@ def build_tools_prompt(
 用途: {metadata["description"]}
 输入格式: {input_schema}
 返回:
-{{
-    "tool": "{metadata["name"]}",
-    "input": "<tool input>"
-}}
+{response_example}
 """.strip()
         )
 
@@ -82,6 +89,23 @@ def build_tools_prompt(
         return "当前 Agent 没有任何可用工具。"
 
     return "\n\n".join(sections)
+
+
+def recover_structured_arguments(tool_name, arguments, step_input, user_input):
+    """Recover legacy structured input using registry metadata for any tool."""
+    metadata = get_tool_metadata(tool_name) if tool_name is not None else None
+    if arguments == {} and isinstance(step_input, dict) and metadata is not None:
+        schema = metadata["input_schema"]
+        required = schema.get("required", [])
+        if required and all(name in step_input for name in required):
+            arguments = {
+                name: step_input[name]
+                for name in schema.get("properties", {})
+                if name in step_input
+            }
+            step_input = user_input
+    return arguments, step_input
+
 
 def plan(
     user_input: str,
@@ -166,25 +190,10 @@ def plan(
 
     structured_input = result.get("input", user_input)
 
-    # Issue #76: recover calculator arguments from structured input.
-    # Some LLM responses return:
-    #
-    #   arguments = {}
-    #   input = {"expression": "..."}
-    #
-    # Treat that as the calculator structured contract rather than
-    # accepting the empty arguments object as complete.
-    if (
-        tool_name == "calculator"
-        and arguments == {}
-        and isinstance(structured_input, dict)
-        and "expression" in structured_input
-    ):
-        arguments = {
-            "expression": structured_input["expression"],
-        }
-        structured_input = user_input
-
+    # Preserve Issue #76's legacy structured input recovery for registered tools.
+    arguments, structured_input = recover_structured_arguments(
+        tool_name, arguments, structured_input, user_input,
+    )
 
     # New structured contract.
     if isinstance(arguments, dict):
@@ -343,19 +352,9 @@ def plan_execution(
                     user_input,
                 )
 
-                # Issue #76: some planner responses place calculator
-                # structured arguments under `input` while returning
-                # an empty `arguments` object.
-                if (
-                    tool_name == "calculator"
-                    and arguments == {}
-                    and isinstance(step_input, dict)
-                    and "expression" in step_input
-                ):
-                    arguments = {
-                        "expression": step_input["expression"],
-                    }
-                    step_input = user_input
+                arguments, step_input = recover_structured_arguments(
+                    tool_name, arguments, step_input, user_input,
+                )
 
                 steps.append(
                     ExecutionStep(
@@ -385,13 +384,13 @@ def plan_execution(
             if not isinstance(arguments, dict):
                 arguments = {}
 
+            arguments, step_input = recover_structured_arguments(
+                tool_name, arguments, result.get("input", user_input), user_input,
+            )
             task = {
                 "tool": tool_name,
                 "arguments": arguments,
-                "input": result.get(
-                    "input",
-                    user_input,
-                ),
+                "input": step_input,
             }
 
             return execution_plan_from_task(

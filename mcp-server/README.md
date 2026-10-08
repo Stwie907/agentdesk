@@ -1,6 +1,6 @@
 # AgentDesk MCP order server
 
-This independent server implements the first MCP milestone with the official
+This independent server uses the official
 Python SDK (`mcp==2.3.0`). It exposes `get_order(order_id)` over stdio and serves
 synthetic, read-only local order fixtures. It makes no model or business API calls.
 
@@ -116,11 +116,49 @@ python -m unittest discover -s tests -v
 Unix environments use `source .venv/bin/activate`. The Docker workflow above
 handles the environment automatically and is the simplest way to reproduce CI.
 
-## Next MCP milestones
+The native backend automatically detects `mcp-server/.venv`. For another location,
+export `MCP_PYTHON` as its absolute Python executable path before starting Uvicorn.
+Docker installs its own isolated SDK environment. `MCP_TIMEOUT_SECONDS` defaults
+to 30 positive finite seconds. See [backend setup](../backend/README.md).
 
-The Agent runtime adapter, tool permissions, planner selection, execution traces,
-and MCP snapshots/replay will be integrated in a later phase. Current workbench
-task submission continues to use its existing runtime tools.
+## Agent Runtime integration
+
+The backend registers `get_order` as a normal permission-controlled tool. Its
+adapter invokes `client.py` using the isolated MCP environment. Each call starts
+the independent server, performs MCP discovery and `tools/call`, validates the
+typed order response, and closes the session/server. The backend does not load
+order fixtures directly or install the SDK into its own dependency environment.
+
+Start the Mock workbench with `sh deployment/start-demo.sh`, select `MCP Order Agent`,
+and submit `Get order DEMO-1001`, `Get order DEMO-1002`, or `查询订单DEMO-1001`.
+Successful outputs are JSON containing the synthetic order. `Get order DEMO-9999`
+records a failed execution. Without permission, Mock selects no tool; the Executor
+also rejects forced disallowed calls before launching any MCP process.
+
+Normal and replay step traces include `transport=mcp_stdio`, arguments, and results
+or errors. Snapshot version 1 stores the structured plan and JSON output. Replay
+uses the saved plan, current permissions, and current server data without a planner
+or model. The registered `return_direct` policy prevents model rewrites of
+single-step order results. The current adapter starts one client/server pair per
+call; pooling and configurable remote servers remain future work.
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_mcp_runtime --base-url http://frontend
+```
+
+Equivalent: `make mcp-runtime-check`. This checks five scenarios: both known
+orders, linked replay, unknown order failure, and planning without permission.
+Backend API tests also force a disallowed plan and revoke permission before
+replay. CI runs the integrated check in `compose-demo` and the standalone MCP
+checks/tests in `mcp-tools`.
+
+The MCP suite now contains 22 tests, including client envelopes, invalid requests,
+incompatible discovery, mismatched order responses, transport failures, and
+timeout cleanup. Client exit codes are 0 for success, 1 for call/transport failures,
+and 2 for invalid input/configuration; stdout contains one JSON envelope.
+
+## Next MCP milestones
 
 The original business-tool plan also includes `track_order(tracking_no)` and
 `create_ticket(problem)`. They will be implemented as separate verifiable tools.

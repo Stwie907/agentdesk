@@ -2,7 +2,7 @@
 
 This guide runs the existing FastAPI, React/Vite, and SQLite application with
 Docker Compose. Mock mode uses deterministic planning and marked replies; the
-Calculator still executes through Runtime V4. No local model or API key is
+Calculator and MCP order tools execute through Runtime V4. No local model or API key is
 needed for Mock task execution.
 
 ## Requirements
@@ -31,7 +31,8 @@ runs an idempotent demo initializer. Repeating it reuses matching demo records
 and preserves existing Agent settings.
 
 The initializer creates a User named `agentdesk-demo`, an `AgentDesk Demo`
-Project, and a `Demo Agent` with Calculator permission. It prints their actual
+Project, a `Demo Agent` with Calculator permission, and a separate `MCP Order Agent`
+with `get_order` permission. It prints their actual
 IDs. Do not assume that the Agent ID is `1` in an existing volume.
 
 Open `http://localhost:5173` and select `Demo Agent`. Submit these new tasks:
@@ -47,6 +48,22 @@ selects Mock even when the shell or root `.env` contains `LLM_PROVIDER=ollama`.
 Unsupported Mock inputs produce a fixed marked reply rather than general LLM
 reasoning. The application itself still defaults to Ollama.
 
+Select `MCP Order Agent` for these tasks:
+
+| Task | Expected result |
+| --- | --- |
+| `Get order DEMO-1001` or `查询订单DEMO-1001` | Completed JSON order, `shipped`, CNY `129.00`, `source: demo_fixture`. |
+| `Get order DEMO-1002` | Completed JSON order, `processing`, CNY `59.00`. |
+| `Get order DEMO-9999` | Failed execution with `tool_execution_error` and a not-found message. |
+| Replay a successful order execution | A new linked execution with its own trace and snapshot. |
+
+The tool calls a real stdio MCP server in a separate SDK environment inside the
+backend image. It publishes no MCP port. The initial build also installs the SDK;
+no host virtual environment is required. The initializer preserves existing Agent
+permissions and does not add order permission to `Demo Agent`. Traces include
+arguments/results or errors. Replay uses the saved plan and current permissions.
+The existing eight-case arithmetic/chat evaluation suite remains separate.
+
 ## Check services and run the smoke check
 
 ```sh
@@ -60,6 +77,18 @@ Agent, execution, and replay IDs. It checks the served React build and assets,
 API health, Agent selection, Calculator execution, Mock trace marker, marked
 chat reply, snapshots, and replay history. It creates demo executions during
 the check. `make demo-check` runs the same command.
+
+Run the MCP acceptance check separately:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_mcp_runtime --base-url http://frontend
+```
+
+Expected JSON includes `status: passed`, `transport: stdio`, `checks_passed: 5`,
+and actual execution/replay IDs. The check creates demo executions. It also checks
+that `Demo Agent` has no order permission and uses a no-tool Mock response; keep
+its original Calculator-only permissions for this check.
 
 The following addresses have different purposes:
 
@@ -146,6 +175,7 @@ native backend settings. The script does not require a `.env` file.
 | `COMPOSE_OLLAMA_BASE_URL` | Container Ollama URL; defaults to the host Docker gateway. |
 | `OLLAMA_PLANNER_MODEL` | Defaults to `qwen2.5:7b`. |
 | `OLLAMA_TIMEOUT_SECONDS` | Defaults to `120` seconds per model request. |
+| `MCP_TIMEOUT_SECONDS` | Defaults to `30` positive finite seconds per MCP call; cleanup has a separate grace period. |
 | `DATABASE_URL` | Container value is fixed to the SQLite volume; the native reference value does not override it. |
 
 ## Troubleshooting
@@ -163,6 +193,10 @@ native backend settings. The script does not require a `.env` file.
 - A changed Demo Agent no longer allows Calculator: the initializer preserves
   existing settings; restore Calculator permission explicitly before checking
   the arithmetic demo.
+- Missing `MCP Order Agent`: run `docker compose exec -T backend python -m app.seed_demo`.
+- MCP import/client errors: rebuild with `sh deployment/start-demo.sh`; the updated
+  image includes the isolated SDK. Native setups require the separate environment
+  described in the backend guide.
 
 ## CI verification
 
@@ -172,6 +206,10 @@ containers, validates Nginx and the published health endpoints, runs the Mock
 smoke check, recreates the services, and verifies persisted executions and
 snapshots. It prints container logs and removes its temporary CI volume at the
 end. Normal local shutdown retains the volume.
+
+CI installs the separate SDK environment for real backend API tests, runs the
+integrated MCP check in `compose-demo`, and retains standalone protocol checks
+and tests in `mcp-tools`.
 
 References: [Compose startup order](https://docs.docker.com/compose/how-tos/startup-order/),
 [Compose networking](https://docs.docker.com/compose/how-tos/networking/), and

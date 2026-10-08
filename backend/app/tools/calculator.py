@@ -6,6 +6,7 @@ from app.tools.base import BaseTool
 
 class CalculatorTool(BaseTool):
     name = "calculator"
+    return_direct = True
 
     description = (
         "Perform basic mathematical calculations from a user expression."

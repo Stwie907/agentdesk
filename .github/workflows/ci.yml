@@ -19,7 +19,11 @@ jobs:
       - name: Install backend dependencies
         working-directory: backend
         run: python -m pip install --requirement requirements.txt
-      - name: Run backend tests
+      - name: Install isolated MCP client dependencies
+        run: |
+          python -m venv mcp-server/.venv
+          mcp-server/.venv/bin/python -m pip install --requirement mcp-server/requirements.txt
+      - name: Run backend tests including real MCP Agent calls and replay
         working-directory: backend
         run: python -m pytest
       - uses: actions/setup-node@v4
@@ -59,6 +63,8 @@ jobs:
         run: make demo-check
       - name: Evaluate deterministic Runtime V4 cases
         run: make evaluate
+      - name: Check MCP order tasks, permissions, traces, failures, and replay
+        run: make mcp-runtime-check
       - name: Upload evaluation reports
         if: always()
         uses: actions/upload-artifact@v7

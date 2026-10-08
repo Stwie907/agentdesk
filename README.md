@@ -15,7 +15,7 @@ sh deployment/start-demo.sh
 ```
 
 The script builds both services, waits for healthy containers, and creates a
-calculator-enabled `Demo Agent`. It explicitly selects Mock mode; a language
+calculator-enabled `Demo Agent` and a separate `MCP Order Agent`. It explicitly selects Mock mode; a language
 model and API key are not needed. The initial build downloads container images
 and dependencies. Once built, Mock task execution makes no LLM requests.
 
@@ -27,6 +27,23 @@ Open [the workbench](http://localhost:5173), select `Demo Agent`, and submit:
 The Inspector shows traces and snapshots. Replay the Calculator execution to
 create a linked execution with output `42`. Run `make demo-check` for an
 automated check of the built workbench, API proxy, tasks, snapshots, and replay.
+
+Select `MCP Order Agent` and submit `Get order DEMO-1001` or `查询订单DEMO-1001`.
+The real MCP client discovers and calls the independent stdio order server.
+The response is JSON with `source: demo_fixture`, status `shipped`, and total
+`129.00`. Trace shows arguments/results; Snapshot stores the plan and output.
+Replay executes the saved MCP plan using current Agent permissions and server data.
+`Get order DEMO-9999` creates a failed execution with a visible tool error.
+
+Run the integrated API check after starting the demo:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_mcp_runtime --base-url http://frontend
+```
+
+Equivalent: `make mcp-runtime-check`. The initializer preserves existing Agent
+permissions and only gives `get_order` permission to the new order demo Agent.
 
 SQLite is stored in a Docker named volume. `docker compose down` stops the
 services while retaining this data. Container data is separate from the native
@@ -56,7 +73,7 @@ See [the evaluation guide](evaluation/README.md) for metrics and troubleshooting
 
 ## Local MCP order server
 
-Run the first standalone MCP milestone with Docker:
+Check the standalone MCP server independently with Docker:
 
 ```sh
 sh deployment/check-mcp.sh
@@ -69,9 +86,8 @@ model or external business API, and has no published port. The optional MCP
 check container is removed after the command completes.
 
 Run `make mcp-test` for order data, SDK, and real subprocess protocol tests.
-See [the MCP guide](mcp-server/README.md) for fixture ids and native setup.
-Later milestones will connect this tool to Agent execution traces and add
-`track_order(tracking_no)` and `create_ticket(problem)`.
+See [the MCP guide](mcp-server/README.md) for runtime integration and native setup.
+Later milestones will add `track_order(tracking_no)` and `create_ticket(problem)`.
 
 ## Repository layout
 
@@ -82,7 +98,7 @@ Later milestones will connect this tool to Agent execution traces and add
 - `mcp-server/`: independent stdio order server, demo fixtures, protocol check, and tests.
 - `evaluation/`: a fixed Mock dataset, HTTP evaluator, reports, and evaluator tests.
 
-RAG and the Agent runtime's MCP tool adapter remain future milestones.
+RAG and additional MCP business tools remain future milestones.
 
 ## Commands
 
@@ -98,6 +114,7 @@ RAG and the Agent runtime's MCP tool adapter remain future milestones.
 | `make evaluation-test` | Test evaluator scoring and error handling without Docker. |
 | `make mcp-check` | Verify the standalone MCP order server in Docker. |
 | `make mcp-test` | Run order data and MCP protocol tests in Docker. |
+| `make mcp-runtime-check` | Check order tasks, permissions, traces, errors, snapshots, and replay through the running Mock API. |
 | `make stop` | Stop services while retaining the data volume. |
 
 The application keeps Ollama as its default provider. The Mock Compose override

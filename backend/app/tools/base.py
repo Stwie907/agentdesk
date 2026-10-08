@@ -28,6 +28,11 @@ class BaseTool(ABC):
     name: str = ""
     description: str = ""
 
+    # Registry policy: deterministic tools can return their result directly.
+    # MCP adapters identify their transport for normal and replay trace details.
+    return_direct: bool = False
+    transport: str | None = None
+
     input_schema: dict = {
         "type": "string",
     }

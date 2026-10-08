@@ -11,6 +11,7 @@ from app.crud.execution_snapshot import (
 from app.runtime.execution_plan import ExecutionPlan, ExecutionStep
 from app.schemas.execution_snapshot import ExecutionSnapshotCreate
 from app.runtime.plan_executor import execute_plan
+from app.runtime.trace_details import step_trace_detail
 from app.crud.execution import create_replay_execution
 from app.constants import CURRENT_EXECUTION_SNAPSHOT_VERSION
 from app.services.execution_failure import classify_failure
@@ -206,39 +207,21 @@ def replay_execution_snapshot(
         )
 
     def on_step_started(step_index, step):
-        tool_detail = (
-            f" tool={step.tool}"
-            if step.tool is not None
-            else ""
-        )
-
         trace(
             TraceEvent.STEP_STARTED,
-            f"step={step_index}{tool_detail}",
+            step_trace_detail(step_index, step),
         )
 
     def on_step_completed(step_index, result):
-        tool_detail = (
-            f" tool={result.step.tool}"
-            if result.step.tool is not None
-            else ""
-        )
-
         trace(
             TraceEvent.STEP_COMPLETED,
-            f"step={step_index}{tool_detail}",
+            step_trace_detail(step_index, result.step, result.output),
         )
 
     def on_step_failed(step_index, step, exc):
-        tool_detail = (
-            f" tool={step.tool}"
-            if step.tool is not None
-            else ""
-        )
-
         trace(
             TraceEvent.STEP_FAILED,
-            f"step={step_index}{tool_detail}; error={exc}",
+            f"{step_trace_detail(step_index, step)}; error={exc}",
         )
 
     trace(

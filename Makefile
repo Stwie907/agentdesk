@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test
+.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check
 
 help:
 	@printf '%s\n' \
@@ -17,6 +17,7 @@ help:
 		'  evaluation-test  Test the evaluator without a running backend' \
 		'  mcp-check  Verify the standalone order MCP server over stdio' \
 		'  mcp-test  Run order data and MCP protocol tests in Docker'
+	@printf '%s\n' '  mcp-runtime-check  Check MCP order tasks and replay through the running Mock API'
 
 check:
 	@test -f README.md
@@ -70,6 +71,14 @@ check:
 	@test -f mcp-server/.dockerignore
 	@test -f mcp-server/README.md
 	@test -f mcp-server/tests/test_orders.py
+	@test -f mcp-server/client.py
+	@test -f mcp-server/tests/test_client.py
+	@test -f backend/app/tools/mcp_order.py
+	@test -f backend/app/runtime/trace_details.py
+	@test -f backend/app/check_mcp_runtime.py
+	@test -f backend/tests/test_mcp_order.py
+	@test -f backend/tests/test_mcp_runtime_api.py
+	@test -f .dockerignore
 
 test: check
 	@python -m unittest discover -s evaluation/tests -v
@@ -107,3 +116,7 @@ mcp-check:
 mcp-test:
 	docker compose run --build --rm --no-deps -T mcp-check \
 		python -m unittest discover -s tests -v
+
+mcp-runtime-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_mcp_runtime --base-url http://frontend
