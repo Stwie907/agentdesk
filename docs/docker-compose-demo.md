@@ -95,6 +95,35 @@ across the whole store. Case and internal whitespace remain significant. Inputs
 must be non-blank strings of at most 2000 characters. Order/tracking permissions
 do not grant write access. Existing Agent settings remain preserved.
 
+## Continue a conversation and extract memory
+
+Select `Demo Agent`. Under **Conversation Chat**, enter `Memory demo` in
+**New conversation title** and select **Create conversation**. In **Chat message**,
+send `My name is Tom`, then `I like Python`. Confirm the transcript shows both
+user and assistant turns and the Memory panel refreshes with the name/preference.
+Repeated preferences reuse the same record. A new canonical name replaces the
+previous name memory for that Agent.
+
+Send `What do I like about Python?` as a follow-up. Mock returns its fixed marked
+reply; Runtime receives history and relevant memory, and the question does not
+create a new preference. Each returned execution opens in the Inspector. Return
+to the same Agent/conversation after reloading the page to see saved messages.
+
+Titles require 1 to 200 characters; messages require 1 to 4000 characters after
+trimming. Failed requests retain drafts. Use **Reload messages** to check the
+saved transcript before sending again. Switching Agents resets selections and
+drafts and ignores old responses. The panel uses existing SQLite storage and
+does not add multi-user authentication.
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_conversation --base-url http://frontend
+```
+
+Expected JSON includes `status: passed`, `checks_passed: 6`, conversation/memory
+IDs, and two execution IDs. The check reuses one named demo conversation and
+preference; each run appends two turns. Equivalent: `make conversation-check`.
+
 ## Manage Agent memories
 
 Select `Demo Agent` in the task form. In **Agent Memory**, save
@@ -237,6 +266,16 @@ replay records and their snapshots are present before creating new test tasks.
 Keep the same repository directory and Compose project name across runs so
 Compose reuses the same volume.
 
+After the initial conversation check, verify it after the same service restart:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_conversation --base-url http://frontend --verify-persistence
+```
+
+Conversation, transcript, and extracted preference must already exist. Missing
+data fails before any new chat can recreate it. All three use `/data/agentdesk.db`.
+
 ## Switch to local Ollama
 
 Use the base Compose file without the Mock override. Ollama must run on the host,
@@ -324,7 +363,8 @@ integrated MCP check in `compose-demo`, and retains standalone protocol checks
 and tests in `mcp-tools`.
 Order, tracking, and ticket acceptance checks run in `compose-demo`, including
 ticket persistence after recreation. Memory acceptance also runs before and
-after recreation. Standalone protocol checking covers 25
+after recreation. Conversation history and automatic memory acceptance also run
+before and after recreation. Standalone protocol checking covers 25
 checks and the MCP test suite contains 52 tests. Ticket protocol tests use
 temporary databases independently of the application's store.
 

@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { ExecutionHistory } from "../components/ExecutionHistory";
+import { ConversationPanel } from "../components/ConversationPanel";
 import { ExecutionInspector } from "../components/ExecutionInspector";
 import { MemoryPanel } from "../components/MemoryPanel";
 import { TaskSubmission } from "../components/TaskSubmission";
@@ -8,6 +9,7 @@ import type { Execution } from "../types/executions";
 
 export function HomePage() {
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
+  const [memoryRefreshKey, setMemoryRefreshKey] = useState(0);
   const [selectedExecutionId, setSelectedExecutionId] = useState<
     number | null
   >(null);
@@ -30,7 +32,13 @@ export function HomePage() {
 
       <TaskSubmission onSubmitted={handleTaskSubmitted} onAgentSelected={setSelectedAgentId} />
 
-      <MemoryPanel agentId={selectedAgentId} />
+      <ConversationPanel agentId={selectedAgentId} onActivity={(agentId, executionId) => {
+        if (agentId !== selectedAgentId) return;
+        handleTaskSubmitted(executionId);
+        setMemoryRefreshKey((key) => key + 1);
+      }} />
+
+      <MemoryPanel agentId={selectedAgentId} refreshKey={memoryRefreshKey} />
 
       <ExecutionHistory
         onSelectExecution={setSelectedExecutionId}

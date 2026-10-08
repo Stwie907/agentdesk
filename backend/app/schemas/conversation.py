@@ -1,5 +1,7 @@
 from datetime import datetime
-from pydantic import BaseModel
+from typing import Annotated
+
+from pydantic import BaseModel, Field, StringConstraints
 
 
 class ConversationCreate(BaseModel):
@@ -15,3 +17,8 @@ class ConversationResponse(BaseModel):
 
 
     model_config = {"from_attributes": True}
+
+
+class ConversationCreateRequest(BaseModel):
+    agent_id: Annotated[int, Field(strict=True, gt=0)]
+    title: Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=200)]

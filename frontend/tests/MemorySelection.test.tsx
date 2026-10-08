@@ -12,7 +12,7 @@ test("the task selector controls the memory panel and resets drafts when scope c
     const path = new URL(String(input), "http://localhost").pathname;
     requests.push(path);
     if (path === "/agents") return jsonResponse([testAgent, { ...testAgent, id: 8, name: "Other Agent" }]);
-    if (path === "/executions" || path.startsWith("/memories/")) return jsonResponse([]);
+    if (path === "/executions" || path === "/conversations" || path.startsWith("/memories/")) return jsonResponse([]);
     throw new Error(`Unexpected request: ${path}`);
   }));
   render(<HomePage />);

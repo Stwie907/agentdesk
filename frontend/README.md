@@ -22,8 +22,32 @@ npm run dev
 
 Open the Local URL printed by Vite, normally `http://localhost:5173`.
 Start the [backend](../backend/README.md) in a separate terminal. Vite proxies
-`/agents`, `/executions`, and `/memories` to `http://127.0.0.1:8000`. If those requests report
+`/agents`, `/executions`, `/memories`, and `/conversations` to
+`http://127.0.0.1:8000`. If those requests report
 `ECONNREFUSED` or status `502`, confirm that the backend completed startup.
+
+## Conversation Chat
+
+Select an Agent in the task form. Under **Conversation Chat**, enter a title of
+1 to 200 characters and select **Create conversation**, or choose an existing
+conversation. Its saved messages load in order. Enter a **Chat message** of
+1 to 4000 characters and select **Send message** to continue the same history.
+
+For example, send `My name is Tom`, followed by `I like Python`. Existing rules
+save an Agent name/preference and refresh **Agent Memory** after each returned
+execution. Questions such as `What do I like about Python?` do not create a new
+preference. Each returned execution also opens in the Inspector and refreshes
+execution history. One-off **Submit Task** continues to use its existing endpoint.
+
+Writes are guarded against repeated clicks. A failed request retains its draft;
+reload conversations/messages to check what was saved before retrying. A failed
+execution retains the chat draft and opens its inspection. A transcript load
+failure disables sending until recovery. Switching Agents resets the panel and
+ignores old responses. A conversation change resets the chat draft.
+
+Conversation and memory data use the same SQLite volume. Mock responses remain
+fixed, while previous history and relevant memories reach the existing Runtime.
+Ollama uses that context for generated replies. No paid service is added.
 
 ## Agent Memory
 

@@ -4,7 +4,7 @@ import { ApiError } from "../api/executions";
 import { deleteMemory, getAgentMemories, saveMemory } from "../api/memories";
 import type { Memory } from "../types/memories";
 
-export function MemoryPanel({ agentId }: { agentId: number | null }) {
+export function MemoryPanel({ agentId, refreshKey = 0 }: { agentId: number | null; refreshKey?: number }) {
   return (
     <section aria-labelledby="memory-heading">
       <h2 id="memory-heading">Agent Memory</h2>
@@ -12,13 +12,13 @@ export function MemoryPanel({ agentId }: { agentId: number | null }) {
         <p>Select an Agent above to view or manage its saved memories.</p>
       ) : (
         // A new Agent gets independent drafts, request guards, and load state.
-        <AgentMemories key={agentId} agentId={agentId} />
+        <AgentMemories key={agentId} agentId={agentId} refreshKey={refreshKey} />
       )}
     </section>
   );
 }
 
-function AgentMemories({ agentId }: { agentId: number }) {
+function AgentMemories({ agentId, refreshKey }: { agentId: number; refreshKey: number }) {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
@@ -30,6 +30,15 @@ function AgentMemories({ agentId }: { agentId: number }) {
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const mounted = useRef(true);
   const writeInProgress = useRef(false);
+  const previousRefreshKey = useRef(refreshKey);
+
+  // Defer a chat-triggered refresh until a manual memory write has finished.
+  useEffect(() => {
+    if (!busy && refreshKey !== previousRefreshKey.current) {
+      previousRefreshKey.current = refreshKey;
+      setReloadKey((key) => key + 1);
+    }
+  }, [busy, refreshKey]);
 
   useEffect(() => {
     mounted.current = true;

@@ -221,3 +221,21 @@ test("rejects a save response from another Agent without losing the draft", asyn
   expect(screen.queryByText(memory.content)).not.toBeInTheDocument();
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 });
+
+test("defers a chat-triggered refresh until a manual save has finished", async () => {
+  const pending = deferredResponse();
+  const extracted = { ...memory, id: 12, content: "User likes Python." };
+  const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse([])).mockReturnValueOnce(pending.promise)
+    .mockResolvedValueOnce(jsonResponse([memory, extracted]));
+  vi.stubGlobal("fetch", fetchMock);
+  const { rerender } = render(<MemoryPanel agentId={7} refreshKey={0} />);
+  await screen.findByText("No saved memories for this Agent.");
+  enterMemory(memory.content);
+  fireEvent.click(screen.getByRole("button", { name: "Save memory" }));
+  rerender(<MemoryPanel agentId={7} refreshKey={1} />);
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  await act(async () => { pending.resolve(jsonResponse(memory)); });
+  await screen.findByText(extracted.content);
+  expect(screen.getByText(memory.content)).toBeInTheDocument();
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+});
