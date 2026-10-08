@@ -57,6 +57,10 @@ services:
       - http://frontend
       - --output-dir
       - /reports
+  mcp-check:
+    profiles: ["mcp"]
+    build:
+      context: ./mcp-server
 
 volumes:
   agentdesk-data:

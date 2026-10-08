@@ -54,16 +54,35 @@ This deterministic suite evaluates the current runtime. Router/RAG accuracy,
 hallucination scoring, and token accounting remain future evaluation work.
 See [the evaluation guide](evaluation/README.md) for metrics and troubleshooting.
 
+## Local MCP order server
+
+Run the first standalone MCP milestone with Docker:
+
+```sh
+sh deployment/check-mcp.sh
+```
+
+The official MCP Python SDK launches the independent order server over stdio,
+discovers `get_order(order_id)`, and checks structured replies and tool errors.
+It uses synthetic local fixtures marked `source: demo_fixture`, requires no
+model or external business API, and has no published port. The optional MCP
+check container is removed after the command completes.
+
+Run `make mcp-test` for order data, SDK, and real subprocess protocol tests.
+See [the MCP guide](mcp-server/README.md) for fixture ids and native setup.
+Later milestones will connect this tool to Agent execution traces and add
+`track_order(tracking_no)` and `create_ticket(problem)`.
+
 ## Repository layout
 
 - `backend/`: FastAPI APIs, Agent runtime, demo commands, persistence, and tests.
 - `frontend/`: React, TypeScript, and Vite execution workbench with Nginx hosting.
 - `docs/`: project and deployment documentation.
 - `deployment/`: the portable Mock demo startup script.
-- `mcp-server/`: reserved for MCP server code.
+- `mcp-server/`: independent stdio order server, demo fixtures, protocol check, and tests.
 - `evaluation/`: a fixed Mock dataset, HTTP evaluator, reports, and evaluator tests.
 
-RAG and MCP integrations are not implemented yet.
+RAG and the Agent runtime's MCP tool adapter remain future milestones.
 
 ## Commands
 
@@ -77,6 +96,8 @@ RAG and MCP integrations are not implemented yet.
 | `make demo-check` | Check the running Mock demo through the frontend proxy. |
 | `make evaluate` | Evaluate the running Mock demo and save JSON/Markdown reports. |
 | `make evaluation-test` | Test evaluator scoring and error handling without Docker. |
+| `make mcp-check` | Verify the standalone MCP order server in Docker. |
+| `make mcp-test` | Run order data and MCP protocol tests in Docker. |
 | `make stop` | Stop services while retaining the data volume. |
 
 The application keeps Ollama as its default provider. The Mock Compose override
