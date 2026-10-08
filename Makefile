@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test
+.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test
 
 help:
 	@printf '%s\n' \
@@ -14,7 +14,9 @@ help:
 		'  demo   Build and start the Mock demo with a Demo Agent' \
 		'  demo-check  Check the workbench, Mock tasks, snapshots, and replay' \
 		'  evaluate  Evaluate the running Mock demo and save reports' \
-		'  evaluation-test  Test the evaluator without a running backend'
+		'  evaluation-test  Test the evaluator without a running backend' \
+		'  mcp-check  Verify the standalone order MCP server over stdio' \
+		'  mcp-test  Run order data and MCP protocol tests in Docker'
 
 check:
 	@test -f README.md
@@ -58,6 +60,16 @@ check:
 	@test -f evaluation/run.py
 	@test -f evaluation/tests/test_run.py
 	@test -f evaluation/README.md
+	@test -f deployment/check-mcp.sh
+	@test -f mcp-server/server.py
+	@test -f mcp-server/orders.py
+	@test -f mcp-server/check.py
+	@test -f mcp-server/fixtures.json
+	@test -f mcp-server/requirements.txt
+	@test -f mcp-server/Dockerfile
+	@test -f mcp-server/.dockerignore
+	@test -f mcp-server/README.md
+	@test -f mcp-server/tests/test_orders.py
 
 test: check
 	@python -m unittest discover -s evaluation/tests -v
@@ -88,3 +100,10 @@ evaluate:
 
 evaluation-test:
 	python -m unittest discover -s evaluation/tests -v
+
+mcp-check:
+	sh deployment/check-mcp.sh
+
+mcp-test:
+	docker compose run --build --rm --no-deps -T mcp-check \
+		python -m unittest discover -s tests -v

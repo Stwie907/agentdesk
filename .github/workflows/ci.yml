@@ -81,3 +81,20 @@ jobs:
       - name: Clean up CI containers and volumes
         if: always()
         run: docker compose -f docker-compose.yml -f docker-compose.mock.yml down --volumes --remove-orphans
+
+  mcp-tools:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      COMPOSE_PROJECT_NAME: agentdesk-mcp-ci-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate MCP profile
+        run: docker compose --profile mcp config --quiet
+      - name: Test order data and MCP protocol behavior
+        run: make mcp-test
+      - name: Check the standalone stdio order server
+        run: make mcp-check
+      - name: Clean up MCP CI containers
+        if: always()
+        run: docker compose --profile mcp down --remove-orphans
