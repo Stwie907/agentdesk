@@ -24,27 +24,24 @@ def create_conversation(
 
 def get_conversation(
     db: Session,
-    conversation_id: int
+    conversation_id: int,
+    agent_id: int | None = None,
 ):
-
-    return (
-        db.query(Conversation)
-        .filter(
-            Conversation.id == conversation_id
-        )
-        .first()
-    )
+    query = db.query(Conversation).filter(Conversation.id == conversation_id)
+    if agent_id is not None:
+        query = query.filter(Conversation.agent_id == agent_id)
+    return query.first()
 
 
 
 def get_conversations(
-    db: Session
+    db: Session,
+    agent_id: int | None = None,
 ):
-
-    return (
-        db.query(Conversation)
-        .all()
-    )
+    query = db.query(Conversation)
+    if agent_id is not None:
+        query = query.filter(Conversation.agent_id == agent_id)
+    return query.order_by(Conversation.created_at.asc(), Conversation.id.asc()).all()
 
 
 

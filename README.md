@@ -130,6 +130,33 @@ logs and the saved snapshot. Ollama receives relevant context through the existi
 runtime. Redis/PostgreSQL adapters, semantic retrieval, and a user-level profile
 store remain future Memory work.
 
+## Multi-turn conversation workbench
+
+Select an Agent, then create or select a conversation under **Conversation Chat**.
+Send `My name is Tom` and `I like Python` as separate **Chat message** turns.
+The transcript is saved, each execution opens in the Inspector, and **Agent
+Memory** refreshes with the extracted facts. A follow-up such as
+`What do I like about Python?` loads previous history and relevant memories
+without saving the question as a new preference.
+
+Conversation titles allow 1 to 200 trimmed characters; chat messages allow 1 to
+4000. Requests include the selected Agent's scope. Failed requests keep drafts
+and are not retried automatically. Switching Agents ignores old responses.
+One-off task submission retains its existing behavior. Mock replies remain fixed;
+Ollama receives history and relevant context through the existing Runtime.
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_conversation --base-url http://frontend
+```
+
+Equivalent: `make conversation-check`. The command reuses a demo conversation
+and extracted preference and appends two turns. After restarting, add
+`--verify-persistence` to check that conversation, messages, and memory survived
+before creating further turns. This uses existing SQLite storage and adds no
+paid service. Redis/PostgreSQL adapters and semantic Memory retrieval remain
+future work.
+
 ## Runtime evaluation
 
 After starting the Mock demo, run this from the repository root:
@@ -201,6 +228,7 @@ RAG and additional MCP business tools remain future milestones.
 | `make mcp-tracking-check` | Check shipment tasks, permissions, traces, errors, snapshots, and replay through the running Mock API. |
 | `make mcp-ticket-check` | Check ticket creation, duplicate submission, write permissions, traces, snapshots, and replay. |
 | `make memory-check` | Check Agent memory storage, isolation, validation, deletion, and Runtime retrieval. |
+| `make conversation-check` | Check scoped multi-turn chat, automatic memory, Runtime context, and saved snapshots. |
 | `make stop` | Stop services while retaining the data volume. |
 
 The application keeps Ollama as its default provider. The Mock Compose override

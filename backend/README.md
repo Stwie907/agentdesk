@@ -212,6 +212,34 @@ The existing application data volume holds memories; no migration or new
 dependency is required. Redis/PostgreSQL adapters and semantic retrieval remain
 future work.
 
+## Conversation workbench APIs
+
+`POST /conversations` requires an existing positive integer Agent ID and a
+trimmed, non-blank title of at most 200 characters. `GET /conversations?agent_id=ID`
+returns ordered conversations for that Agent. The existing unfiltered list
+remains available to older clients.
+
+Conversation reads, message reads/writes, chat, and deletion accept an optional
+positive `agent_id` query. A mismatch or missing conversation returns 404 before
+saving messages, extracting memory, or executing Runtime. The workbench always
+includes its selected Agent ID. This scope check adds no authentication or
+multi-user authorization.
+
+`POST /conversations/{id}/chat?agent_id=ID` requires trimmed content of 1 to 4000
+characters. It uses the existing conversation service: prior history is loaded
+before the current user message, explicit facts are extracted, Runtime creates
+an execution, and the assistant output is saved. Messages sort by creation time
+and ID. Existing English/Chinese name and preference rules now skip recognizable
+questions and hypotheticals instead of storing question words as facts. This
+remains a limited deterministic extractor, not general language understanding.
+
+Run `python -m app.check_conversation --base-url http://frontend` in Mock mode.
+Its six scenarios cover scoped conversations, rejected writes, two saved turns,
+automatic memory, Runtime history/retrieval, and snapshots. It reuses one demo
+conversation and preference; subsequent runs append two turns. After recreation,
+add `--verify-persistence`: conversation, transcript, and extracted memory must
+already exist before new chat writes. No schema migration or dependency is added.
+
 ## Health and tests
 
 `GET /health` continues to return `{"status": "ok"}`.
