@@ -63,8 +63,9 @@ class MCPOrderTool(BaseTool):
         return call_mcp_tool(self.name, arguments, "order", "order_id")
 
 
-def call_mcp_tool(tool_name: str, arguments: dict, response_key: str, id_field: str) -> str:
-    """Shared fixed-client transport for the registered order and tracking tools."""
+def call_mcp_tool(tool_name: str, arguments: dict, response_key: str, id_field: str,
+                  source: str = "demo_fixture") -> str:
+    """Shared fixed-client transport for the registered demo business tools."""
     if not ORDER_CLIENT.is_file():
         raise RuntimeError("The MCP client is missing from mcp-server/client.py")
     timeout = mcp_timeout()
@@ -98,6 +99,6 @@ def call_mcp_tool(tool_name: str, arguments: dict, response_key: str, id_field: 
             or not response["protocol_version"]
             or not isinstance(record, dict)
             or record.get(id_field) != arguments[id_field]
-            or record.get("source") != "demo_fixture"):
+            or record.get("source") != source):
         raise RuntimeError("The MCP client returned an incompatible tool response")
     return json.dumps(record, ensure_ascii=False, sort_keys=True)

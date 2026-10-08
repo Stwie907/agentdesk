@@ -1,6 +1,7 @@
-"""Expose synthetic order and shipment lookups over MCP stdio."""
+"""Expose local demo order, shipment, and support-ticket tools over MCP."""
 
 from pathlib import Path
+import sqlite3
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -8,13 +9,14 @@ from mcp.types import ToolAnnotations
 
 from orders import DemoOrder, OrderId, OrderRepository
 from tracking import DemoTracking, TrackingNo, TrackingRepository
+from tickets import DemoTicket, Problem, TicketStore, ticket_db_path
 
 
 repository = OrderRepository(Path(__file__).with_name("fixtures.json"))
 tracking_repository = TrackingRepository(Path(__file__).with_name("tracking-fixtures.json"), repository)
 mcp = MCPServer(
-    "AgentDesk demo orders",
-    instructions="Read-only synthetic order and shipment examples. Results are demo data, not real customer orders or live logistics.",
+    "AgentDesk demo business tools",
+    instructions="Synthetic order/shipment lookups and local demo ticket creation. No real customer, carrier, or support service is contacted. Repeated trimmed ticket problems return the existing local ticket.",
     log_level="WARNING",
 )
 
@@ -45,6 +47,17 @@ def track_order(tracking_no: TrackingNo) -> DemoTracking:
     if shipment is None:
         raise ToolError(f"Tracking number {tracking_no} was not found in the demo dataset")
     return shipment
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=False,
+))
+def create_ticket(problem: Problem) -> DemoTicket:
+    """Create a synthetic local support ticket, or reuse the same trimmed problem."""
+    try:
+        return TicketStore(ticket_db_path()).create(problem)
+    except (ValueError, OSError, sqlite3.Error) as exc:
+        raise ToolError(f"Cannot create a demo ticket: {exc}") from exc
 
 
 if __name__ == "__main__":

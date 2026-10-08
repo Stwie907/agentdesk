@@ -1,9 +1,10 @@
 # AgentDesk MCP business tools
 
 This independent server uses the official
-Python SDK (`mcp==2.3.0`). It exposes `get_order(order_id)` and
-`track_order(tracking_no)` over stdio and serves synthetic, read-only local
-fixtures. It makes no model, carrier, or external business API calls.
+Python SDK (`mcp==2.3.0`). It exposes `get_order(order_id)`,
+`track_order(tracking_no)`, and `create_ticket(problem)` over stdio. Lookups serve
+synthetic read-only fixtures; ticket creation writes to a separate local SQLite
+store. It makes no model, carrier, or external business API calls.
 
 ## Docker check
 
@@ -19,16 +20,18 @@ Expected output includes:
 {
   "status": "passed",
   "transport": "stdio",
-  "tool_names": ["get_order", "track_order"],
-  "checks_passed": 16
+  "tool_names": ["get_order", "track_order", "create_ticket"],
+  "checks_passed": 25
 }
 ```
 
 The actual output also records the negotiated protocol version, check names,
-and sample order ids/statuses/source. The SDK client launches `server.py` as a
-real subprocess, negotiates the protocol, lists tools, and calls both tools.
+and sample records. The SDK client launches `server.py` as a real subprocess,
+negotiates the protocol, lists tools, and calls all three tools.
 It closes the server process after checking. The temporary Docker container is
 removed after the command finishes.
+Ticket protocol checks always use their own temporary database, even if
+`MCP_TICKET_DB` is configured. They never write to the demo application's store.
 
 The `mcp-check` service belongs to an optional `mcp` profile. Normal application
 startup excludes it. Explicitly running the service activates its profile:
@@ -87,7 +90,34 @@ These fixed timelines are not live logistics data.
 invalid fields/dates, inconsistent timelines, and references to missing demo
 orders. Returned event lists are deep copies. `DEMO-TRACK-9999` returns a tool
 error; malformed numbers, missing arguments, and wrong types also fail.
-Both business tools advertise read-only, idempotent, closed-world behavior.
+Both lookup tools advertise read-only, idempotent, closed-world behavior.
+
+## Ticket write contract
+
+`create_ticket(problem)` requires a non-blank string of at most 2000 characters.
+Leading/trailing whitespace is removed. Case and internal whitespace are
+preserved. A new problem creates a ticket with `status: open`; the same trimmed
+problem returns the original ticket, including its ID and creation timestamp.
+Deduplication applies across the entire demo store, independent of the Agent.
+This is synthetic local support data, not a customer support integration.
+
+Structured output contains `ticket_id` (`DEMO-TICKET-` followed by 32 lowercase
+hexadecimal characters), `problem`, `status`, `created_at` (UTC), and
+`source: demo_ticket_store`. Ticket creation advertises `read_only_hint=false`,
+`destructive_hint=false`, `idempotent_hint=true`, and `open_world_hint=false`.
+These hints describe behavior; AgentDesk separately enforces tool permissions.
+
+The store uses SQLite schema version 1, parameterized SQL, a unique problem
+constraint, and one transaction for lookup/insert. Concurrent per-call servers
+reuse the same record. Invalid arguments and read-only lookups do not create a
+ticket database. Failed writes return a tool error without successful ticket data.
+An unrelated database or unsupported schema version is rejected.
+
+Native storage defaults to `mcp-server/data/tickets.db`, which is ignored by Git
+and Docker builds. An optional `MCP_TICKET_DB` override must be an absolute path
+to a dedicated ticket database. The backend image uses `/data/mcp-tickets.db`
+inside the existing persistent volume. The client forwards this setting to the
+independent server. No backend schema migration or extra dependency is required.
 
 Stdout is reserved for JSON-RPC protocol messages. Human-readable server logging
 uses stderr. Starting `server.py` directly waits for an MCP client and does not
@@ -95,7 +125,7 @@ open a browser page.
 
 ## Checks and tests
 
-The protocol check validates eight areas for each tool, for 16 checks total:
+The protocol check validates eight areas for each lookup tool:
 
 1. Tool discovery and input/output schemas.
 2. Read-only tool metadata.
@@ -105,6 +135,10 @@ The protocol check validates eight areas for each tool, for 16 checks total:
 6. A malformed id.
 7. A missing argument.
 8. An argument with the wrong type.
+
+Nine additional ticket checks cover discovery/schema, write metadata, creation,
+trimmed-problem deduplication, distinct problems, blank/missing/wrong-type input,
+and oversized input. The complete check contains 25 checks.
 
 Run unit and protocol tests in the same Docker environment:
 
@@ -146,14 +180,16 @@ to 30 positive finite seconds. See [backend setup](../backend/README.md).
 
 ## Agent Runtime integration
 
-The backend registers both tools with independent Agent permissions. Their
+The backend registers all three tools with independent Agent permissions. Their
 adapters invoke `client.py` using the isolated MCP environment. Each call starts
 the independent server, performs MCP discovery and `tools/call`, validates the
-typed order or shipment response, and closes the session/server. The backend
+typed business response, and closes the session/server. The backend
 does not load business fixtures directly or install the SDK into its own
 dependency environment.
-The shared client accepts only `get_order` and `track_order`. The original
+The shared client accepts only `get_order`, `track_order`, and `create_ticket`. The original
 `lookup_order` function and default order CLI contract remain compatible.
+The legacy `call_read_only_tool` API rejects ticket creation. Write calls use the
+explicitly allowlisted business client and verify the declared write contract.
 
 Start the Mock workbench with `sh deployment/start-demo.sh`, select `MCP Order Agent`,
 and submit `Get order DEMO-1001`, `Get order DEMO-1002`, or `查询订单DEMO-1001`.
@@ -166,6 +202,13 @@ Select `MCP Logistics Agent` for `Track order DEMO-TRACK-1001` or
 keeps its existing settings. `Track order DEMO-TRACK-9999` records a tool failure.
 The generic planner metadata, direct-result policy, Trace, and replay pipeline
 support the new tool without another Agent-specific execution branch.
+
+Select `MCP Ticket Agent` for `Create ticket Demo parcel is delayed.` or
+`创建工单示例订单需要帮助。`. Only `create_ticket` permission allows this write;
+order/tracking permissions do not grant it. Repeat the same problem or replay its
+execution to reuse the original ticket. Replay checks the Agent's current write
+permission before launching MCP. Invalid structured arguments also fail before
+launching a client. Blank/oversized fixed Mock commands select no tool.
 
 Normal and replay step traces include `transport=mcp_stdio`, arguments, and results
 or errors. Snapshot version 1 stores the structured plan and JSON output. Replay
@@ -197,13 +240,29 @@ linked replay, unknown number failure, and planning without permission. Backend
 tests also force disallowed calls and revoke tracking permission before replay.
 The `compose-demo` job runs both order and tracking acceptance checks.
 
+The ticket acceptance command is:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_mcp_ticket --base-url http://frontend
+```
+
+Equivalent: `make mcp-ticket-check`. It checks five scenarios: English and Chinese
+creation, duplicate submission, linked replay, and planning without write
+permission. Backend tests additionally verify forced disallowed calls, revoked
+replay permission, and failed database writes. After this command, recreate the
+demo services and add `--verify-persistence` to compare the saved ticket IDs and
+contents with execution history. CI runs both initial and persistence checks.
+
 From an activated native MCP environment, a direct client call is:
 
 ```sh
 printf '%s' '{"tracking_no":"DEMO-TRACK-1001"}' | python client.py --tool track_order
+printf '%s' '{"problem":"Demo parcel is delayed."}' | python client.py --tool create_ticket
 ```
 
-The MCP suite now contains 36 tests, including tracking fixture/timeline validation,
+The MCP suite now contains 52 tests, including ticket persistence, concurrent
+deduplication, validation before writes, database failures, and tracking fixture/timeline validation,
 order links, client envelopes, invalid requests,
 incompatible discovery, mismatched order responses, transport failures, and
 timeout cleanup. Client exit codes are 0 for success, 1 for call/transport failures,
@@ -211,9 +270,8 @@ and 2 for invalid input/configuration; stdout contains one JSON envelope.
 
 ## Next MCP milestones
 
-The next business tool is `create_ticket(problem)`. It will need a separate write
-contract and permission tests. The current server only provides read-only order
-and shipment lookups.
+The three initial business tools are implemented. Configurable remote servers,
+connection pooling, and customer-scoped idempotency contracts remain future work.
 
 Official references:
 

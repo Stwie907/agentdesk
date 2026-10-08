@@ -79,6 +79,8 @@ permissions. It also recognizes `Get order DEMO-1001` and `查询订单DEMO-1001
 when the Agent allows `get_order`; these call the real MCP order server.
 `Track order DEMO-TRACK-1001` and `查询物流DEMO-TRACK-1002` use the real tracking
 tool when the Agent allows `track_order`.
+`Create ticket Demo parcel is delayed.` and `创建工单示例订单需要帮助。` use the
+local ticket write tool when the Agent allows `create_ticket`.
 Other input produces a no-tool plan and a fixed reply. Mock mode does
 not perform general reasoning, datetime selection, or multi-step natural-language
 planning.
@@ -96,6 +98,9 @@ planning.
 | `Track order DEMO-TRACK-1001` | Agent allows `track_order`; MCP environment installed. | Synthetic JSON shipment, `in_transit`, and 3 UTC events. |
 | `查询物流DEMO-TRACK-1002` | Agent allows `track_order`; MCP environment installed. | Synthetic JSON shipment, `label_created`, and 1 event. |
 | `Track order DEMO-TRACK-9999` | Agent allows `track_order`. | Failed execution with `tool_execution_error`. |
+| `Create ticket Demo parcel is delayed.` | Agent allows `create_ticket`. | Persistent synthetic JSON ticket with `status: open`. |
+| Repeat the same ticket problem | Same local ticket store. | Original ticket ID and creation timestamp. |
+| `Create ticket Demo parcel is delayed.` | Ticket write permission absent. | Fixed `[MOCK]` reply; no MCP write. |
 
 Calculator outputs are real tool results. The Inspector's `plan_started` trace
 contains `provider=mock; planner=demo_rules`. Simulated chat replies carry the
@@ -139,6 +144,23 @@ returns directly and includes `source: demo_fixture`, carrier, linked order,
 status, and ordered UTC events. The backend does not read shipment fixtures.
 Tracking uses existing planner metadata recovery, Trace, Snapshot, and Replay;
 the Agent runner and replay executor require no tool-specific changes.
+
+Ticket creation uses the same isolated client with its own write contract. Select
+`MCP Ticket Agent`, or explicitly grant `allowed_tools: ["create_ticket"]`.
+Problems must be non-blank strings of at most 2000 characters. The MCP server
+stores tickets in a dedicated SQLite database and reuses the same trimmed problem
+atomically, including across subprocesses and replay. Returned JSON contains
+`source: demo_ticket_store`, `ticket_id`, `problem`, `status: open`, and UTC
+`created_at`. The backend returns it directly and does not access the ticket
+database. Order/tracking permissions do not grant write permission. The Executor
+checks current permissions before a normal call or replay; failures retain the
+existing runtime error, trace, and snapshot behavior.
+
+Native MCP tickets default to `mcp-server/data/tickets.db`. An optional
+`MCP_TICKET_DB` must be an absolute path to a dedicated SQLite file; export it in
+the Uvicorn terminal. Docker sets `/data/mcp-tickets.db` in the existing data
+volume. Ticket persistence is separate from the backend's database and requires
+no Alembic change. Store-level deduplication is a synthetic demo contract.
 
 ## Workbench demo
 
@@ -199,6 +221,8 @@ It also creates a separate `MCP Order Agent` with `get_order` permission and
 preserves that Agent's settings on later initializer runs.
 It also creates `MCP Logistics Agent` with only `track_order` permission. Existing
 calculator, order, and logistics Agent settings are preserved on repeated runs.
+`MCP Ticket Agent` is created with only `create_ticket` permission; its existing
+settings are also preserved on repeated initializer runs.
 
 The smoke command `python -m app.check_demo --base-url http://frontend` runs
 inside the Mock backend container and checks the built workbench, API proxy,
@@ -207,6 +231,9 @@ Calculator task, marked reply, trace, snapshots, and replay.
 order tasks, permissions, failed lookups, MCP traces, snapshots, and linked replay.
 `python -m app.check_mcp_tracking --base-url http://frontend` performs the equivalent
 five-scenario logistics acceptance check through the Mock API.
+`python -m app.check_mcp_ticket --base-url http://frontend` checks five ticket
+scenarios. After the initial check and service recreation, add
+`--verify-persistence` to confirm ticket IDs/content and execution history survive.
 
 The backend image now builds from the repository root to include the separate MCP
 environment. For a manual build, run `docker build -f backend/Dockerfile .` from

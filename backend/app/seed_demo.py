@@ -1,4 +1,4 @@
-"""Create idempotent calculator, order, and logistics Agents for the demo."""
+"""Create separate calculator, order, logistics, and ticket demo Agents."""
 
 import json
 
@@ -18,6 +18,7 @@ DEMO_PROJECT_NAME = "AgentDesk Demo"
 DEMO_AGENT_NAME = "Demo Agent"
 MCP_AGENT_NAME = "MCP Order Agent"
 TRACKING_AGENT_NAME = "MCP Logistics Agent"
+TICKET_AGENT_NAME = "MCP Ticket Agent"
 
 
 def seed_demo(db: Session) -> dict[str, int]:
@@ -94,8 +95,24 @@ def seed_demo(db: Session) -> dict[str, int]:
             db.add(tracking_agent)
             db.flush()
 
+        ticket_agent = db.query(Agent).filter(
+            Agent.project_id == project.id,
+            Agent.name == TICKET_AGENT_NAME,
+        ).first()
+        if ticket_agent is None:
+            ticket_agent = Agent(
+                project_id=project.id,
+                name=TICKET_AGENT_NAME,
+                description="Create or reuse synthetic support tickets in the local MCP store.",
+                model="qwen2.5:7b",
+                allowed_tools=json.dumps(["create_ticket"]),
+            )
+            db.add(ticket_agent)
+            db.flush()
+
         result = {"user_id": user.id, "project_id": project.id, "agent_id": agent.id,
-                  "mcp_agent_id": order_agent.id, "tracking_agent_id": tracking_agent.id}
+                  "mcp_agent_id": order_agent.id, "tracking_agent_id": tracking_agent.id,
+                  "ticket_agent_id": ticket_agent.id}
         db.commit()
         return result
     except Exception:
@@ -108,7 +125,7 @@ def main() -> None:
     with SessionLocal() as db:
         result = seed_demo(db)
     print(json.dumps({"agent_name": DEMO_AGENT_NAME, "mcp_agent_name": MCP_AGENT_NAME,
-                      "tracking_agent_name": TRACKING_AGENT_NAME, **result}))
+                      "tracking_agent_name": TRACKING_AGENT_NAME, "ticket_agent_name": TICKET_AGENT_NAME, **result}))
 
 
 if __name__ == "__main__":

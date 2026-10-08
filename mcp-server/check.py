@@ -6,9 +6,11 @@ import json
 import math
 from pathlib import Path
 import sys
+import tempfile
 
 from mcp import Client, StdioServerParameters
 from tracking import DemoTracking, TRACKING_NO_PATTERN
+from tickets import DemoTicket, MAX_PROBLEM_LENGTH
 
 
 class CheckError(RuntimeError):
@@ -25,10 +27,16 @@ def error_text(result) -> str:
 
 
 async def check_server(server_path: Path, timeout: float = 30) -> dict:
+    # Protocol checks must never write to a user's persistent ticket store.
+    with tempfile.TemporaryDirectory(prefix="agentdesk-mcp-check-") as directory:
+        return await check_demo_server(server_path, timeout, Path(directory) / "tickets.db")
+
+
+async def check_demo_server(server_path: Path, timeout: float, ticket_path: Path) -> dict:
     parameters = StdioServerParameters(
         command=sys.executable, args=["-u", str(server_path.resolve())],
         cwd=str(server_path.resolve().parent),
-        env={"PYTHONUTF8": "1", "PYTHONDONTWRITEBYTECODE": "1"},
+        env={"PYTHONUTF8": "1", "PYTHONDONTWRITEBYTECODE": "1", "MCP_TICKET_DB": str(ticket_path)},
     )
     checks = []
     async with asyncio.timeout(timeout):
@@ -130,9 +138,51 @@ async def check_server(server_path: Path, timeout: float = 30) -> dict:
                         f"{label} must be a tool error")
                 checks.append(label)
 
+            matches = [tool for tool in listing.tools if tool.name == "create_ticket"]
+            require(len(matches) == 1, "Discovery must include exactly one create_ticket tool")
+            ticket_tool = matches[0]
+            schema = ticket_tool.input_schema
+            field = schema.get("properties", {}).get("problem", {})
+            require(schema.get("required") == ["problem"] and field.get("type") == "string"
+                    and field.get("minLength") == 1 and field.get("maxLength") == MAX_PROBLEM_LENGTH
+                    and bool(ticket_tool.output_schema), "create_ticket schemas are incompatible")
+            checks.append("ticket_discovery_and_schemas")
+            hints = ticket_tool.annotations
+            require(hints is not None and hints.read_only_hint is False and hints.destructive_hint is False
+                    and hints.idempotent_hint is True and hints.open_world_hint is False,
+                    "Ticket creation must advertise local, idempotent write behavior")
+            checks.append("ticket_write_metadata")
+
+            created = await client.call_tool("create_ticket", {"problem": "Protocol demo problem"})
+            require(not created.is_error and isinstance(created.structured_content, dict), "Ticket creation failed")
+            ticket = DemoTicket.model_validate(created.structured_content)
+            require(ticket.problem == "Protocol demo problem" and ticket.status == "open", "Ticket content differs")
+            checks.append("ticket_creation")
+            repeated = await client.call_tool("create_ticket", {"problem": "  Protocol demo problem  "})
+            require(not repeated.is_error and repeated.structured_content == created.structured_content,
+                    "Repeated trimmed problems must return the original ticket")
+            checks.append("ticket_idempotency")
+            other = await client.call_tool("create_ticket", {"problem": "Second protocol demo problem"})
+            require(not other.is_error and isinstance(other.structured_content, dict), "Second ticket failed")
+            other_ticket = DemoTicket.model_validate(other.structured_content)
+            require(other_ticket.ticket_id != ticket.ticket_id, "Different problems must receive different tickets")
+            checks.append("distinct_ticket_creation")
+            for label, arguments in (
+                ("blank_ticket_problem_error", {"problem": "   "}),
+                ("missing_ticket_problem_error", {}),
+                ("wrong_ticket_problem_type_error", {"problem": True}),
+                ("oversized_ticket_problem_error", {"problem": "x" * (MAX_PROBLEM_LENGTH + 1)}),
+            ):
+                result = await client.call_tool("create_ticket", arguments)
+                require(result.is_error and result.structured_content is None and bool(error_text(result)),
+                        f"{label} must be a tool error")
+                checks.append(label)
+
             return {"status": "passed", "transport": "stdio", "protocol_version": client.protocol_version,
                     "tool_names": names, "checks_passed": len(checks), "checks": checks,
-                    "sample_orders": samples, "sample_shipments": tracking_samples}
+                    "sample_orders": samples, "sample_shipments": tracking_samples,
+                    "sample_tickets": [{"ticket_id": item.ticket_id, "status": item.status, "source": item.source}
+                                       for item in (ticket, other_ticket)]}
 
 
 def describe_error(exc: BaseException) -> str:
