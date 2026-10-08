@@ -2,10 +2,43 @@ services:
   backend:
     build:
       context: ./backend
+    environment:
+      DATABASE_URL: sqlite:////data/agentdesk.db
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      OLLAMA_BASE_URL: ${COMPOSE_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_PLANNER_MODEL: ${OLLAMA_PLANNER_MODEL:-qwen2.5:7b}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-120}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - agentdesk-data:/data
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import json, urllib.request; response = urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3); assert json.load(response) == {'status': 'ok'}"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
   frontend:
     build:
       context: ./frontend
     ports:
-      - "5173:80"
+      - "127.0.0.1:5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+        restart: true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+volumes:
+  agentdesk-data:

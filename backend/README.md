@@ -24,8 +24,9 @@ An existing environment can be reused; this feature adds no dependencies.
 ## LLM configuration
 
 Export settings in the terminal that starts Uvicorn. The backend reads process
-environment variables. Root `.env.example` documents defaults; copying it to
-`.env` alone does not load settings automatically.
+environment variables. Root `.env.example` documents defaults; native Uvicorn
+does not load a `.env` file automatically. Docker Compose separately reads a root
+`.env` file for the variables mapped by its service configuration.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -127,6 +128,26 @@ does not require a live model.
 
 ## Containers
 
-`docker compose up --build backend` builds the service foundation. The current
-Compose file does not forward LLM variables or provide Ollama. Use the local
-commands for these demos; container integration is the next deployment task.
+From the repository root, start the complete Mock workbench with:
+
+```sh
+sh deployment/start-demo.sh
+```
+
+The container stores SQLite at `/data/agentdesk.db` in a named volume. Its health
+check uses `/health`; it does not require Ollama. The Mock override explicitly
+sets `LLM_PROVIDER=mock`. The base Compose file defaults to Ollama and uses
+`COMPOSE_OLLAMA_BASE_URL` for requests to a host model server.
+
+The startup script runs `python -m app.seed_demo` inside the backend. This command
+reuses the matching demo User, Project, and Agent on repeated runs. It creates a
+`Demo Agent` with Calculator permission and `qwen2.5:7b` as its normal Ollama
+model. It preserves existing Agent settings and rejects a conflicting demo User
+identity rather than modifying that User.
+
+The smoke command `python -m app.check_demo --base-url http://frontend` runs
+inside the Mock backend container and checks the built workbench, API proxy,
+Calculator task, marked reply, trace, snapshots, and replay.
+
+See [the Docker Compose guide](../docs/docker-compose-demo.md) for complete
+commands, switching providers, persistence verification, and troubleshooting.

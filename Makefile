@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: help check test lint build start stop
+.PHONY: help check test lint build start stop demo demo-check
 
 help:
 	@printf '%s\n' \
@@ -10,12 +10,15 @@ help:
 		'  lint   Report that no linter is configured' \
 		'  build  Build service containers' \
 		'  start  Start service containers' \
-		'  stop   Stop service containers'
+		'  stop   Stop service containers, retaining demo data' \
+		'  demo   Build and start the Mock demo with a Demo Agent' \
+		'  demo-check  Check the workbench, Mock tasks, snapshots, and replay'
 
 check:
 	@test -f README.md
 	@test -f Makefile
 	@test -f docker-compose.yml
+	@test -f docker-compose.mock.yml
 	@test -f .env.example
 	@test -f .github/workflows/ci.yml
 	@test -d backend
@@ -26,10 +29,13 @@ check:
 	@test -d deployment
 	@test -f backend/app/main.py
 	@test -f backend/app/config.py
+	@test -f backend/app/seed_demo.py
+	@test -f backend/app/check_demo.py
 	@test -f backend/app/api/health.py
 	@test -f backend/tests/test_health.py
 	@test -f backend/requirements.txt
 	@test -f backend/Dockerfile
+	@test -f backend/.dockerignore
 	@test -f backend/README.md
 	@test -f frontend/src/main.tsx
 	@test -f frontend/src/App.tsx
@@ -40,7 +46,10 @@ check:
 	@test -f frontend/package-lock.json
 	@test -f frontend/vite.config.ts
 	@test -f frontend/Dockerfile
+	@test -f frontend/nginx.conf
 	@test -f frontend/README.md
+	@test -f deployment/start-demo.sh
+	@test -f docs/docker-compose-demo.md
 
 test: check
 	@cd backend && python -m pytest
@@ -53,7 +62,14 @@ build:
 	docker compose build backend frontend
 
 start:
-	docker compose up --detach backend frontend
+	docker compose up --detach --wait --wait-timeout 180 backend frontend
 
 stop:
 	docker compose down
+
+demo:
+	sh deployment/start-demo.sh
+
+demo-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_demo --base-url http://frontend
