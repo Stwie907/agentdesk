@@ -5,31 +5,59 @@ SQLite, and Ollama. Runtime V4 supports execution plans, tool permissions,
 structured traces, snapshots, and replay. The workbench supports task submission,
 execution history, filters, pagination, cancellation, retry, and automatic refresh.
 
-Run the backend with the default Ollama provider, or explicitly enable Mock mode
-for an offline demonstration without a local model. Mock mode uses fixed planning
-rules and clearly marked simulated chat replies. Calculator demo tasks still run
-the real Calculator tool through the normal execution pipeline.
+## Quick Mock demo
 
-See [backend setup and demo instructions](backend/README.md) and
-[frontend setup](frontend/README.md).
+Start Docker with Linux containers and Docker Compose v2 available. From the
+repository root, using Windows Git Bash or a Unix shell:
+
+```sh
+sh deployment/start-demo.sh
+```
+
+The script builds both services, waits for healthy containers, and creates a
+calculator-enabled `Demo Agent`. It explicitly selects Mock mode; a language
+model and API key are not needed. The initial build downloads container images
+and dependencies. Once built, Mock task execution makes no LLM requests.
+
+Open [the workbench](http://localhost:5173), select `Demo Agent`, and submit:
+
+- `Calculate 40 + 2`: the real Calculator returns `42`.
+- `Hello AgentDesk`: a fixed reply starts with `[MOCK]`.
+
+The Inspector shows traces and snapshots. Replay the Calculator execution to
+create a linked execution with output `42`. Run `make demo-check` for an
+automated check of the built workbench, API proxy, tasks, snapshots, and replay.
+
+SQLite is stored in a Docker named volume. `docker compose down` stops the
+services while retaining this data. Container data is separate from the native
+backend's `backend/agentdesk.db`.
+
+See [Docker Compose instructions](docs/docker-compose-demo.md),
+[backend setup](backend/README.md), and [frontend setup](frontend/README.md).
 
 ## Repository layout
 
-- `backend/` - FastAPI APIs, Agent runtime, persistence, and tests.
-- `frontend/` - React, TypeScript, and Vite execution workbench.
-- `mcp-server/` — reserved for MCP server code.
-- `evaluation/` — reserved for evaluation assets.
-- `docs/` — project documentation.
-- `deployment/` — deployment configuration.
+- `backend/`: FastAPI APIs, Agent runtime, demo commands, persistence, and tests.
+- `frontend/`: React, TypeScript, and Vite execution workbench with Nginx hosting.
+- `docs/`: project and deployment documentation.
+- `deployment/`: the portable Mock demo startup script.
+- `mcp-server/`: reserved for MCP server code.
+- `evaluation/`: reserved for evaluation assets.
+
+RAG and MCP integrations are not implemented yet.
 
 ## Commands
 
-- `make check` validates the monorepo structure.
-- `make test` runs backend and frontend tests.
-- `make build` builds service containers.
-- `make start` starts service containers.
-- `make stop` stops service containers.
+| Command | Purpose |
+| --- | --- |
+| `make check` | Validate the monorepo structure. |
+| `make test` | Run backend and frontend tests using installed local dependencies. |
+| `make build` | Build service containers. |
+| `make start` | Start the base Compose services and wait for health; Ollama is the default. |
+| `make demo` | Build, start, and seed the explicit Mock demo. |
+| `make demo-check` | Check the running Mock demo through the frontend proxy. |
+| `make stop` | Stop services while retaining the data volume. |
 
-The current Compose configuration is a service foundation. Local development
-instructions cover LLM configuration; container environment wiring and deployment
-are separate follow-up work. RAG and MCP integrations are not implemented yet.
+The application keeps Ollama as its default provider. The Mock Compose override
+selects deterministic demo behavior. Use the Docker guide to switch an existing
+demo to a local Ollama server without deleting its data.
