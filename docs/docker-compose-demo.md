@@ -336,6 +336,75 @@ MEMORY_RETRIEVAL_MODE=keyword sh deployment/start-demo.sh
 Semantic previews are read-only and calculate fresh vectors for each request.
 They require no new SQLite table or migration.
 
+## Read-only acceptance with real Ollama
+
+Complete the offline semantic acceptance above once, and retain its fixture rows
+and checkpoint. Issue #126 users can reuse their already verified checkpoint.
+
+On the Windows host, check the Ollama version and install the local embedding model:
+
+```sh
+ollama --version
+ollama pull embeddinggemma
+```
+
+EmbeddingGemma requires Ollama v0.11.10 or later and its default model download is
+approximately 622 MB. See the [official model page](https://ollama.com/library/embeddinggemma).
+Keep Ollama running locally. Only the embedding model is used by this check;
+chat/planning remain qwen2.5:7b.
+
+From the repository root, use only the base Compose file to select real Ollama:
+
+```sh
+LLM_PROVIDER=ollama MEMORY_RETRIEVAL_MODE=semantic docker compose -f docker-compose.yml \
+  up --build --detach --wait --wait-timeout 180 backend frontend
+
+docker compose -f docker-compose.yml exec -T backend python -m app.check_ollama_memory --base-url http://frontend
+```
+
+Do not include `docker-compose.mock.yml` in the real-provider startup command.
+The configured host Ollama address still uses `COMPOSE_OLLAMA_BASE_URL`.
+The root `.env` controls the embedding model, threshold, and backend embedding
+timeout; the check runs inside that same backend environment.
+
+Expected JSON includes `status: passed`, `checks_passed: 7`,
+`embedding_provider: ollama`, `runtime_mode: semantic`, `read_only: true`, and
+`chat_executions_created: 0`. The `evidence` list reports actual similarities and
+ranks. No fixed 0.96 score is expected. For the control query, a null score means
+the target was not returned in the top 20; the bilingual sharing scenario has no
+control request. Review the reported records in the workbench if a quality check fails.
+
+The command sends only application GET requests. It reads existing records and
+original inspection, then verifies that memory, transcripts, execution history,
+and checkpoint are unchanged. It never seeds or repairs missing records.
+Avoid editing the acceptance fixtures while the check runs.
+
+To verify the same records after recreation in real-provider mode:
+
+```sh
+docker compose down
+LLM_PROVIDER=ollama MEMORY_RETRIEVAL_MODE=semantic docker compose -f docker-compose.yml \
+  up --detach --wait --wait-timeout 180 backend frontend
+docker compose -f docker-compose.yml exec -T backend python -m app.check_ollama_memory --base-url http://frontend
+```
+
+No new persistence flag is needed: every run validates the original checkpoint.
+The named SQLite volume is retained.
+
+A 503 can indicate a stopped/unreachable Ollama, missing embedding model, input
+exceeding its context window, or backend embedding timeout. Check the local model
+and host address. The client `--timeout` option changes only its wait for the API;
+the server's `MEMORY_EMBEDDING_TIMEOUT_SECONDS` remains separate.
+
+Restore the keyword Mock demo after testing:
+
+```sh
+MEMORY_RETRIEVAL_MODE=keyword sh deployment/start-demo.sh
+```
+
+CI exercises this check with controlled protocol responses and explicit failures;
+it does not download a model or claim real-model quality acceptance.
+
 ## Check services and run the smoke check
 
 ```sh
