@@ -308,6 +308,35 @@ A failure does not repair or overwrite data. Chat still uses qwen2.5:7b and is n
 invoked by this check. See the [Compose guide](docs/docker-compose-demo.md) for
 model installation, switching, restart verification, and restoring Mock mode.
 
+## Inspect the memory used by an execution
+
+Load an execution in the Inspector and select **Show memory retrieval**. The
+panel displays captured Agent and shared user memories, their original content
+and identity, the requested and used retrieval modes, keyword matched terms or
+cosine scores, embedding metadata, and any keyword fallback reason. Expand
+**Memory context sent to Runtime** to inspect the exact memory text supplied to
+the Agent runner. Mock scores are explicitly identified as fixed test vectors.
+
+Evidence is saved with the execution in the existing SQLite execution logs.
+Editing or deleting a source memory does not rewrite historical evidence, and
+reading evidence does not call Ollama or rerun retrieval. Older executions,
+plan replays, and executions that have not reached retrieval return an explicit
+unavailable result. Refresh the panel after an active execution completes.
+
+After `make semantic-memory-check`, run `make memory-evidence-check`. The first
+run creates three fixed Mock chats to capture semantic, keyword fallback, and
+cross-user isolation evidence. Later runs reuse those executions. The restart
+check is read-only and verifies their original evidence, traces, and snapshots:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_memory_evidence --base-url http://frontend --verify-persistence
+```
+
+Keep both acceptance checkpoint files and the SQLite volume. Missing or changed
+evidence fails verification without creating replacement chats. See the
+[demo guide](docs/docker-compose-demo.md) for the complete restart sequence.
+
 ## Multi-turn conversation workbench
 
 Select an Agent, then create or select a conversation under **Conversation Chat**.

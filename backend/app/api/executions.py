@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -25,6 +25,8 @@ from app.crud.execution_snapshot import get_execution_snapshot
 from app.schemas.execution_snapshot import ExecutionSnapshotRead
 from app.services.execution_snapshot import replay_execution
 from app.services.execution_failure import classify_failure
+from app.schemas.memory_evidence import ExecutionMemoryContext
+from app.services.memory_evidence import InvalidMemoryEvidence, read_memory_evidence
 
 router = APIRouter(
     prefix="/executions",
@@ -107,6 +109,22 @@ def read(
         )
 
     return execution
+
+@router.get("/{execution_id}/memory-context", response_model=ExecutionMemoryContext)
+def read_execution_memory_context(
+    execution_id: int = Path(gt=0),
+    agent_id: int | None = Query(default=None, gt=0),
+    db: Session = Depends(get_db),
+):
+    execution = get_execution(db, execution_id)
+    if execution is None or (agent_id is not None and execution.agent_id != agent_id):
+        raise HTTPException(status_code=404, detail="Execution not found in the requested Agent scope")
+    try:
+        evidence = read_memory_evidence(db, execution)
+    except InvalidMemoryEvidence as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return {"execution_id": execution_id, "available": evidence is not None, "evidence": evidence}
+
 
 @router.get(
     "/{execution_id}/snapshot",
