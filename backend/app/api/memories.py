@@ -96,7 +96,7 @@ def search_agent_memories_semantically(
     try:
         settings = get_embedding_settings()
         minimum = settings.memory.min_similarity if min_similarity is None else min_similarity
-        matches = rank_semantic_rows(rows, normalized, settings, limit, minimum)
+        matches = rank_semantic_rows(rows, normalized, settings, limit, minimum, db=db)
     except SemanticMemoryUnavailable as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     return SemanticSearchResponse(agent_id=agent_id, query=normalized, limit=limit,

@@ -13,6 +13,7 @@ from app.crud.memory import create_memory
 from app.services.memory_retrieval import MemoryMatch, rank_agent_memories, rank_memory_rows
 from app.models.memory import Memory
 from app.schemas.memory_evidence import MemoryEvidence, MemoryEvidenceItem, render_memory_context
+from app.services.memory_vector_cache import invalidate_memory_vectors
 
 
 class MemoryEditConflict(ValueError):
@@ -41,6 +42,7 @@ def update_agent_memory(db: Session, memory: Memory, content: str, expected_cont
         ).update({Memory.content: normalized}, synchronize_session=False)
         if changed != 1:
             raise MemoryEditConflict("Memory changed since it was loaded. Reload memories before editing again.")
+        invalidate_memory_vectors(db, "agent", memory.agent_id, memory.id)
         db.commit()
     except Exception:
         db.rollback()
@@ -83,6 +85,8 @@ def build_memory_context(
     limit: int = 5,
     on_fallback: Callable[[str], None] | None = None,
     on_details: Callable[[MemoryEvidence], None] | None = None,
+    populate_cache: bool = False,
+    on_cache: Callable[[dict], None] | None = None,
 ) -> str:
     """
     Build persistent memory context for the agent runtime.
@@ -112,7 +116,8 @@ def build_memory_context(
             settings = get_embedding_settings()
             # Embed both sources together. Rank each scope afterward
             # so shared memories do not consume the Agent memory result budget.
-            matches = rank_semantic_rows([*local, *shared], query, settings, len(local) + len(shared))
+            matches = rank_semantic_rows([*local, *shared], query, settings, len(local) + len(shared),
+                                         db=db, populate_cache=populate_cache, on_cache=on_cache)
             agent_matches = [match for match in matches if isinstance(match.memory, Memory)][:limit]
             shared_matches = [match for match in matches if not isinstance(match.memory, Memory)][:limit]
         except SemanticMemoryUnavailable as error:
@@ -187,6 +192,7 @@ def save_agent_memory(
         for memory in existing_memories:
             if memory.content.strip().startswith("User's name is "):
                 memory.content = normalized_content
+                invalidate_memory_vectors(db, "agent", agent_id, memory.id)
                 db.commit()
                 db.refresh(memory)
 

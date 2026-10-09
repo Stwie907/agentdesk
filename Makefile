@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check memory-search-check memory-editing-check user-memory-check semantic-memory-check ollama-memory-check memory-evidence-check
+.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check memory-search-check memory-editing-check user-memory-check semantic-memory-check ollama-memory-check memory-evidence-check memory-vector-cache-check
 
 help:
 	@printf '%s\n' \
@@ -29,6 +29,7 @@ help:
 	@printf '%s\n' '  semantic-memory-check  Enable Mock semantic Runtime and check vectors, scope, edits, and persistence fixtures'
 	@printf '%s\n' '  ollama-memory-check  Read-only real Ollama retrieval acceptance using saved semantic fixtures'
 	@printf '%s\n' '  memory-evidence-check  Check saved Runtime retrieval evidence using existing Mock semantic fixtures'
+	@printf '%s\n' '  memory-vector-cache-check  Check scoped vector reuse, invalidation, and cache persistence'
 
 check:
 	@test -f README.md
@@ -155,6 +156,11 @@ check:
 	@test -f backend/tests/test_memory_evidence.py
 	@test -f frontend/src/components/MemoryRetrievalPanel.tsx
 	@test -f frontend/src/api/memoryEvidence.ts
+	@test -f backend/app/models/memory_vector_cache.py
+	@test -f backend/app/services/memory_vector_cache.py
+	@test -f backend/app/check_memory_vector_cache.py
+	@test -f backend/tests/test_memory_vector_cache.py
+	@test -f backend/tests/test_memory_vector_cache_acceptance.py
 
 test: check
 	@python -m unittest discover -s evaluation/tests -v
@@ -241,3 +247,7 @@ ollama-memory-check:
 memory-evidence-check:
 	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
 		python -m app.check_memory_evidence --base-url http://frontend
+
+memory-vector-cache-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_memory_vector_cache --base-url http://frontend

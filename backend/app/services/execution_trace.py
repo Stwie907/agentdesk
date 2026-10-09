@@ -21,6 +21,7 @@ class TraceEvent(str, Enum):
     MEMORY_RETRIEVED = "memory_retrieved"
     MEMORY_RETRIEVAL_FALLBACK = "memory_retrieval_fallback"
     MEMORY_RETRIEVAL_DETAILS = "memory_retrieval_details"
+    MEMORY_EMBEDDING_CACHE = "memory_embedding_cache"
 
     CONVERSATION_HISTORY_LOADED = "conversation_history_loaded"
 

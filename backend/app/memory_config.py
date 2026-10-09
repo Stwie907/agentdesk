@@ -8,6 +8,7 @@ import os
 MEMORY_ENVIRONMENT_KEYS = (
     "MEMORY_RETRIEVAL_MODE", "OLLAMA_EMBEDDING_MODEL",
     "MEMORY_EMBEDDING_TIMEOUT_SECONDS", "MEMORY_SEMANTIC_MIN_SIMILARITY",
+    "MEMORY_VECTOR_CACHE_ENABLED",
 )
 
 
@@ -17,6 +18,7 @@ class MemorySettings:
     embedding_model: str
     timeout_seconds: float
     min_similarity: float
+    cache_enabled: bool = True
 
 
 def get_memory_settings() -> MemorySettings:
@@ -38,4 +40,7 @@ def get_memory_settings() -> MemorySettings:
         raise ValueError("MEMORY_SEMANTIC_MIN_SIMILARITY must be between 0 and 1.") from error
     if not math.isfinite(minimum) or not 0 <= minimum <= 1:
         raise ValueError("MEMORY_SEMANTIC_MIN_SIMILARITY must be between 0 and 1.")
-    return MemorySettings(mode, model, timeout, minimum)
+    cache = os.getenv("MEMORY_VECTOR_CACHE_ENABLED", "true").strip().lower()
+    if cache not in {"true", "false"}:
+        raise ValueError("MEMORY_VECTOR_CACHE_ENABLED must be 'true' or 'false'.")
+    return MemorySettings(mode, model, timeout, minimum, cache == "true")

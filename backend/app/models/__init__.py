@@ -5,6 +5,7 @@ from app.models.execution import Execution
 from app.models.execution_log import ExecutionLog
 from app.models.memory import Memory
 from app.models.user_memory import UserMemory
+from app.models.memory_vector_cache import MemoryVectorCache
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.execution_snapshot import ExecutionSnapshot

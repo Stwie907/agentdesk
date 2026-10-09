@@ -10,6 +10,7 @@ from app.models.project import Project
 from app.models.user import User
 from app.models.user_memory import UserMemory
 from app.services.memory_retrieval import rank_memory_rows
+from app.services.memory_vector_cache import invalidate_memory_vectors
 
 
 class UserMemoryConflict(ValueError):
@@ -75,6 +76,7 @@ def update_user_memory(db: Session, memory: UserMemory, content: str, expected_c
         ).update({UserMemory.content: normalized, UserMemory.content_key: key}, synchronize_session=False)
         if changed != 1:
             raise UserMemoryConflict("Shared memory changed since it was loaded. Reload shared memories before editing again.")
+        invalidate_memory_vectors(db, "user", memory.user_id, memory.id)
         db.commit()
     except IntegrityError as error:
         db.rollback()
@@ -88,6 +90,7 @@ def update_user_memory(db: Session, memory: UserMemory, content: str, expected_c
 
 def delete_user_memory(db: Session, memory: UserMemory) -> None:
     try:
+        invalidate_memory_vectors(db, "user", memory.user_id, memory.id)
         db.delete(memory)
         db.commit()
     except Exception:

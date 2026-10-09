@@ -460,6 +460,56 @@ python -m app.check_memory_evidence --base-url http://127.0.0.1:5173 --verify-pe
 Run with `LLM_PROVIDER=mock`. The initial check also requires semantic mode on
 the running server and the fixtures created by `app.check_semantic_memory`.
 
+## Persistent memory vector cache
+
+`memory_vector_cache` holds disposable document embeddings. Semantic Runtime
+populates it; semantic preview APIs only read existing entries and embed misses
+in memory. No preview writes, hit counters, query-vector persistence, or
+background indexing are introduced. Every retrieval embeds its current query.
+Runtime emits `memory_embedding_cache` logs with document counts, hits, misses,
+writes, provider/model, and cache status. Runtime V4 traces exclude this event.
+
+The source key contains source type, owner ID, memory ID, and a namespace derived
+from the embedding provider, model, endpoint, and cache format version. Content
+hash, source creation time, model digest, vector checksum, finite nonzero values,
+and dimensions are checked before reuse. Equal IDs in the Agent and shared
+memory tables remain separate. Shared vectors are reused only within one owner.
+
+For Ollama, the local [`GET /api/tags`](https://docs.ollama.com/api/tags) catalog
+provides the model digest. Model aliases are matched exactly, including the
+implicit `:latest` tag. Cached retrieval checks model identity before and after
+generating the query or missing documents. A changing identity aborts semantic
+retrieval, preserving the existing explicit preview error and Runtime keyword
+fallback. Unavailable model identity bypasses the cache. Catalog requests bypass
+proxy variables and redirects, with a timeout of at most five seconds.
+
+Successful source edits, automatic name replacement, and deletion invalidate
+all corresponding cache namespaces transactionally. Insert-select writes also
+check the source content, identity, owner, and creation time so a delayed
+embedding cannot repopulate a deleted or edited record. Cache storage failures
+retain uncached semantic retrieval. Set `MEMORY_VECTOR_CACHE_ENABLED=false` to
+bypass caching without changing ranking or deleting stored vectors.
+
+Migration `9da24d6f8e11` adds the cache table after `c84f31a920de`, adopting a
+matching runtime-created table and retaining its rows. Schema drift is rejected.
+Downgrading to `c84f31a920de` drops only disposable cache data. Compose startup
+creates the additive table through the existing metadata bootstrap; native
+Alembic users should run `python -m alembic upgrade head`.
+
+```sh
+python -m app.check_memory_vector_cache --base-url http://127.0.0.1:5173
+python -m app.check_memory_vector_cache --base-url http://127.0.0.1:5173 --verify-persistence
+```
+
+Acceptance requires the existing semantic checkpoint and enabled caching on the
+Mock backend. Its initial run creates six fixed Mock chats and cleans up only
+its own unique edit/delete fixtures. Reuse checks the original cache and saved
+executions before creating one proof chat. Restart verification is therefore
+not read-only: the proof chat demonstrates warm reuse, while original vectors,
+source memories, inspections, and checkpoint files remain unchanged. Missing or
+changed original data fails before that chat. The previous memory-evidence and
+real Ollama acceptance checks retain their read-only behavior.
+
 ## Conversation workbench APIs
 
 `POST /conversations` requires an existing positive integer Agent ID and a
