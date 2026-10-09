@@ -37,7 +37,8 @@ def default_state_file():
     return Path(database).resolve().parent / "semantic-memory-acceptance.json"
 
 
-def validate_checkpoint(base_url, state, agent_id, peer_id, owner, agents):
+def validate_checkpoint(base_url, state, agent_id, peer_id, owner, agents, *, read=None):
+    read = request_json if read is None else read
     require(isinstance(state, dict) and state.get("version") == 1, "Semantic memory checkpoint is invalid")
     for key in ("agent_id", "peer_agent_id", "user_id", "isolation_agent_id", "isolation_user_id"):
         require(type(state.get(key)) is int and state[key] > 0, "Semantic memory checkpoint has invalid IDs")
@@ -46,11 +47,11 @@ def validate_checkpoint(base_url, state, agent_id, peer_id, owner, agents):
     require(type(state.get("isolation_agent_id")) is int and type(state.get("isolation_user_id")) is int
             and state["isolation_user_id"] != owner and any(row["id"] == state["isolation_agent_id"] for row in agents),
             "Semantic memory isolation fixture was lost or changed")
-    other = request_json(base_url, f'/user-memories/for-agent/{state["isolation_agent_id"]}')
+    other = read(base_url, f'/user-memories/for-agent/{state["isolation_agent_id"]}')
     require(other["user_id"] == state["isolation_user_id"], "Semantic memory isolation owner changed")
     scopes = (
-        ("private", "agent_id", agent_id, PRIVATE, request_json(base_url, f"/memories/{agent_id}")),
-        ("shared", "user_id", owner, SHARED, request_json(base_url, f"/user-memories/for-agent/{agent_id}")["memories"]),
+        ("private", "agent_id", agent_id, PRIVATE, read(base_url, f"/memories/{agent_id}")),
+        ("shared", "user_id", owner, SHARED, read(base_url, f"/user-memories/for-agent/{agent_id}")["memories"]),
         ("isolated", "user_id", other["user_id"], PRIVATE, other["memories"]),
     )
     for key, scope_key, scope, content, rows in scopes:
@@ -59,13 +60,15 @@ def validate_checkpoint(base_url, state, agent_id, peer_id, owner, agents):
                 and type(saved.get(scope_key)) is int and saved[scope_key] == scope and saved.get("content") == content
                 and isinstance(saved.get("created_at"), str), "Semantic memory checkpoint has an invalid record")
         require(saved in rows, "Semantic memory was lost or changed before restart verification")
-    require(state["shared"] in request_json(base_url, f"/user-memories/for-agent/{peer_id}")["memories"],
+    require(state["shared"] in read(base_url, f"/user-memories/for-agent/{peer_id}")["memories"],
             "Semantic memory same-user fixture was lost or changed")
     message = "Semantic Runtime execution, trace, or snapshot was lost or changed"
     require(type(state.get("execution_id")) is int and state["execution_id"] > 0
             and isinstance(state.get("inspection"), dict), "Semantic memory checkpoint has invalid Runtime data")
     try:
-        require(inspection(base_url, state["execution_id"]) == state["inspection"], message)
+        current = {suffix: read(base_url, f'/executions/{state["execution_id"]}' + suffix)
+                   for suffix in ("", "/trace", "/snapshot")}
+        require(current == state["inspection"], message)
     except HTTPError as error:
         if error.code != 404: raise
         raise RuntimeError(message) from error

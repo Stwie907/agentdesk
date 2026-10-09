@@ -279,6 +279,35 @@ the original execution/trace/snapshot are checked before any fixture writes.
 Restart `make demo` with `MEMORY_RETRIEVAL_MODE=keyword` to restore keyword Runtime.
 See the [Compose guide](docs/docker-compose-demo.md) for the exact commands.
 
+## Read-only Ollama memory acceptance
+
+After completing the Mock semantic check, keep its checkpoint and fixture rows.
+Switch the backend to `LLM_PROVIDER=ollama` and `MEMORY_RETRIEVAL_MODE=semantic`,
+then run:
+
+```sh
+docker compose -f docker-compose.yml exec -T backend python -m app.check_ollama_memory --base-url http://frontend
+```
+
+Equivalent: `make ollama-memory-check`. Seven read-only checks reuse the existing
+Agent/shared/isolation fixtures and original saved inspection. They check English
+paraphrases, Chinese retrieval, same-user cross-language retrieval, Agent/User
+scope, keyword contrast, and unchanged records/checkpoint. The check sends only
+GET requests to the application; it creates no chat execution or memory.
+
+The JSON report includes the real provider/model, target rank, cosine similarity,
+and comparison with an unrelated database-recovery query. Relevant targets must
+appear in the top five at the configured threshold. When a target is returned for
+the control query, its relevant score must be higher. `control_similarity: null`
+means the target was absent from the control's top 20, or no control was requested
+for that scenario. This checks the documented fixtures, not a general model benchmark.
+
+Missing/changed fixtures, Mock responses, mismatched configuration, unavailable
+models, invalid scores/scopes, and unmet quality expectations fail explicitly.
+A failure does not repair or overwrite data. Chat still uses qwen2.5:7b and is not
+invoked by this check. See the [Compose guide](docs/docker-compose-demo.md) for
+model installation, switching, restart verification, and restoring Mock mode.
+
 ## Multi-turn conversation workbench
 
 Select an Agent, then create or select a conversation under **Conversation Chat**.
@@ -407,6 +436,7 @@ RAG and additional MCP business tools remain future milestones.
 | `make memory-search-check` | Check shared keyword ranking, scoped read-only previews, match evidence, and Runtime retrieval. |
 | `make user-memory-check` | Check same-user sharing, different-user isolation, conditional edits, and Runtime retrieval. |
 | `make semantic-memory-check` | Enable offline semantic fixtures and check cosine ranking, scopes, fresh edits, and Runtime retrieval. |
+| `make ollama-memory-check` | Check real Ollama fixture retrieval, scope, measured quality, and unchanged saved data using only GET requests. |
 | `make conversation-check` | Check scoped multi-turn chat, automatic memory, Runtime context, and saved snapshots. |
 | `make conversation-management-check` | Check rename, scoped message cleanup, protected conversations, and retained Agent data. |
 | `make stop` | Stop services while retaining the data volume. |

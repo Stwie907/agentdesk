@@ -389,6 +389,32 @@ validation checks the immutable checkpoint and original Runtime inspection befor
 writes. Temporary edit records use unique IDs in their content to preserve
 existing user-created fixture records.
 
+## Real Ollama retrieval acceptance
+
+`python -m app.check_ollama_memory --base-url http://frontend` is a separate,
+read-only real-provider check. Run it in the Ollama backend after the Mock semantic
+acceptance has saved `semantic-memory-acceptance.json` beside SQLite. It reuses
+that checkpoint; it never seeds, edits, deletes, chats, or rewrites the checkpoint.
+An optional `--state-file PATH` selects another existing checkpoint.
+
+Seven checks verify saved identity/inspection, Agent English paraphrases, shared
+Chinese paraphrases, same-user English-to-Chinese retrieval, both isolation scopes,
+keyword contrast, and unchanged memory/history/transcripts/checkpoint. Responses
+must report `provider: ollama`, the configured embedding model, semantic Runtime
+mode, valid scope, descending cosine/ID order, and a valid threshold/result limit.
+
+Expected preference records must appear in the relevant top five. Where the
+target also appears in the control query's top 20 (`min_similarity=0`), its relevant
+score must be higher. Scores are measured rather than compared to Mock's fixed
+0.96. Evidence includes target rank, similarity, control similarity, and a margin
+when available; null control values are explained in the root README.
+
+`--timeout 180` is the default per-HTTP-request timeout. It must be positive and
+finite; it does not change `MEMORY_EMBEDDING_TIMEOUT_SECONDS` on the server.
+The client bypasses proxy environment variables and rejects redirects and HTML.
+Errors exit nonzero without replacement writes. The check does not test generated
+qwen2.5:7b replies or create Runtime executions. No extra dependency is required.
+
 ## Conversation workbench APIs
 
 `POST /conversations` requires an existing positive integer Agent ID and a
