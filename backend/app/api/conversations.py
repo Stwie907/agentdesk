@@ -4,9 +4,15 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from app.crud.agent import get_agent
-from app.crud.conversation import create_conversation, delete_conversation, get_conversation, get_conversations
+from app.crud.conversation import (
+    create_conversation,
+    delete_conversation,
+    get_conversation,
+    get_conversations,
+    update_conversation_title,
+)
 from app.database import get_db
-from app.schemas.conversation import ConversationCreateRequest, ConversationResponse
+from app.schemas.conversation import ConversationCreateRequest, ConversationResponse, ConversationUpdateRequest
 
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
@@ -37,6 +43,13 @@ def list_all(db: Session = Depends(get_db), agent_id: Annotated[int | None, Quer
 def read(conversation_id: Annotated[int, Path(gt=0)], db: Session = Depends(get_db),
          agent_id: Annotated[int | None, Query(gt=0)] = None):
     return require_conversation(db, conversation_id, agent_id)
+
+
+@router.patch("/{conversation_id}", response_model=ConversationResponse)
+def rename(conversation_id: Annotated[int, Path(gt=0)], request: ConversationUpdateRequest,
+           db: Session = Depends(get_db), agent_id: Annotated[int | None, Query(gt=0)] = None):
+    conversation = require_conversation(db, conversation_id, agent_id)
+    return update_conversation_title(db, conversation, request.title)
 
 
 @router.delete("/{conversation_id}")

@@ -39,6 +39,17 @@ execution. Questions such as `What do I like about Python?` do not create a new
 preference. Each returned execution also opens in the Inspector and refreshes
 execution history. One-off **Submit Task** continues to use its existing endpoint.
 
+Select a conversation to edit **Conversation title** and choose **Rename
+conversation**. The title allows 1 to 200 trimmed characters. Its ID, transcript,
+selection, and chat draft are retained after a successful rename.
+
+**Delete conversation** opens an inline confirmation with the title and ID.
+**Cancel delete** makes no request; **Confirm delete** removes the conversation
+and messages, then clears the selection and chat draft. Agent memories and
+execution inspection remain available. Writes and selection are disabled while
+a mutation is pending; other writes are also disabled during confirmation.
+Rename/delete responses are checked for the selected conversation and Agent.
+
 Writes are guarded against repeated clicks. A failed request retains its draft;
 reload conversations/messages to check what was saved before retrying. A failed
 execution retains the chat draft and opens its inspection. A transcript load

@@ -157,6 +157,32 @@ before creating further turns. This uses existing SQLite storage and adds no
 paid service. Redis/PostgreSQL adapters and semantic Memory retrieval remain
 future work.
 
+## Rename or delete a conversation
+
+Select a conversation, edit **Conversation title**, and choose **Rename
+conversation**. A title contains 1 to 200 trimmed characters. Renaming preserves
+the conversation ID, Agent, creation time, transcript, and chat draft.
+
+Choose **Delete conversation** to review its title and ID. **Cancel delete**
+keeps it; **Confirm delete** removes that conversation and its messages in one
+database transaction. The panel clears its selection and transcript. Other
+conversations, Agent memories, execution history, traces, and snapshots remain
+available. Deleting a conversation does not delete its previously extracted
+Agent memories; manage those separately in **Agent Memory**.
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_conversation_management --base-url http://frontend
+```
+
+Equivalent: `make conversation-management-check`. Six scenarios verify rename,
+rejected writes, deletion with messages, missing/deleted resources, retained
+Agent memory and inspection, and protected conversations. It retains one named
+keeper conversation and removes a temporary conversation. After restarting,
+add `--verify-persistence`; the renamed keeper, transcript, memory, and stored
+execution must already exist before any test write. No migration or dependency
+is added.
+
 ## Runtime evaluation
 
 After starting the Mock demo, run this from the repository root:
@@ -229,6 +255,7 @@ RAG and additional MCP business tools remain future milestones.
 | `make mcp-ticket-check` | Check ticket creation, duplicate submission, write permissions, traces, snapshots, and replay. |
 | `make memory-check` | Check Agent memory storage, isolation, validation, deletion, and Runtime retrieval. |
 | `make conversation-check` | Check scoped multi-turn chat, automatic memory, Runtime context, and saved snapshots. |
+| `make conversation-management-check` | Check rename, scoped message cleanup, protected conversations, and retained Agent data. |
 | `make stop` | Stop services while retaining the data volume. |
 
 The application keeps Ollama as its default provider. The Mock Compose override

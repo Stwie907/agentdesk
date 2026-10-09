@@ -276,6 +276,43 @@ docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend 
 Conversation, transcript, and extracted preference must already exist. Missing
 data fails before any new chat can recreate it. All three use `/data/agentdesk.db`.
 
+## Rename and delete conversations
+
+Select `Demo Agent` and a conversation. Edit **Conversation title** and select
+**Rename conversation**. Confirm that its ID, saved messages, and chat draft
+stay the same. Reload the page and select it again to see the persisted title.
+
+Choose **Delete conversation**. Review its title and ID, then test **Cancel
+delete** first. Choose **Delete conversation** again and **Confirm delete** to
+remove that conversation and its messages. Its selector entry and transcript
+disappear. Agent memories and execution history, including Inspector traces and
+snapshots, stay available. Use **Agent Memory** separately to delete a memory.
+
+Run the automated checks from the repository root:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_conversation_management --base-url http://frontend
+```
+
+Equivalent: `make conversation-management-check`. Expected JSON includes
+`status: passed`, `checks_passed: 6`, `keeper_conversation_id`,
+`deleted_conversation_id`, and `preserved_execution_id`. A named keeper is
+retained; only a newly created disposable conversation is deleted. The check
+verifies that protected conversations, Agent memories, and the deleted
+conversation's execution, trace, and snapshot are unchanged.
+
+After the same service recreation described above, run:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_conversation_management --base-url http://frontend --verify-persistence
+```
+
+The renamed keeper, transcript, memory, and stored execution/snapshot must exist
+before any test writes. Missing data fails instead of being recreated to pass.
+This uses the existing `/data/agentdesk.db` volume without a schema migration.
+
 ## Switch to local Ollama
 
 Use the base Compose file without the Mock override. Ollama must run on the host,
@@ -364,7 +401,9 @@ and tests in `mcp-tools`.
 Order, tracking, and ticket acceptance checks run in `compose-demo`, including
 ticket persistence after recreation. Memory acceptance also runs before and
 after recreation. Conversation history and automatic memory acceptance also run
-before and after recreation. Standalone protocol checking covers 25
+before and after recreation. Conversation management acceptance verifies rename,
+scoped message deletion, retained Agent data, and restart persistence.
+Standalone protocol checking covers 25
 checks and the MCP test suite contains 52 tests. Ticket protocol tests use
 temporary databases independently of the application's store.
 

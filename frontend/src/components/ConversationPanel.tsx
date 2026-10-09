@@ -1,6 +1,9 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
-import { createConversation, getConversationMessages, getConversations, sendConversationMessage } from "../api/conversations";
+import {
+  createConversation, deleteConversation, getConversationMessages, getConversations,
+  renameConversation, sendConversationMessage,
+} from "../api/conversations";
 import { ApiError } from "../api/executions";
 import type { Conversation, ConversationMessage } from "../types/conversations";
 
@@ -23,6 +26,8 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [title, setTitle] = useState("");
+  const [renameTitle, setRenameTitle] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [loadingList, setLoadingList] = useState(true);
@@ -31,14 +36,20 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
   const [messagesLoaded, setMessagesLoaded] = useState(false);
   const [listKey, setListKey] = useState(0);
   const [messageKey, setMessageKey] = useState(0);
-  const [pending, setPending] = useState<"create" | "chat" | null>(null);
+  const [pending, setPending] = useState<"create" | "chat" | "rename" | "delete" | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [messageError, setMessageError] = useState<string | null>(null);
   const [writeError, setWriteError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const mounted = useRef(true);
   const writeInProgress = useRef(false);
-  const conversationId = conversations.find((row) => String(row.id) === selectedId)?.id ?? null;
+  const selectedConversation = conversations.find((row) => String(row.id) === selectedId);
+  const conversationId = selectedConversation?.id ?? null;
+
+  useEffect(() => {
+    setRenameTitle(selectedConversation?.title ?? "");
+    setConfirmDelete(false);
+  }, [conversationId]);
 
   useEffect(() => {
     mounted.current = true;
@@ -95,7 +106,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (writeInProgress.current || loadingList || !listLoaded || !title.trim() || title.trim().length > 200) return;
+    if (writeInProgress.current || confirmDelete || loadingList || !listLoaded || !title.trim() || title.trim().length > 200) return;
     writeInProgress.current = true;
     setPending("create");
     setWriteError(null);
@@ -118,7 +129,68 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
     }
   }
 
-  const chatDisabled = pending !== null || loadingList || !listLoaded || loadingMessages || !messagesLoaded || conversationId === null;
+  const managementDisabled = pending !== null || confirmDelete || loadingList || !listLoaded || conversationId === null;
+  const chatDisabled = managementDisabled || loadingMessages || !messagesLoaded;
+
+  function managementError(error: unknown, action: string): string {
+    if (error instanceof ApiError && error.status === 404) {
+      return "Conversation not found for this Agent. Reload conversations to refresh the list.";
+    }
+    if (error instanceof ApiError && error.status === 422) return error.message;
+    return `Unable to ${action} conversation. Reload conversations to check its saved state before trying again.`;
+  }
+
+  async function handleRename(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (managementDisabled || writeInProgress.current || conversationId === null ||
+        !renameTitle.trim() || renameTitle.trim().length > 200 || renameTitle.trim() === selectedConversation?.title) return;
+    writeInProgress.current = true;
+    setPending("rename");
+    setWriteError(null);
+    setNotice(null);
+    try {
+      const saved = await renameConversation(conversationId, agentId, renameTitle);
+      if (mounted.current) {
+        setConversations((rows) => rows.map((row) => row.id === saved.id ? saved : row));
+        setRenameTitle(saved.title);
+        setNotice(`Conversation ${saved.id} renamed.`);
+      }
+    } catch (error) {
+      if (mounted.current) setWriteError(managementError(error, "rename"));
+    } finally {
+      writeInProgress.current = false;
+      if (mounted.current) setPending(null);
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirmDelete || writeInProgress.current || pending !== null || loadingList || !listLoaded || conversationId === null) return;
+    writeInProgress.current = true;
+    setPending("delete");
+    setWriteError(null);
+    setNotice(null);
+    try {
+      await deleteConversation(conversationId, agentId);
+      if (mounted.current) {
+        setConversations((rows) => rows.filter((row) => row.id !== conversationId));
+        setSelectedId("");
+        setMessage("");
+        setMessages([]);
+        setMessagesLoaded(false);
+        setLoadingMessages(false);
+        setMessageError(null);
+        setNotice(`Conversation ${conversationId} deleted. Agent memories and execution history were kept.`);
+      }
+    } catch (error) {
+      if (mounted.current) setWriteError(managementError(error, "delete"));
+    } finally {
+      writeInProgress.current = false;
+      if (mounted.current) {
+        setPending(null);
+        setConfirmDelete(false);
+      }
+    }
+  }
 
   async function handleSend(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -148,7 +220,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
   return (
     <div aria-busy={pending !== null || loadingList || loadingMessages}>
       <p>Conversations for Agent {agentId}</p>
-      <button type="button" disabled={loadingList || pending !== null} onClick={() => setListKey((key) => key + 1)}>
+      <button type="button" disabled={loadingList || pending !== null || confirmDelete} onClick={() => setListKey((key) => key + 1)}>
         Reload conversations
       </button>
       {loadingList && <p role="status">Loading conversations...</p>}
@@ -157,26 +229,52 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
       <form onSubmit={(event) => void handleCreate(event)}>
         <label htmlFor="conversation-title">New conversation title</label>
         <input id="conversation-title" value={title} maxLength={200}
-          disabled={loadingList || !listLoaded || pending !== null}
+          disabled={loadingList || !listLoaded || pending !== null || confirmDelete}
           onChange={(event) => { setTitle(event.target.value); setWriteError(null); }} />
-        <button type="submit" disabled={loadingList || !listLoaded || pending !== null || !title.trim() || title.trim().length > 200}>
+        <button type="submit" disabled={loadingList || !listLoaded || pending !== null || confirmDelete || !title.trim() || title.trim().length > 200}>
           {pending === "create" ? "Creating..." : "Create conversation"}
         </button>
       </form>
       <label htmlFor="conversation-select">Conversation</label>
       <select id="conversation-select" value={selectedId}
-        disabled={loadingList || !listLoaded || pending !== null || conversations.length === 0}
+        disabled={loadingList || !listLoaded || pending !== null || confirmDelete || conversations.length === 0}
         onChange={(event) => { setSelectedId(event.target.value); setMessage(""); setNotice(null); setWriteError(null); }}>
         <option value="">Select a conversation</option>
         {conversations.map((row) => <option key={row.id} value={row.id}>{row.title} (ID: {row.id})</option>)}
       </select>
-      <button type="button" disabled={conversationId === null || loadingMessages || pending !== null}
+      {conversationId !== null && (
+        <div>
+          <form onSubmit={(event) => void handleRename(event)}>
+            <label htmlFor="conversation-rename-title">Conversation title</label>
+            <input id="conversation-rename-title" value={renameTitle} maxLength={200} disabled={managementDisabled}
+              onChange={(event) => { setRenameTitle(event.target.value); setWriteError(null); }} />
+            <button type="submit" disabled={managementDisabled || !renameTitle.trim() || renameTitle.trim().length > 200 ||
+                renameTitle.trim() === selectedConversation?.title}>
+              {pending === "rename" ? "Renaming..." : "Rename conversation"}
+            </button>
+          </form>
+          <button type="button" disabled={managementDisabled} onClick={() => {
+            setConfirmDelete(true); setWriteError(null); setNotice(null);
+          }}>Delete conversation</button>
+          {confirmDelete && (
+            <div role="group" aria-labelledby="conversation-delete-prompt">
+              <p id="conversation-delete-prompt">Delete “{selectedConversation?.title}” (ID: {conversationId})?</p>
+              <p>Its saved messages will be removed. Agent memories and execution history will stay available.</p>
+              <button type="button" disabled={pending !== null} onClick={() => void handleDelete()}>
+                {pending === "delete" ? "Deleting..." : "Confirm delete"}
+              </button>
+              <button type="button" disabled={pending !== null} onClick={() => setConfirmDelete(false)}>Cancel delete</button>
+            </div>
+          )}
+        </div>
+      )}
+      <button type="button" disabled={conversationId === null || loadingMessages || pending !== null || confirmDelete}
         onClick={() => setMessageKey((key) => key + 1)}>Reload messages</button>
       {conversationId === null && <p>Create or select a conversation to send a message.</p>}
-      {loadingMessages && <p role="status">Loading messages...</p>}
-      {messageError !== null && <p role="alert">{messageError}</p>}
-      {messagesLoaded && messages.length === 0 && <p>No messages in this conversation.</p>}
-      {messagesLoaded && messages.length > 0 && (
+      {conversationId !== null && loadingMessages && <p role="status">Loading messages...</p>}
+      {conversationId !== null && messageError !== null && <p role="alert">{messageError}</p>}
+      {conversationId !== null && messagesLoaded && messages.length === 0 && <p>No messages in this conversation.</p>}
+      {conversationId !== null && messagesLoaded && messages.length > 0 && (
         <ol aria-label="Conversation messages">
           {messages.map((row) => <li key={row.id}>
             <p><strong>{row.role}</strong> · Message {row.id}</p>

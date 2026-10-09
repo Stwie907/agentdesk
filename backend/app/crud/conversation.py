@@ -45,6 +45,17 @@ def get_conversations(
 
 
 
+def update_conversation_title(db: Session, conversation: Conversation, title: str):
+    conversation.title = title
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(conversation)
+    return conversation
+
+
 def delete_conversation(
     db: Session,
     conversation_id: int
@@ -56,7 +67,12 @@ def delete_conversation(
     )
 
     if conversation:
-        db.delete(conversation)
-        db.commit()
+        try:
+            # The ORM relationship deletes messages in the same transaction.
+            db.delete(conversation)
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
 
     return conversation
