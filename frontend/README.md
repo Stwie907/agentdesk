@@ -140,6 +140,27 @@ The existing Agent Memory panel and automatic extraction remain independent.
 Save facts in this panel explicitly to share them. Vite and Nginx both proxy
 `/user-memories` to FastAPI, including GET, POST, PATCH, and DELETE.
 
+## Optional semantic previews
+
+Select **Semantic (local embeddings)** in **Memory search method** or **Shared
+memory search method**. The query and limit are sent to the scoped semantic
+endpoint only after submission. Keyword is the initial selection.
+
+Semantic results show **Cosine similarity**, the embedding provider/model, and
+the server's Runtime memory mode. Mock results explicitly show **Mock fixture
+vectors**. For Mock, save `I prefer concise answers.` and query `Keep it brief.`;
+the Chinese pair is `我喜欢简洁的回答。` / `请用简短的方式解释。`. Ollama mode
+supports general queries through the configured local embedding model.
+
+Changing the method, query, limit, Agent, or saved-memory revision invalidates
+older results. Embedding failures keep the query/method and show the server error;
+retry is explicit. The client rejects non-finite/out-of-range similarity, wrong
+scopes, metadata, duplicate IDs, and inconsistent ranking.
+
+Preview selection is independent of Runtime configuration. Set the backend's
+`MEMORY_RETRIEVAL_MODE=semantic` to use semantic retrieval during chat. The panel
+shows the current server mode so users can distinguish these settings.
+
 ## Tests and production build
 
 ```sh

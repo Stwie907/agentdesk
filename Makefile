@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check memory-search-check memory-editing-check user-memory-check
+.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check memory-search-check memory-editing-check user-memory-check semantic-memory-check
 
 help:
 	@printf '%s\n' \
@@ -26,6 +26,7 @@ help:
 	@printf '%s\n' '  memory-search-check  Check ranked bilingual previews, Agent scope, and Runtime retrieval'
 	@printf '%s\n' '  memory-editing-check  Check scoped edits, conflicts, and preserved memory identity'
 	@printf '%s\n' '  user-memory-check  Check shared user memory, isolation, conditional edits, and Runtime retrieval'
+	@printf '%s\n' '  semantic-memory-check  Enable Mock semantic Runtime and check vectors, scope, edits, and persistence fixtures'
 
 check:
 	@test -f README.md
@@ -136,6 +137,14 @@ check:
 	@test -f frontend/src/api/userMemories.ts
 	@test -f frontend/src/types/userMemories.ts
 	@test -f frontend/tests/UserMemoryPanel.test.tsx
+	@test -f backend/app/memory_config.py
+	@test -f backend/app/services/memory_embeddings.py
+	@test -f backend/app/services/semantic_memory.py
+	@test -f backend/app/schemas/semantic_memory.py
+	@test -f backend/app/check_semantic_memory.py
+	@test -f backend/tests/test_semantic_memory.py
+	@test -f frontend/src/api/semanticMemories.ts
+	@test -f frontend/tests/SemanticMemory.test.tsx
 
 test: check
 	@python -m unittest discover -s evaluation/tests -v
@@ -209,3 +218,9 @@ memory-editing-check:
 user-memory-check:
 	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
 		python -m app.check_user_memory --base-url http://frontend
+
+semantic-memory-check:
+	MEMORY_RETRIEVAL_MODE=semantic docker compose -f docker-compose.yml -f docker-compose.mock.yml \
+		up --detach --wait --wait-timeout 180 backend frontend
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_semantic_memory --base-url http://frontend

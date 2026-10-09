@@ -3,6 +3,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { ApiError } from "../api/executions";
 import { deleteUserMemory, getUserMemories, saveUserMemory, searchUserMemories, updateUserMemory } from "../api/userMemories";
 import type { UserMemory, UserMemoryList, UserMemorySearch } from "../types/userMemories";
+import { searchSemanticUserMemories, type SemanticSearch } from "../api/semanticMemories";
 
 export function UserMemoryPanel({ agentId }: { agentId: number | null }) {
   const [opened, setOpened] = useState(false);
@@ -26,7 +27,8 @@ function UserMemories({ agentId }: { agentId: number }) {
   const [status, setStatus] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
-  const [search, setSearch] = useState<UserMemorySearch | null>(null);
+  const [search, setSearch] = useState<UserMemorySearch | SemanticSearch<UserMemory> | null>(null);
+  const [searchMode, setSearchMode] = useState<"keyword" | "semantic">("keyword");
   const [searchError, setSearchError] = useState<string | null>(null);
   const active = useRef(true);
   const writing = useRef(false);
@@ -94,7 +96,8 @@ function UserMemories({ agentId }: { agentId: number }) {
     const request = ++searchRequest.current;
     setSearching(true); setSearch(null); setSearchError(null);
     try {
-      const result = await searchUserMemories(agentId, context.user_id, trimmed);
+      const result = searchMode === "semantic" ? await searchSemanticUserMemories(agentId, context.user_id, trimmed)
+        : await searchUserMemories(agentId, context.user_id, trimmed);
       if (active.current && request === searchRequest.current) setSearch(result);
     } catch (failure) {
       if (active.current && request === searchRequest.current) setSearchError(failure instanceof ApiError ? failure.message : "Unable to search shared memories.");
@@ -118,6 +121,12 @@ function UserMemories({ agentId }: { agentId: number }) {
         <button type="submit" disabled={disabled || editing !== null || !draft.trim() || draft.trim().length > 2000}>Save shared memory</button>
       </form>
       <form onSubmit={event => void handleSearch(event)}>
+        <label htmlFor="shared-memory-mode">Shared memory search method</label>
+        <select id="shared-memory-mode" value={searchMode} disabled={disabled}
+          onChange={event => { setSearchMode(event.target.value as "keyword" | "semantic"); clearSearch(); }}>
+          <option value="keyword">Keyword</option>
+          <option value="semantic">Semantic (local embeddings)</option>
+        </select>
         <label htmlFor="shared-memory-query">Shared memory search query</label>
         <input id="shared-memory-query" maxLength={500} value={query} disabled={disabled}
           onChange={event => { setQuery(event.target.value); clearSearch(); }} />
@@ -125,11 +134,15 @@ function UserMemories({ agentId }: { agentId: number }) {
       </form>
       {searching && <p role="status">Searching shared memories...</p>}
       {searchError && <p role="alert">{searchError}</p>}
-      {search && <div><p>{search.results.length} relevant shared memories found.</p>
+      {search && <div>
+        {"provider" in search && <p>{search.provider === "mock" ? "Mock fixture vectors" : "Ollama semantic vectors"}
+          {" · Model: "}{search.model}{" · Runtime memory mode: "}{search.runtime_mode}</p>}
+        {"provider" in search && <p>Cosine similarity measures how close the text vectors are. Runtime uses server configuration.</p>}
+        <p>{search.results.length} relevant shared memories found.</p>
         <ol aria-label="Shared memory search results">{search.results.map(result => <li key={result.memory.id}>
-          <p>Shared memory {result.memory.id} · Keyword matches: {result.score}</p>
+          <p>Shared memory {result.memory.id} · {"similarity" in result ? `Cosine similarity: ${result.similarity.toFixed(3)}` : `Keyword matches: ${result.score}`}</p>
           <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{result.memory.content}</p>
-          <p>Matched text: {result.matched_terms.join(", ")}</p>
+          {"matched_terms" in result && <p>Matched text: {result.matched_terms.join(", ")}</p>}
         </li>)}</ol></div>}
       {context?.memories.length === 0 && <p>No shared memories for this user.</p>}
       {context && context.memories.length > 0 && <ul aria-label="Saved shared memories">{context.memories.map(memory => <li key={memory.id}>

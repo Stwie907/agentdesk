@@ -128,8 +128,9 @@ marked Mock execution. After stopping and restarting the services, repeat with
 Memory uses the application's existing SQLite volume. Mock replies stay fixed
 even when relevant memory is loaded; the check verifies retrieval in execution
 logs and the saved snapshot. Ollama receives relevant context through the existing
-runtime. Shared user memory is available below; Redis/PostgreSQL adapters and
-semantic retrieval remain future Memory work.
+runtime. Shared user memory and optional local semantic retrieval are available
+below; persistent vector indexing and Redis/PostgreSQL adapters remain future
+Memory work.
 
 ## Preview relevant memories
 
@@ -230,6 +231,54 @@ isolation, with an immutable checkpoint beside SQLite. Restart validation checks
 both records and the original execution/trace/snapshot before any write. See the
 [Compose guide](docs/docker-compose-demo.md) for the full recreation sequence.
 
+## Optional local semantic memory retrieval
+
+Both memory panels offer **Keyword** and **Semantic (local embeddings)** search.
+Keyword remains the default. Semantic previews use cosine similarity over
+owner-scoped records and show the provider, embedding model, and Runtime mode.
+Agent memories remain private to their Agent; shared memories remain user-scoped.
+
+Ollama semantic search uses `POST /api/embed` with a separately configured local
+embedding model. Chat and planning retain `qwen2.5:7b`. The default embedding model
+is `embeddinggemma`; pull it locally before using semantic search in Ollama mode:
+
+```sh
+ollama pull embeddinggemma
+```
+
+The model requires Ollama v0.11.10 or later. See the
+[Ollama embedding model](https://ollama.com/library/embeddinggemma) and
+[embedding API](https://docs.ollama.com/api/embed).
+
+`MEMORY_RETRIEVAL_MODE=semantic` enables semantic Runtime retrieval; selecting a
+preview method affects only that preview. The default minimum cosine similarity
+is 0.35, configurable with `MEMORY_SEMANTIC_MIN_SIMILARITY`. Runtime retrieves
+up to five matching rows from each scope. Embedding failures produce an explicit
+503 in semantic previews; Runtime uses keyword ranking and records
+`memory_retrieval_fallback` in execution logs.
+
+Vectors are calculated on demand in batches of at most 32 inputs. Previews
+remain read-only, and edits/deletion are reflected on the next request. No
+embedding cache, vector database, new migration, or paid API is required.
+
+Mock semantic mode uses a documented set of fixed vectors for pipeline tests.
+Save `I prefer concise answers.`, select Semantic, and query `Keep it brief.`.
+A Chinese fixture uses `我喜欢简洁的回答。` and `请用简短的方式解释。`.
+Results are labeled **Mock fixture vectors**. These fixtures validate the
+pipeline; real semantic quality requires a local Ollama model acceptance.
+
+```sh
+make semantic-memory-check
+```
+
+This target enables semantic Runtime in the running Mock services, then runs
+eight acceptance scenarios. It retains Agent/shared/isolation markers and a
+checkpoint beside SQLite. After recreation, enable semantic Runtime again and
+run `app.check_semantic_memory --verify-persistence`; checkpoint identities and
+the original execution/trace/snapshot are checked before any fixture writes.
+Restart `make demo` with `MEMORY_RETRIEVAL_MODE=keyword` to restore keyword Runtime.
+See the [Compose guide](docs/docker-compose-demo.md) for the exact commands.
+
 ## Multi-turn conversation workbench
 
 Select an Agent, then create or select a conversation under **Conversation Chat**.
@@ -254,7 +303,7 @@ Equivalent: `make conversation-check`. The command reuses a demo conversation
 and extracted preference and appends two turns. After restarting, add
 `--verify-persistence` to check that conversation, messages, and memory survived
 before creating further turns. This uses existing SQLite storage and adds no
-paid service. Redis/PostgreSQL adapters and semantic Memory retrieval remain
+paid service. Persistent vector indexing and Redis/PostgreSQL adapters remain
 future work.
 
 ## Rename or delete a conversation
@@ -357,6 +406,7 @@ RAG and additional MCP business tools remain future milestones.
 | `make memory-editing-check` | Check scoped edits, conflicts, preserved identity, and updated Runtime retrieval. |
 | `make memory-search-check` | Check shared keyword ranking, scoped read-only previews, match evidence, and Runtime retrieval. |
 | `make user-memory-check` | Check same-user sharing, different-user isolation, conditional edits, and Runtime retrieval. |
+| `make semantic-memory-check` | Enable offline semantic fixtures and check cosine ranking, scopes, fresh edits, and Runtime retrieval. |
 | `make conversation-check` | Check scoped multi-turn chat, automatic memory, Runtime context, and saved snapshots. |
 | `make conversation-management-check` | Check rename, scoped message cleanup, protected conversations, and retained Agent data. |
 | `make stop` | Stop services while retaining the data volume. |

@@ -17,6 +17,9 @@ from app.crud.agent import get_agent
 from app.crud.memory import get_memory, get_memories_by_agent, delete_memory
 from app.services.memory_service import MemoryEditConflict, save_agent_memory, update_agent_memory
 from app.services.memory_retrieval import rank_agent_memories
+from app.schemas.semantic_memory import SemanticMemoryResult, SemanticSearchResponse
+from app.services.memory_embeddings import SemanticMemoryUnavailable, get_embedding_settings
+from app.services.semantic_memory import rank_semantic_rows
 
 
 router = APIRouter(
@@ -74,6 +77,32 @@ def search_agent_memories(
         results=[MemorySearchResult(memory=MemoryResponse.model_validate(match.memory),
                                    score=match.score, matched_terms=list(match.matched_terms)) for match in matches],
     )
+
+
+@router.get("/{agent_id}/semantic-search", response_model=SemanticSearchResponse)
+def search_agent_memories_semantically(
+    agent_id: Annotated[int, Path(gt=0)],
+    query: Annotated[str, Query(min_length=1, max_length=500)],
+    db: Session = Depends(get_db),
+    limit: Annotated[int, Query(ge=1, le=20)] = 5,
+    min_similarity: Annotated[float | None, Query(ge=0, le=1, allow_inf_nan=False)] = None,
+):
+    normalized = query.strip()
+    if not normalized:
+        raise HTTPException(status_code=422, detail="Enter a non-blank semantic memory query")
+    if get_agent(db, agent_id) is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    rows = get_memories_by_agent(db, agent_id)
+    try:
+        settings = get_embedding_settings()
+        minimum = settings.memory.min_similarity if min_similarity is None else min_similarity
+        matches = rank_semantic_rows(rows, normalized, settings, limit, minimum)
+    except SemanticMemoryUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    return SemanticSearchResponse(agent_id=agent_id, query=normalized, limit=limit,
+        provider=settings.provider, model=settings.model, runtime_mode=settings.memory.mode,
+        min_similarity=minimum, results=[SemanticMemoryResult(memory=MemoryResponse.model_validate(match.memory),
+                                                              similarity=match.similarity) for match in matches])
 
 
 @router.patch("/item/{memory_id}", response_model=MemoryResponse)
