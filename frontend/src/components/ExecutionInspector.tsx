@@ -17,6 +17,7 @@ import type {
   Execution,
   ExecutionInspection,
 } from "../types/executions";
+import { MemoryRetrievalPanel } from "./MemoryRetrievalPanel";
 
 type ExecutionInspectorProps = {
   selectedExecutionId?: number | null;
@@ -438,6 +439,13 @@ export function ExecutionInspector({
               </button>
             )}
           </section>
+
+          <MemoryRetrievalPanel
+            key={inspection.execution.id}
+            executionId={inspection.execution.id}
+            agentId={inspection.execution.agent_id}
+            input={inspection.execution.input}
+          />
 
           <section aria-labelledby="execution-trace-heading">
             <h3 id="execution-trace-heading">

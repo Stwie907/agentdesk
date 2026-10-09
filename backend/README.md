@@ -415,6 +415,51 @@ The client bypasses proxy environment variables and rejects redirects and HTML.
 Errors exit nonzero without replacement writes. The check does not test generated
 qwen2.5:7b replies or create Runtime executions. No extra dependency is required.
 
+## Persisted Runtime memory evidence
+
+`GET /executions/{execution_id}/memory-context?agent_id={agent_id}` returns:
+
+```json
+{"execution_id": 42, "available": false, "evidence": null}
+```
+
+An available result includes version `1`, the execution Agent and captured user
+owner, trimmed query, limit per scope, capture time, requested and used modes,
+optional embedding provider/model/threshold, optional fallback reason,
+`agent_memories`, `shared_memories`, and the exact `context` passed to Runtime.
+Each item records memory ID, scope and scope ID, original content and creation
+time, plus keyword score/matched terms or a cosine similarity. Retrieval order
+and each scope's independent result budget are preserved.
+
+The worker captures these facts from the same matches used to build the prompt,
+before running the Agent. Evidence is stored as a versioned
+`memory_retrieval_details` execution log, without a new table or migration.
+Internal model retries reuse the same evidence; a later worker attempt records
+new evidence and the API returns the newest attempt. Existing Runtime V4 trace
+filtering and snapshot version `1` remain unchanged.
+
+The API performs no retrieval, embedding requests, or writes. Deleted or edited
+source rows remain represented by their original captured content. The
+`agent_id` query is optional; an execution outside the requested scope returns
+404. Positive IDs are required (422). A malformed or mismatched latest capture
+returns 409 rather than presenting an older capture or reconstructing current
+memory. Old executions and plan replays have an explicit unavailable result.
+This scope check follows the existing local workbench access model; it is not
+an authentication mechanism.
+
+Offline acceptance reuses the existing semantic checkpoint. The initial
+`app.check_memory_evidence` run creates three fixed Mock chats; subsequent and
+`--verify-persistence` runs only read their original evidence and inspections.
+They never recreate missing records or overwrite the checkpoint.
+
+```sh
+python -m app.check_memory_evidence --base-url http://127.0.0.1:5173
+python -m app.check_memory_evidence --base-url http://127.0.0.1:5173 --verify-persistence
+```
+
+Run with `LLM_PROVIDER=mock`. The initial check also requires semantic mode on
+the running server and the fixtures created by `app.check_semantic_memory`.
+
 ## Conversation workbench APIs
 
 `POST /conversations` requires an existing positive integer Agent ID and a

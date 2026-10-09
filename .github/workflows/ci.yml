@@ -83,6 +83,8 @@ jobs:
         run: make conversation-management-check
       - name: Enable Mock semantic Runtime and check scoped vector retrieval
         run: make semantic-memory-check
+      - name: Check persisted Runtime memory evidence and keyword fallback
+        run: make memory-evidence-check
       - name: Upload evaluation reports
         if: always()
         uses: actions/upload-artifact@v7
@@ -115,6 +117,8 @@ jobs:
             up --detach --wait --wait-timeout 180 backend frontend
           docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
             python -m app.check_semantic_memory --base-url http://frontend --verify-persistence
+          docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+            python -m app.check_memory_evidence --base-url http://frontend --verify-persistence
       - name: Show container logs
         if: always()
         run: |

@@ -7,6 +7,7 @@ from app.models.execution import Execution
 from app.models.agent import Agent
 
 from app.services.memory_service import build_memory_context
+from app.services.memory_evidence import save_memory_evidence
 from app.services.agent_runner import run_agent
 from app.services.execution_trace import TraceEvent, trace_event
 from app.services.execution_failure import classify_failure
@@ -98,6 +99,7 @@ def execute_agent(
                 detail="Semantic retrieval unavailable; using keyword ranking. " + reason,
                 level="warning",
             ),
+            on_details=lambda evidence: save_memory_evidence(db, execution, evidence),
         )
 
         trace_event(

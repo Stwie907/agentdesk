@@ -405,6 +405,64 @@ MEMORY_RETRIEVAL_MODE=keyword sh deployment/start-demo.sh
 CI exercises this check with controlled protocol responses and explicit failures;
 it does not download a model or claim real-model quality acceptance.
 
+## Inspect captured Runtime memory
+
+In **Runtime V4 Execution Inspector**, load an execution and select **Show
+memory retrieval**. Agent and shared user results show the content captured for
+that execution, scope, IDs, and the scores that selected them. The panel also
+shows the requested and used modes, embedding provider/model/threshold, and an
+explicit fallback reason. Expand **Memory context sent to Runtime** to inspect
+the exact injected text. Mock similarity is identified as fixed test vectors.
+
+Evidence persists in SQLite execution logs and remains unchanged after source
+memory edits or deletion. It is a historical capture, not a fresh preview.
+Reading it makes no embedding requests and writes no records. Old executions,
+plan replays, and executions that have not reached retrieval may have no
+recorded evidence. **Refresh memory retrieval** checks again after an active
+execution finishes. A corrupt capture displays an error instead of current
+memory. Existing traces and snapshots retain their formats.
+
+Use the offline semantic fixtures already created above. Run:
+
+```sh
+MEMORY_RETRIEVAL_MODE=semantic docker compose -f docker-compose.yml -f docker-compose.mock.yml \
+  up --detach --wait --wait-timeout 180 backend frontend
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_memory_evidence --base-url http://frontend
+```
+
+Equivalent initial check: `make memory-evidence-check` after
+`make semantic-memory-check`. Expect `checks_passed: 6`,
+`chat_executions_created: 3` on the first run, and execution IDs labelled
+`semantic`, `fallback`, and `isolation`. The checks cover both captured scopes,
+keyword fallback, user isolation, positive/scoped API IDs, unchanged source
+fixtures, and the original saved inspections. Subsequent runs reuse the
+checkpoint and create zero chats. Mock replies stay fixed; this check measures
+the recording pipeline and does not measure a learned embedding model.
+
+Open the returned `semantic` execution ID in the Inspector. Expect provider
+`mock`, model `mock-fixtures-v1`, and fixture cosine `0.960000` for the concise
+answer memories. The `fallback` execution shows keyword ranking with the Mock
+unsupported-query reason.
+
+Recreate services while retaining the volume, then verify:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml down
+MEMORY_RETRIEVAL_MODE=semantic docker compose -f docker-compose.yml -f docker-compose.mock.yml \
+  up --detach --wait --wait-timeout 180 backend frontend
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_memory_evidence --base-url http://frontend --verify-persistence
+```
+
+Expect the same execution IDs, `persistence_verified: true`, and
+`chat_executions_created: 0`. The read-only verification compares each original
+execution, trace, snapshot, and retrieval capture. Keep
+`semantic-memory-acceptance.json`, `memory-evidence-acceptance.json`, their
+fixture rows, and the SQLite volume. Missing or changed checkpoints or records
+fail before replacement writes; rerunning the initial command does not repair
+an invalid existing checkpoint.
+
 ## Check services and run the smoke check
 
 ```sh
@@ -681,6 +739,9 @@ checks both owners' rows and original Runtime inspection after recreation.
 The semantic check then enables Mock Runtime semantic mode and verifies explicit
 fixture vectors before and after recreation. It covers both memory scopes and
 never downloads or requires an Ollama model in CI.
+Memory evidence acceptance then records three Mock executions and verifies
+their captured retrieval facts, scopes, fallback, traces, and snapshots after
+recreation without creating replacement chats.
 Standalone protocol checking covers 25
 checks and the MCP test suite contains 52 tests. Ticket protocol tests use
 temporary databases independently of the application's store.
