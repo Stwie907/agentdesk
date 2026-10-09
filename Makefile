@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check memory-search-check
+.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check memory-search-check memory-editing-check
 
 help:
 	@printf '%s\n' \
@@ -24,6 +24,7 @@ help:
 	@printf '%s\n' '  conversation-check  Check multi-turn chat, automatic memory, and Agent scope'
 	@printf '%s\n' '  conversation-management-check  Check rename, message deletion, and retained Agent data'
 	@printf '%s\n' '  memory-search-check  Check ranked bilingual previews, Agent scope, and Runtime retrieval'
+	@printf '%s\n' '  memory-editing-check  Check scoped edits, conflicts, and preserved memory identity'
 
 check:
 	@test -f README.md
@@ -120,6 +121,9 @@ check:
 	@test -f backend/tests/test_memory_search.py
 	@test -f frontend/src/components/MemorySearchPanel.tsx
 	@test -f frontend/tests/MemorySearchPanel.test.tsx
+	@test -f backend/app/check_memory_editing.py
+	@test -f backend/tests/test_memory_editing.py
+	@test -f frontend/tests/MemoryEditing.test.tsx
 
 test: check
 	@python -m unittest discover -s evaluation/tests -v
@@ -185,3 +189,7 @@ conversation-management-check:
 memory-search-check:
 	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
 		python -m app.check_memory_search --base-url http://frontend
+
+memory-editing-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_memory_editing --base-url http://frontend

@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { ApiError } from "../api/executions";
-import { deleteMemory, getAgentMemories, saveMemory } from "../api/memories";
+import { deleteMemory, getAgentMemories, saveMemory, updateMemory } from "../api/memories";
 import type { Memory } from "../types/memories";
 import { MemorySearchPanel } from "./MemorySearchPanel";
 
@@ -30,17 +30,18 @@ function AgentMemories({ agentId, refreshKey }: { agentId: number; refreshKey: n
   const [status, setStatus] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const [searchKey, setSearchKey] = useState(0);
+  const [editing, setEditing] = useState<{ memory: Memory; draft: string } | null>(null);
   const mounted = useRef(true);
   const writeInProgress = useRef(false);
   const previousRefreshKey = useRef(refreshKey);
 
   // Defer a chat-triggered refresh until a manual memory write has finished.
   useEffect(() => {
-    if (!busy && refreshKey !== previousRefreshKey.current) {
+    if (!busy && editing === null && refreshKey !== previousRefreshKey.current) {
       previousRefreshKey.current = refreshKey;
       setReloadKey((key) => key + 1);
     }
-  }, [busy, refreshKey]);
+  }, [busy, editing, refreshKey]);
 
   useEffect(() => {
     mounted.current = true;
@@ -78,7 +79,7 @@ function AgentMemories({ agentId, refreshKey }: { agentId: number; refreshKey: n
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = content.trim();
-    if (disabled || writeInProgress.current || !trimmed || trimmed.length > 2000) return;
+    if (disabled || editing !== null || writeInProgress.current || !trimmed || trimmed.length > 2000) return;
     writeInProgress.current = true;
     setBusy(true);
     setSearchKey((key) => key + 1);
@@ -106,7 +107,7 @@ function AgentMemories({ agentId, refreshKey }: { agentId: number; refreshKey: n
   }
 
   async function handleDelete(memoryId: number) {
-    if (disabled || writeInProgress.current || confirmId !== memoryId) return;
+    if (disabled || editing !== null || writeInProgress.current || confirmId !== memoryId) return;
     writeInProgress.current = true;
     setBusy(true);
     setSearchKey((key) => key + 1);
@@ -130,10 +131,38 @@ function AgentMemories({ agentId, refreshKey }: { agentId: number; refreshKey: n
     }
   }
 
+  async function handleEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (disabled || editing === null || writeInProgress.current) return;
+    const trimmed = editing.draft.trim();
+    if (!trimmed || trimmed.length > 2000 || trimmed === editing.memory.content) return;
+    writeInProgress.current = true;
+    setBusy(true);
+    setSearchKey((key) => key + 1);
+    setError(null);
+    setStatus(null);
+    try {
+      const saved = await updateMemory(editing.memory, trimmed);
+      if (mounted.current) {
+        setMemories((rows) => rows.map((row) => row.id === saved.id ? saved : row));
+        setEditing(null);
+        setStatus(`Memory ${saved.id} updated.`);
+      }
+    } catch (failure) {
+      if (mounted.current) {
+        setError(failure instanceof ApiError ? failure.message :
+          "Unable to update memory. Keep your draft, then cancel editing and reload to check what was saved.");
+      }
+    } finally {
+      writeInProgress.current = false;
+      if (mounted.current) setBusy(false);
+    }
+  }
+
   return (
     <div aria-busy={loading || busy}>
       <p>Memories for Agent {agentId}</p>
-      <button type="button" disabled={loading || busy}
+      <button type="button" disabled={loading || busy || editing !== null}
         onClick={() => setReloadKey((key) => key + 1)}>
         Reload memories
       </button>
@@ -145,11 +174,11 @@ function AgentMemories({ agentId, refreshKey }: { agentId: number; refreshKey: n
         <div>
           <textarea id="memory-content" rows={3} maxLength={2000}
             placeholder="Example: I prefer concise answers."
-            value={content} disabled={disabled}
+            value={content} disabled={disabled || editing !== null}
             onChange={(event) => { setContent(event.target.value); setStatus(null); }} />
         </div>
         <p>Up to 2000 characters. Exact duplicates reuse the existing memory.</p>
-        <button type="submit" disabled={disabled || !content.trim() || content.trim().length > 2000}>
+        <button type="submit" disabled={disabled || editing !== null || !content.trim() || content.trim().length > 2000}>
           Save memory
         </button>
       </form>
@@ -162,6 +191,29 @@ function AgentMemories({ agentId, refreshKey }: { agentId: number; refreshKey: n
             <li key={memory.id}>
               <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{memory.content}</p>
               <p>Memory {memory.id} · Created {memory.created_at.replace("T", " ")}</p>
+              {editing?.memory.id === memory.id ? (
+                <form aria-label={`Edit memory ${memory.id}`} onSubmit={(event) => void handleEdit(event)}>
+                  <label htmlFor={`edit-memory-${memory.id}`}>Edited memory content</label>
+                  <div>
+                    <textarea id={`edit-memory-${memory.id}`} rows={3} maxLength={2000}
+                      value={editing.draft} disabled={disabled}
+                      onChange={(event) => setEditing({ ...editing, draft: event.target.value })} />
+                  </div>
+                  <p>Up to 2000 characters. Saving keeps this memory's ID and creation time.</p>
+                  <button type="submit" disabled={disabled || !editing.draft.trim() ||
+                    editing.draft.trim().length > 2000 || editing.draft.trim() === editing.memory.content}>
+                    Save changes
+                  </button>
+                  <button type="button" disabled={disabled}
+                    onClick={() => { setEditing(null); setError(null); setStatus(null); }}>Cancel editing</button>
+                </form>
+              ) : (
+                <button type="button" disabled={disabled || editing !== null}
+                  onClick={() => {
+                    setEditing({ memory: { ...memory }, draft: memory.content });
+                    setConfirmId(null); setError(null); setStatus(null);
+                  }}>Edit memory {memory.id}</button>
+              )}
               {confirmId === memory.id ? (
                 <>
                   <p>Delete memory {memory.id}?</p>
@@ -171,7 +223,7 @@ function AgentMemories({ agentId, refreshKey }: { agentId: number; refreshKey: n
                     onClick={() => setConfirmId(null)}>Keep memory</button>
                 </>
               ) : (
-                <button type="button" disabled={disabled}
+                <button type="button" disabled={disabled || editing !== null}
                   onClick={() => setConfirmId(memory.id)}>Delete memory {memory.id}</button>
               )}
             </li>

@@ -163,7 +163,7 @@ Queries allow 1 to 500 trimmed characters; the limit defaults to 5. English case
 full-width forms, punctuation, and Chinese fragments use shared keyword rules
 with Runtime. This is deterministic matching, not semantic search or translation.
 Changing the preview limit does not change Runtime's default limit of 5.
-Search creates no execution, conversation, or memory. Saving, deleting,
+Search creates no execution, conversation, or memory. Saving, editing, deleting,
 reloading, or a chat-triggered refresh clears the preview and retains its draft.
 Switching Agents resets the query and limit. Failed searches require manual retry.
 
@@ -178,6 +178,44 @@ Equivalent: `make memory-search-check`. Expected JSON contains `status: passed`,
 memories, verifies read-only searches, removes its temporary record from the
 other Agent, and submits one separate Mock Runtime probe. That probe is the
 source of the reported execution; preview searches themselves create none.
+
+## Edit a saved memory
+
+Select `Demo Agent`. Save `User likes Python.` in **Agent Memory**, note its ID
+and creation time, then select **Edit memory** for that row. Change **Edited
+memory content** to `User likes Rust.` and select **Save changes**. The row keeps
+its ID and creation time. Search `Rust` to see the updated content. Test **Cancel
+editing** separately; it sends no request and leaves the saved record unchanged.
+
+A duplicate or an original record changed by chat/another client returns a
+conflict and keeps the edit draft. Copy any draft you need, cancel editing, and
+reload before resolving the conflict. Edits leave other saved memories, existing
+conversations/messages, and historical executions/traces/snapshots available.
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_memory_editing --base-url http://frontend
+```
+
+Equivalent: `make memory-editing-check`. Expected JSON includes `status: passed`,
+`checks_passed: 6`, `memory_id`, `created_at`, and `persistence_verified: false`.
+The check retains one edited demo record and an acceptance checkpoint in the
+same `/data` volume as SQLite. It cleans up a temporary duplicate-check record
+and creates one separate fixed-Mock execution for Runtime retrieval.
+
+After the initial check, recreate services and verify the retained record:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml down
+sh deployment/start-demo.sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_memory_editing --base-url http://frontend --verify-persistence
+```
+
+Expected: the same `memory_id` and `created_at`, six passed checks, and
+`persistence_verified: true`. Missing or changed checkpoint/record data fails
+before creating a replacement memory. Avoid editing the acceptance marker
+`AgentDeskMemoryEditRust updated.` when testing your own records.
 
 ## Check services and run the smoke check
 
@@ -447,6 +485,8 @@ before and after recreation. Conversation management acceptance verifies rename,
 scoped message deletion, retained Agent data, and restart persistence.
 Memory retrieval acceptance checks shared ranking, read-only scoped previews,
 and retained retrieval demo memories before and after recreation.
+Memory editing acceptance checks scoped conditional updates, conflicts, updated
+retrieval, and exact retained identity against its checkpoint after recreation.
 Standalone protocol checking covers 25
 checks and the MCP test suite contains 52 tests. Ticket protocol tests use
 temporary databases independently of the application's store.

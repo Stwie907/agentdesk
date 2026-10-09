@@ -44,6 +44,27 @@ export async function deleteMemory(memoryId: number, agentId: number): Promise<v
   await requestJson(`/memories/item/${memoryId}?agent_id=${agentId}`, { method: "DELETE" });
 }
 
+export async function updateMemory(memory: Memory, content: string): Promise<Memory> {
+  const trimmed = content.trim();
+  try {
+    const value = await requestJson<unknown>(`/memories/item/${memory.id}?agent_id=${memory.agent_id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: trimmed, expected_content: memory.content }),
+    });
+    const saved = validateMemory(value, memory.agent_id);
+    if (saved.id !== memory.id || saved.created_at !== memory.created_at || saved.content !== trimmed) {
+      throw new ApiError(502, "The server returned invalid memory edit data.");
+    }
+    return saved;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 422) {
+      throw new ApiError(422, "Use memory content of 1 to 2000 characters.");
+    }
+    throw error;
+  }
+}
+
 export async function searchMemories(agentId: number, query: string, limit = 5): Promise<MemorySearchResponse> {
   const normalized = query.trim();
   const params = new URLSearchParams({ query: normalized, limit: String(limit) });

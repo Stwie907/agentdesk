@@ -4,6 +4,41 @@ from app.crud.memory import get_memories_by_agent
 from app.schemas.memory import MemoryCreate
 from app.crud.memory import create_memory
 from app.services.memory_retrieval import rank_agent_memories
+from app.models.memory import Memory
+
+
+class MemoryEditConflict(ValueError):
+    """An edit conflicts with the current record or another saved memory."""
+
+
+def update_agent_memory(db: Session, memory: Memory, content: str, expected_content: str):
+    """Edit one row with a conditional write, retaining its identity and time."""
+    normalized = content.strip()
+    if memory.content != expected_content:
+        raise MemoryEditConflict("Memory changed since it was loaded. Reload memories before editing again.")
+    for other in get_memories_by_agent(db, memory.agent_id):
+        if other.id == memory.id:
+            continue
+        if other.content.strip() == normalized:
+            raise MemoryEditConflict("An identical memory already exists for this Agent. Use different content.")
+        if normalized.startswith("User's name is ") and other.content.strip().startswith("User's name is "):
+            raise MemoryEditConflict("A name memory already exists for this Agent. Edit that memory instead.")
+    try:
+        # Checking the original content in SQL also protects the interval after
+        # the read, including automatic name replacement by a chat request.
+        changed = db.query(Memory).filter(
+            Memory.id == memory.id,
+            Memory.agent_id == memory.agent_id,
+            Memory.content == expected_content,
+        ).update({Memory.content: normalized}, synchronize_session=False)
+        if changed != 1:
+            raise MemoryEditConflict("Memory changed since it was loaded. Reload memories before editing again.")
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(memory)
+    return memory
 
 
 def get_agent_memories(
