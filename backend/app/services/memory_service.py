@@ -86,13 +86,18 @@ def build_memory_context(
         limit,
     )
 
-    if not memories:
-        return ""
-
-    return "\n".join(
+    agent_context = "\n".join(
         memory.content
         for memory in memories
     )
+    from app.services.user_memory_service import user_memory_context
+    shared_context = user_memory_context(db, agent_id, query, limit)
+    if not shared_context:
+        return agent_context
+    context = "Shared user memory:\n" + shared_context
+    if agent_context:
+        context += "\nAgent memory:\n" + agent_context
+    return context
 
 
 def save_agent_memory(

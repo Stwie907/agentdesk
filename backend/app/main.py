@@ -11,6 +11,7 @@ from app.api import (
     agents,
     executions,
     memories,
+    user_memories,
     execution_logs,
     conversations,
     messages,
@@ -55,6 +56,8 @@ app.include_router(
 app.include_router(
     memories.router
 )
+
+app.include_router(user_memories.router)
 
 app.include_router(
     execution_logs.router

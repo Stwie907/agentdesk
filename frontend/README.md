@@ -115,6 +115,31 @@ Errors preserve the draft and require an explicit **Search memories** retry.
 Returned scope, query, limits, ordering, scores, and match evidence are validated
 before display. Content renders as plain text.
 
+## Shared User Memory
+
+Select an Agent, then **Show shared memories**. The panel starts collapsed and
+fetches only after it is opened. Its owner label shows the resolved username/User
+ID. Save a shared preference, then switch to another Agent of the same user:
+the same record ID is visible. Another owner's Agents load a separate list.
+Switching Agents resets drafts, edits, confirmations, and search state; late
+responses from the previous selection are ignored.
+
+Shared content permits 1–2000 trimmed characters. Exact duplicates reuse the row.
+Editing sends original `expected_content` and both Agent/User scopes; saves keep
+ID/time. **Cancel shared editing** makes no request and retains an add draft.
+Blank, unchanged, or overlong edits are disabled. Writes and reloads wait while
+saving. Failures preserve the draft; copy it before canceling and reloading.
+
+**Delete shared memory** explains that deletion affects all Agents of the owner
+and requires confirmation. **Shared memory search query** allows 1–500 characters
+and returns up to five keyword-ranked matches. Searches run only on submission;
+query changes, edits, and reloads invalidate stale responses. Response validation
+rejects mismatched owners, identities, timestamps, queries, duplicates, and scores.
+
+The existing Agent Memory panel and automatic extraction remain independent.
+Save facts in this panel explicitly to share them. Vite and Nginx both proxy
+`/user-memories` to FastAPI, including GET, POST, PATCH, and DELETE.
+
 ## Tests and production build
 
 ```sh

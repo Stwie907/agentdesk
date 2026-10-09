@@ -4,6 +4,7 @@ import { ExecutionHistory } from "../components/ExecutionHistory";
 import { ConversationPanel } from "../components/ConversationPanel";
 import { ExecutionInspector } from "../components/ExecutionInspector";
 import { MemoryPanel } from "../components/MemoryPanel";
+import { UserMemoryPanel } from "../components/UserMemoryPanel";
 import { TaskSubmission } from "../components/TaskSubmission";
 import type { Execution } from "../types/executions";
 
@@ -39,6 +40,7 @@ export function HomePage() {
       }} />
 
       <MemoryPanel agentId={selectedAgentId} refreshKey={memoryRefreshKey} />
+      <UserMemoryPanel agentId={selectedAgentId} />
 
       <ExecutionHistory
         onSelectExecution={setSelectedExecutionId}

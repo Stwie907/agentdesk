@@ -128,8 +128,8 @@ marked Mock execution. After stopping and restarting the services, repeat with
 Memory uses the application's existing SQLite volume. Mock replies stay fixed
 even when relevant memory is loaded; the check verifies retrieval in execution
 logs and the saved snapshot. Ollama receives relevant context through the existing
-runtime. Redis/PostgreSQL adapters, semantic retrieval, and a user-level profile
-store remain future Memory work.
+runtime. Shared user memory is available below; Redis/PostgreSQL adapters and
+semantic retrieval remain future Memory work.
 
 ## Preview relevant memories
 
@@ -192,6 +192,43 @@ transient record, and creates one separate Mock Runtime probe. After recreation,
 repeat with `--verify-persistence`: the checkpoint and the exact original ID,
 content, and creation time must exist before any test write. No migration,
 dependency, or paid API is added.
+
+## Shared user memory
+
+Select **Show shared memories** under **Shared User Memory**. This panel resolves
+the selected Agent's Project owner, then lists that user's shared records. Save
+`I prefer concise SQLite examples.`, switch from `Demo Agent` to `MCP Order Agent`,
+and see the same ID and content. Agents in different Projects also share memories
+when their Projects have the same owner. Another user's Agents have a separate list.
+
+Shared records support add, conditional edit, confirmed delete, reload, and a
+keyword retrieval preview. Content allows 1–2000 trimmed characters. Exact
+duplicates retain the original ID/time; conflicting edits return HTTP 409 and
+preserve the draft. Deleting one shared row affects every Agent of its owner.
+Shared memory is saved explicitly: automatic conversation extraction still
+belongs only to the selected Agent. Ownership checks use the existing data model;
+they do not add authentication to this local workbench.
+
+Runtime retrieves up to five relevant shared records and five Agent records with
+the same deterministic bilingual ranking. It labels the two sources separately
+when shared context is present. Ollama receives that context; Mock replies remain
+fixed. The new SQLite table is created by the existing demo initializer/startup,
+and an additive Alembic migration supports versioned databases without rewriting
+existing Agent memories, conversations, messages, executions, traces, or snapshots.
+
+```sh
+make user-memory-check
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_user_memory --base-url http://frontend --verify-persistence
+```
+
+Run the first command before recreation and the second after recreation. Eight
+scenarios check sharing, isolation, duplicate reuse, edit identity/conflicts,
+validation, scoped deletion, protected Agent data, and Runtime retrieval. The
+check retains two shared markers and a separate synthetic User/Project/Agent for
+isolation, with an immutable checkpoint beside SQLite. Restart validation checks
+both records and the original execution/trace/snapshot before any write. See the
+[Compose guide](docs/docker-compose-demo.md) for the full recreation sequence.
 
 ## Multi-turn conversation workbench
 
@@ -319,6 +356,7 @@ RAG and additional MCP business tools remain future milestones.
 | `make memory-check` | Check Agent memory storage, isolation, validation, deletion, and Runtime retrieval. |
 | `make memory-editing-check` | Check scoped edits, conflicts, preserved identity, and updated Runtime retrieval. |
 | `make memory-search-check` | Check shared keyword ranking, scoped read-only previews, match evidence, and Runtime retrieval. |
+| `make user-memory-check` | Check same-user sharing, different-user isolation, conditional edits, and Runtime retrieval. |
 | `make conversation-check` | Check scoped multi-turn chat, automatic memory, Runtime context, and saved snapshots. |
 | `make conversation-management-check` | Check rename, scoped message cleanup, protected conversations, and retained Agent data. |
 | `make stop` | Stop services while retaining the data volume. |

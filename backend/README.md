@@ -214,6 +214,53 @@ The existing application data volume holds memories; no migration or new
 dependency is required. Redis/PostgreSQL adapters and semantic retrieval remain
 future work.
 
+## Shared user memory
+
+The new `user_memories` table belongs to `User.id`. An Agent resolves its owner
+through `Agent.project_id -> Project.owner_id`; all that user's Agents share these
+records, including Agents in separate Projects. Automatic conversation extraction
+continues to save Agent-specific memories.
+
+| Method | Endpoint | Scope and payload |
+| --- | --- | --- |
+| GET | `/user-memories/for-agent/{agent_id}` | Returns `agent_id`, `user_id`, `username`, and `memories`. |
+| POST | `/user-memories/for-agent/{agent_id}` | Requires `{ "user_id": 1, "content": "I prefer SQLite." }`; owner must match the Agent. |
+| GET | `/user-memories/for-agent/{agent_id}/search?query=SQLite&limit=5` | Query 1–500 characters; limit 1–20; owner-scoped matches. |
+| PATCH | `/user-memories/item/{memory_id}?agent_id=1&user_id=1` | Requires `content` and original `expected_content`; retains ID, owner, and creation time. |
+| DELETE | `/user-memories/item/{memory_id}?agent_id=1&user_id=1` | Deletes one shared row for all Agents of its owner. |
+
+Content is a strict string of 1–2000 trimmed characters; extra body fields are
+rejected. Invalid scope/content returns 422; unknown Agent/memory or mismatched
+owner returns 404. Both owner and Agent are required for writes so a stale UI
+cannot silently write to a reassigned Project's new owner. This is data scoping;
+it does not add authentication to the existing local workbench.
+
+Uniqueness on `(user_id, content_key)` protects parallel duplicate saves. Exact
+duplicates retain ID/time. Canonical `User's name is ...` records allow one shared
+name per owner: edit it explicitly. Duplicate/name collisions and stale edits
+return 409. Conditional SQL protects changes after the initial read; failures roll back.
+
+Search and Runtime share `memory_retrieval.rank_memory_rows`. Runtime includes
+up to five matching shared rows and five Agent rows, with separate source labels
+when shared context exists. Without shared matches, the old Agent context format
+is preserved. Scores remain keyword counts, not semantic similarity.
+
+Demo initialization/startup adds the table using `Base.metadata.create_all`.
+For an Alembic-managed database, `alembic upgrade head` applies revision
+`c84f31a920de` after `d09aa76d1cdb`. It preserves all existing application data
+and adopts a correctly shaped runtime-created table while repairing missing
+indexes. Schema drift is rejected. The initial Alembic migration must not be run
+blindly on an unversioned demo database whose tables already exist. Downgrading
+this revision removes only the shared-memory table and its records.
+
+Run `python -m app.check_user_memory --base-url http://frontend` in the Mock
+backend. Eight scenarios retain two markers and one synthetic isolation
+User/Project/Agent. A checkpoint beside SQLite records both full rows and the
+original execution/trace/snapshot. After recreation, add `--verify-persistence`;
+missing or changed fixtures/checkpoints fail before replacement writes. Repeated
+checks reuse the same isolation fixture and keep the original checkpoint.
+`--state-file` optionally selects another checkpoint path.
+
 ### Edit a memory
 
 `PATCH /memories/item/{memory_id}?agent_id=ID` requires a positive Agent scope
