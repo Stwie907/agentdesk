@@ -111,7 +111,8 @@ Manual writes require an existing Agent and trimmed content of 1 to 2000
 characters. Exact duplicates reuse the same record. Canonical name memories use
 the existing replacement policy. Lists and workbench deletes are Agent-scoped;
 this scope check does not add authentication or multi-user authorization.
-Existing conversation extraction and keyword retrieval remain unchanged.
+Existing conversation extraction remains unchanged. Runtime and the retrieval
+preview below share the same keyword ranking.
 
 ```sh
 docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
@@ -129,6 +130,40 @@ even when relevant memory is loaded; the check verifies retrieval in execution
 logs and the saved snapshot. Ollama receives relevant context through the existing
 runtime. Redis/PostgreSQL adapters, semantic retrieval, and a user-level profile
 store remain future Memory work.
+
+## Preview relevant memories
+
+Under **Agent Memory**, enter `Python` or `机器学习` in **Memory search query**
+and select **Search memories**. Matching records show their Memory ID, content,
+keyword-match count, and matched text. **Result limit** defaults to 5 and affects
+only the preview; Runtime continues to use its existing default limit of 5.
+
+The Agent-scoped `GET /memories/{agent_id}/search` API accepts a trimmed query of
+1 to 500 characters and a limit of 1 to 20. It uses the same ranking as Runtime:
+distinct overlapping terms count once, with newer IDs first when scores tie.
+Case and full-width forms are normalized. English technical tokens and adjacent
+Chinese character pairs support deterministic keyword matching, without semantic
+search or translation. Blank queries are rejected; unrelated queries return an
+empty result list.
+
+Search only reads saved memories: it creates no execution, conversation, or
+memory. Changes to the query, limit, or saved memories clear stale results.
+Saving, deleting, reloading, or a chat-triggered memory refresh preserves the
+search draft; switching Agents resets it. Failed searches keep the draft and
+require an explicit retry.
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_memory_search --base-url http://frontend
+```
+
+Equivalent: `make memory-search-check`. Six scenarios verify ranking and match
+evidence, limits and normalization, Chinese/no-match behavior, Agent isolation,
+read-only validation, and a separate Runtime retrieval probe. The acceptance
+command creates three stable demo memories, removes its temporary scoped record,
+and creates one marked Mock execution for that explicit Runtime probe. After
+recreating services, add `--verify-persistence`; all three memories must already
+exist before any test write. No database migration or dependency is added.
 
 ## Multi-turn conversation workbench
 
@@ -254,6 +289,7 @@ RAG and additional MCP business tools remain future milestones.
 | `make mcp-tracking-check` | Check shipment tasks, permissions, traces, errors, snapshots, and replay through the running Mock API. |
 | `make mcp-ticket-check` | Check ticket creation, duplicate submission, write permissions, traces, snapshots, and replay. |
 | `make memory-check` | Check Agent memory storage, isolation, validation, deletion, and Runtime retrieval. |
+| `make memory-search-check` | Check shared keyword ranking, scoped read-only previews, match evidence, and Runtime retrieval. |
 | `make conversation-check` | Check scoped multi-turn chat, automatic memory, Runtime context, and saved snapshots. |
 | `make conversation-management-check` | Check rename, scoped message cleanup, protected conversations, and retained Agent data. |
 | `make stop` | Stop services while retaining the data volume. |

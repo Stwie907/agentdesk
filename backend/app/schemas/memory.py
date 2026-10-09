@@ -27,3 +27,16 @@ class MemoryResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+
+class MemorySearchResult(BaseModel):
+    memory: MemoryResponse
+    score: int
+    matched_terms: list[str]
+
+
+class MemorySearchResponse(BaseModel):
+    agent_id: int
+    query: str
+    limit: int
+    results: list[MemorySearchResult]
+

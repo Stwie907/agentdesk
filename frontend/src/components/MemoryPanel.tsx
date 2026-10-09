@@ -3,6 +3,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { ApiError } from "../api/executions";
 import { deleteMemory, getAgentMemories, saveMemory } from "../api/memories";
 import type { Memory } from "../types/memories";
+import { MemorySearchPanel } from "./MemorySearchPanel";
 
 export function MemoryPanel({ agentId, refreshKey = 0 }: { agentId: number | null; refreshKey?: number }) {
   return (
@@ -28,6 +29,7 @@ function AgentMemories({ agentId, refreshKey }: { agentId: number; refreshKey: n
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [searchKey, setSearchKey] = useState(0);
   const mounted = useRef(true);
   const writeInProgress = useRef(false);
   const previousRefreshKey = useRef(refreshKey);
@@ -79,6 +81,7 @@ function AgentMemories({ agentId, refreshKey }: { agentId: number; refreshKey: n
     if (disabled || writeInProgress.current || !trimmed || trimmed.length > 2000) return;
     writeInProgress.current = true;
     setBusy(true);
+    setSearchKey((key) => key + 1);
     setError(null);
     setStatus(null);
     setConfirmId(null);
@@ -106,6 +109,7 @@ function AgentMemories({ agentId, refreshKey }: { agentId: number; refreshKey: n
     if (disabled || writeInProgress.current || confirmId !== memoryId) return;
     writeInProgress.current = true;
     setBusy(true);
+    setSearchKey((key) => key + 1);
     setError(null);
     setStatus(null);
     try {
@@ -149,6 +153,8 @@ function AgentMemories({ agentId, refreshKey }: { agentId: number; refreshKey: n
           Save memory
         </button>
       </form>
+      <MemorySearchPanel agentId={agentId} disabled={disabled}
+        revision={JSON.stringify([reloadKey, refreshKey, searchKey])} />
       {loaded && memories.length === 0 && <p>No saved memories for this Agent.</p>}
       {loaded && memories.length > 0 && (
         <ul aria-label="Saved memories">

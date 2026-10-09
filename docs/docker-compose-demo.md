@@ -150,6 +150,35 @@ demo memory and removes its temporary record. Equivalent: `make memory-check`.
 The Mock reply remains fixed; successful retrieval is verified in execution
 logs. This check does not evaluate model recall.
 
+## Preview memory retrieval
+
+Select `Demo Agent`. Save `User likes Python.` and `我喜欢机器学习。` under
+**Agent Memory**. Enter `Python` in **Memory search query**, select **Search
+memories**, and inspect the Memory ID, content, keyword-match count, and matched
+text. Repeat with `机器学习`. Change **Result limit** to 1 and search again to
+see at most one result. An unrelated query shows **No relevant memories found**
+while the full saved-memory list remains available.
+
+Queries allow 1 to 500 trimmed characters; the limit defaults to 5. English case,
+full-width forms, punctuation, and Chinese fragments use shared keyword rules
+with Runtime. This is deterministic matching, not semantic search or translation.
+Changing the preview limit does not change Runtime's default limit of 5.
+Search creates no execution, conversation, or memory. Saving, deleting,
+reloading, or a chat-triggered refresh clears the preview and retains its draft.
+Switching Agents resets the query and limit. Failed searches require manual retry.
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_memory_search --base-url http://frontend
+```
+
+Equivalent: `make memory-search-check`. Expected JSON contains `status: passed`,
+`checks_passed: 6`, three `memory_ids`, an `execution_id`, and
+`persistence_verified: false`. The acceptance command prepares three stable demo
+memories, verifies read-only searches, removes its temporary record from the
+other Agent, and submits one separate Mock Runtime probe. That probe is the
+source of the reported execution; preview searches themselves create none.
+
 ## Check services and run the smoke check
 
 ```sh
@@ -260,6 +289,19 @@ docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend 
 The demo memory must already exist before the check writes anything. Its ID,
 content, and creation time must match the repeated save. Agent memories share
 `/data/agentdesk.db`; keep the same Compose project and volume across restarts.
+
+After the initial memory retrieval check, verify its records after the same
+restart:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_memory_search --base-url http://frontend --verify-persistence
+```
+
+Expected JSON includes `status: passed`, `checks_passed: 6`, and
+`persistence_verified: true`. All three original retrieval demo memories must
+exist before any test write. A lost record fails instead of being recreated to
+pass. Duplicate saves retain the original IDs, contents, and creation times.
 
 The persistence option checks that earlier Calculator, Mock chat, and linked
 replay records and their snapshots are present before creating new test tasks.
@@ -403,6 +445,8 @@ ticket persistence after recreation. Memory acceptance also runs before and
 after recreation. Conversation history and automatic memory acceptance also run
 before and after recreation. Conversation management acceptance verifies rename,
 scoped message deletion, retained Agent data, and restart persistence.
+Memory retrieval acceptance checks shared ranking, read-only scoped previews,
+and retained retrieval demo memories before and after recreation.
 Standalone protocol checking covers 25
 checks and the MCP test suite contains 52 tests. Ticket protocol tests use
 temporary databases independently of the application's store.
