@@ -337,6 +337,40 @@ Keep both acceptance checkpoint files and the SQLite volume. Missing or changed
 evidence fails verification without creating replacement chats. See the
 [demo guide](docs/docker-compose-demo.md) for the complete restart sequence.
 
+## SQLite memory vector cache
+
+Semantic Runtime caches scoped document embeddings in SQLite. A warm retrieval
+embeds its query again and reuses unchanged document vectors. Agent memories
+stay Agent-scoped; shared memory vectors can be reused by Agents of one owner.
+Read-only previews can consume the cache but never populate or repair it.
+
+The cache verifies source content and creation time, provider, model, endpoint,
+vector checksum and dimensions. Ollama cache reuse also checks the configured
+model digest from its local model catalog. Changed or corrupt vectors are
+recomputed. Source edits and deletion clear all matching cache versions in the
+same transaction. Model identity changes during cached retrieval produce an
+explicit semantic error or the existing Runtime keyword fallback.
+
+Set `MEMORY_VECTOR_CACHE_ENABLED=false` to bypass caching. Keyword mode remains
+the default, and the chat model stays `qwen2.5:7b`. If cache storage or model
+identity is unavailable, retrieval computes document vectors normally.
+
+After the existing Mock semantic acceptance, run `make memory-vector-cache-check`.
+The check verifies both scopes, warm hits, source invalidation, isolation,
+read-only previews, and original persisted inspections. It uses fixed Mock
+vectors and measures the cache pipeline, not a learned model's quality.
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_memory_vector_cache --base-url http://frontend --verify-persistence
+```
+
+Restart verification checks the original cache rows and executions before
+creating one proof chat. Expect positive `cache_hits`, zero `cache_misses`, and
+zero `cache_written`. Missing or changed checkpoints or original cache entries
+fail before the proof chat can regenerate them. See the
+[demo guide](docs/docker-compose-demo.md) for the complete sequence.
+
 ## Multi-turn conversation workbench
 
 Select an Agent, then create or select a conversation under **Conversation Chat**.

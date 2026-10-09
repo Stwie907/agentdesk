@@ -83,7 +83,7 @@ def search_shared_semantically(
     try:
         settings = get_embedding_settings()
         minimum = settings.memory.min_similarity if min_similarity is None else min_similarity
-        matches = rank_semantic_rows(rows, normalized, settings, limit, minimum)
+        matches = rank_semantic_rows(rows, normalized, settings, limit, minimum, db=db)
     except SemanticMemoryUnavailable as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     return SemanticUserSearchResponse(agent_id=agent_id, user_id=owner.id, query=normalized, limit=limit,

@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.models.memory import Memory
 from app.schemas.memory import MemoryCreate
+from app.services.memory_vector_cache import invalidate_memory_vectors
 
 
 def create_memory(
@@ -55,7 +56,12 @@ def delete_memory(
     if not memory:
         return None
 
-    db.delete(memory)
-    db.commit()
+    try:
+        invalidate_memory_vectors(db, "agent", memory.agent_id, memory.id)
+        db.delete(memory)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     return memory

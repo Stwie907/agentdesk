@@ -17,6 +17,7 @@ from app.models.execution_snapshot import ExecutionSnapshot
 from app.models.memory import Memory
 from app.models.message import Message
 from app.models.user_memory import UserMemory
+from app.models.memory_vector_cache import MemoryVectorCache
 from app.seed_demo import seed_demo
 
 
@@ -34,6 +35,7 @@ EXPECTED_HEAD_TABLES = {
     "messages",
     "memories",
     "user_memories",
+    "memory_vector_cache",
     "execution_snapshots",
 }
 
@@ -178,6 +180,9 @@ def assert_database_at_head(
     database_path: Path,
 ) -> None:
     with sqlite3.connect(database_path) as connection:
+        assert get_table_columns(connection, "memory_vector_cache") == {
+            "id", "source_type", "owner_id", "memory_id", "namespace", "model_digest", "content_hash",
+            "source_created_at", "dimensions", "vector_json", "vector_hash", "created_at"}
         tables = get_tables(connection)
 
         current_revision = connection.execute(
@@ -365,7 +370,7 @@ def previous_database(path):
 
 
 def original_rows(path):
-    tables = sorted(EXPECTED_HEAD_TABLES - {"user_memories", "alembic_version"})
+    tables = sorted(EXPECTED_HEAD_TABLES - {"user_memories", "memory_vector_cache", "alembic_version"})
     with sqlite3.connect(path) as connection:
         return {table: connection.execute(f"SELECT * FROM {table} ORDER BY id").fetchall() for table in tables}
 
@@ -435,3 +440,50 @@ def test_migration_rejects_schema_drift_without_changing_existing_data(tmp_path,
     assert original_rows(path) == before
     with sqlite3.connect(path) as connection:
         assert connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "d09aa76d1cdb"
+
+
+def test_vector_cache_migration_adopts_rows_and_downgrades_only_disposable_vectors(tmp_path):
+    from app.services.memory_vector_cache import content_hash
+    path = tmp_path / "vector-cache-adoption.db"
+    url, ids = previous_database(path)
+    assert_alembic_succeeded(run_alembic("upgrade", "c84f31a920de", database_url=url), "upgrade previous head")
+    engine = create_engine(url)
+    MemoryVectorCache.__table__.create(engine)
+    with Session(engine) as db:
+        row = db.query(Memory).first()
+        db.add(UserMemory(user_id=ids["user_id"], content="Keep shared data", content_key="keep-key"))
+        db.add(MemoryVectorCache(source_type="agent", owner_id=row.agent_id, memory_id=row.id,
+            namespace="a" * 64, model_digest="b" * 64, content_hash=content_hash(row.content),
+            source_created_at=row.created_at, dimensions=2, vector_json="[1,0]", vector_hash=content_hash("[1,0]")))
+        db.commit()
+    engine.dispose()
+    with sqlite3.connect(path) as db:
+        before = {table: db.execute(f"SELECT * FROM {table} ORDER BY id").fetchall()
+                  for table in EXPECTED_HEAD_TABLES - {"alembic_version", "memory_vector_cache"}}
+        vectors = db.execute("SELECT * FROM memory_vector_cache").fetchall()
+    assert_alembic_succeeded(run_alembic("upgrade", "head", database_url=url), "adopt vector cache")
+    assert_database_at_head(path)
+    with sqlite3.connect(path) as db:
+        assert db.execute("SELECT * FROM memory_vector_cache").fetchall() == vectors
+    assert_alembic_succeeded(run_alembic("downgrade", "c84f31a920de", database_url=url), "drop only vector cache")
+    with sqlite3.connect(path) as db:
+        assert "memory_vector_cache" not in get_tables(db)
+        assert {table: db.execute(f"SELECT * FROM {table} ORDER BY id").fetchall() for table in before} == before
+    assert_alembic_succeeded(run_alembic("upgrade", "head", database_url=url), "recreate vector cache")
+    assert_database_at_head(path)
+
+
+def test_vector_cache_migration_rejects_schema_drift_without_rewriting_sources(tmp_path):
+    path = tmp_path / "vector-cache-drift.db"
+    url, _ = previous_database(path)
+    assert_alembic_succeeded(run_alembic("upgrade", "c84f31a920de", database_url=url), "upgrade previous head")
+    before = original_rows(path)
+    with sqlite3.connect(path) as db:
+        db.execute("CREATE TABLE memory_vector_cache (id INTEGER PRIMARY KEY, vector_json TEXT)")
+        db.execute("INSERT INTO memory_vector_cache VALUES (1, '[1,0]')")
+    result = run_alembic("upgrade", "head", database_url=url)
+    assert result.returncode != 0 and "Existing memory_vector_cache" in result.stderr
+    assert original_rows(path) == before
+    with sqlite3.connect(path) as db:
+        assert db.execute("SELECT * FROM memory_vector_cache").fetchall() == [(1, "[1,0]")]
+        assert db.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "c84f31a920de"

@@ -463,6 +463,55 @@ fixture rows, and the SQLite volume. Missing or changed checkpoints or records
 fail before replacement writes; rerunning the initial command does not repair
 an invalid existing checkpoint.
 
+## Verify SQLite vector caching
+
+The semantic Runtime caches unchanged document vectors in SQLite and embeds
+only the current query on a fully warm retrieval. Keyword mode is unchanged.
+Agent vectors remain Agent-scoped, and shared vectors remain scoped to their
+user owner. Preview searches read existing cache entries without writing any
+cache or source records. Ollama model digest checks prevent reuse after a model
+update, including changes behind the same model tag.
+
+After rebuilding the Mock backend and retaining the existing semantic fixtures:
+
+```sh
+MEMORY_RETRIEVAL_MODE=semantic docker compose -f docker-compose.yml -f docker-compose.mock.yml \
+  up --detach --wait --wait-timeout 180 backend frontend
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_memory_vector_cache --base-url http://frontend
+```
+
+Expect `checks_passed: 7`, positive `cache_hits`, `cache_misses: 0`, and
+`cache_written: 0` for the warm proof execution. On the first run,
+`chat_executions_created: 6`. The check also exercises scoped edit/delete
+invalidation using unique temporary records, then removes those records. Saved
+fixture memories and their original inspections remain unchanged. Cache
+metrics are available in the warm execution's `/logs` endpoint.
+
+Recreate services while keeping the volume:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml down
+MEMORY_RETRIEVAL_MODE=semantic docker compose -f docker-compose.yml -f docker-compose.mock.yml \
+  up --detach --wait --wait-timeout 180 backend frontend
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_memory_vector_cache --base-url http://frontend --verify-persistence
+```
+
+Expect `persistence_verified: true`, unchanged `original_execution_ids`, positive
+warm hits, zero misses and writes, and `chat_executions_created: 1`. This check
+first verifies the exact original vectors, source fixtures, execution records,
+traces, snapshots, and memory captures. Only then does one new fixed Mock chat
+prove that saved document vectors are reused. Missing or changed data fails
+before any replacement chat or vector can be created. Keep
+`memory-vector-cache-acceptance.json`, the semantic checkpoint, and the volume.
+The existing `check_memory_evidence --verify-persistence` remains read-only.
+
+Caching defaults to enabled for semantic retrieval. To bypass it, set
+`MEMORY_VECTOR_CACHE_ENABLED=false` in the root `.env` and recreate the backend.
+This bypass retains stored cache data. Embeddings, ranking, and the local
+`qwen2.5:7b` chat model remain available with the original configuration.
+
 ## Check services and run the smoke check
 
 ```sh
@@ -681,6 +730,7 @@ native backend settings. The script does not require a `.env` file.
 | Setting | Container behavior |
 | --- | --- |
 | `LLM_PROVIDER` | Base Compose defaults to `ollama`; the Mock override forces `mock`. |
+| `MEMORY_VECTOR_CACHE_ENABLED` | `true` by default; `false` bypasses document vector caching. |
 | `COMPOSE_OLLAMA_BASE_URL` | Container Ollama URL; defaults to the host Docker gateway. |
 | `OLLAMA_PLANNER_MODEL` | Defaults to `qwen2.5:7b`. |
 | `OLLAMA_TIMEOUT_SECONDS` | Defaults to `120` seconds per model request. |
@@ -742,6 +792,10 @@ never downloads or requires an Ollama model in CI.
 Memory evidence acceptance then records three Mock executions and verifies
 their captured retrieval facts, scopes, fallback, traces, and snapshots after
 recreation without creating replacement chats.
+Vector cache acceptance verifies warm reuse, scoped source invalidation, and
+read-only previews, then validates its original saved vectors before creating
+one proof chat after recreation. It uses fixed Mock fixtures without a model
+download or paid API.
 Standalone protocol checking covers 25
 checks and the MCP test suite contains 52 tests. Ticket protocol tests use
 temporary databases independently of the application's store.

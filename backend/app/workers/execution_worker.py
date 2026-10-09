@@ -100,6 +100,9 @@ def execute_agent(
                 level="warning",
             ),
             on_details=lambda evidence: save_memory_evidence(db, execution, evidence),
+            populate_cache=True,
+            on_cache=lambda stats: trace_event(db, execution.id, TraceEvent.MEMORY_EMBEDDING_CACHE,
+                                               detail=json.dumps(stats, allow_nan=False)),
         )
 
         trace_event(
