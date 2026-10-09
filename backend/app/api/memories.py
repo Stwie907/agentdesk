@@ -8,11 +8,14 @@ from app.database import get_db
 from app.schemas.memory import (
     MemoryCreateRequest,
     MemoryResponse,
+    MemorySearchResponse,
+    MemorySearchResult,
 )
 
 from app.crud.agent import get_agent
 from app.crud.memory import get_memory, get_memories_by_agent, delete_memory
 from app.services.memory_service import save_agent_memory
+from app.services.memory_retrieval import rank_agent_memories
 
 
 router = APIRouter(
@@ -49,6 +52,26 @@ def list_agent_memories(
     return get_memories_by_agent(
         db,
         agent_id,
+    )
+
+
+@router.get("/{agent_id}/search", response_model=MemorySearchResponse)
+def search_agent_memories(
+    agent_id: Annotated[int, Path(gt=0)],
+    query: Annotated[str, Query(min_length=1, max_length=500)],
+    db: Session = Depends(get_db),
+    limit: Annotated[int, Query(ge=1, le=20)] = 5,
+):
+    normalized_query = query.strip()
+    if not normalized_query:
+        raise HTTPException(status_code=422, detail="Enter a non-blank memory query")
+    if get_agent(db, agent_id) is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    matches = rank_agent_memories(db, agent_id, normalized_query, limit)
+    return MemorySearchResponse(
+        agent_id=agent_id, query=normalized_query, limit=limit,
+        results=[MemorySearchResult(memory=MemoryResponse.model_validate(match.memory),
+                                   score=match.score, matched_terms=list(match.matched_terms)) for match in matches],
     )
 
 

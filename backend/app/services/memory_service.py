@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.crud.memory import get_memories_by_agent
 from app.schemas.memory import MemoryCreate
 from app.crud.memory import create_memory
+from app.services.memory_retrieval import rank_agent_memories
 
 
 def get_agent_memories(
@@ -23,118 +24,13 @@ def retrieve_relevant_memories(
     query: str,
     limit: int = 5,
 ):
-    """
-    Retrieve memories relevant to the current user query.
-
-    This lightweight retrieval implementation uses keyword
-    overlap while ignoring common stop words.
-
-    It is deterministic and does not require embeddings.
-    """
-
-    memories = get_agent_memories(
-        db,
-        agent_id,
-    )
-
-    if not memories:
+    """Use the same deterministic ranking as the workbench preview."""
+    if limit <= 0:
         return []
-
-    normalized_query = query.lower().strip()
-
-    if not normalized_query:
-        return memories[:limit]
-
-    stop_words = {
-        "a",
-        "an",
-        "the",
-        "is",
-        "are",
-        "am",
-        "was",
-        "were",
-        "be",
-        "been",
-        "being",
-        "do",
-        "does",
-        "did",
-        "what",
-        "which",
-        "who",
-        "whom",
-        "where",
-        "when",
-        "why",
-        "how",
-        "to",
-        "of",
-        "in",
-        "on",
-        "at",
-        "for",
-        "from",
-        "with",
-        "about",
-        "and",
-        "or",
-    }
-
-    def tokenize(text: str) -> set[str]:
-        tokens = set()
-
-        for token in text.lower().split():
-            cleaned = token.strip(
-                ".,!?;:'\"()[]{}"
-            )
-
-            if (
-                cleaned
-                and cleaned not in stop_words
-            ):
-                tokens.add(cleaned)
-
-        return tokens
-
-    query_tokens = tokenize(
-        normalized_query
-    )
-
-    if not query_tokens:
-        return []
-
-    scored_memories = []
-
-    for memory in memories:
-        content_tokens = tokenize(
-            memory.content
-        )
-
-        score = len(
-            query_tokens & content_tokens
-        )
-
-        if score > 0:
-            scored_memories.append(
-                (
-                    score,
-                    memory,
-                )
-            )
-
-    scored_memories.sort(
-        key=lambda item: (
-            item[0],
-            item[1].id,
-        ),
-        reverse=True,
-    )
-
-    return [
-        memory
-        for _, memory in scored_memories[:limit]
-    ]
+    # Preserve the existing empty-query context behavior for internal callers.
+    if not query.strip():
+        return get_agent_memories(db, agent_id)[:limit]
+    return [match.memory for match in rank_agent_memories(db, agent_id, query, limit)]
 
 
 def build_memory_context(

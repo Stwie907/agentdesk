@@ -191,6 +191,7 @@ The workbench uses the existing SQLite memory table and service policy:
 | --- | --- |
 | `POST /memories` | Existing positive integer `agent_id`; string content trimmed to 1–2000 characters. Returns a new or reused record. |
 | `GET /memories/{agent_id}` | Existing positive Agent ID; ordered records for that Agent only. An unknown Agent returns 404. |
+| `GET /memories/{agent_id}/search?query=Python&limit=5` | Read-only ranked matches for the selected Agent, with overlap scores and matched terms. |
 | `DELETE /memories/item/{memory_id}?agent_id={agent_id}` | Removes the record only if it belongs to the supplied Agent; a mismatch or absent record returns 404. |
 
 Invalid input returns 422. Exact duplicate content reuses its ID/timestamp.
@@ -198,8 +199,8 @@ Canonical `User's name is ...` writes replace an earlier name memory using the
 same policy as automatic extraction. Old clients may omit the delete scope;
 the frontend always supplies it. These APIs do not implement authentication.
 
-Internal conversation extraction, existing saved content, keyword retrieval,
-and Ollama prompt injection retain their current behavior. The manual API limit
+Internal conversation extraction, existing saved content, and Ollama prompt
+injection retain their current behavior. The manual API limit
 does not truncate legacy or automatically extracted records. Memory retrieval
 events remain available in `GET /execution-logs/{execution_id}`. Mock always
 returns its fixed marked reply, even when relevant context was loaded.
@@ -211,6 +212,44 @@ the original ID/content/timestamp, and cleans up its temporary scope-test record
 The existing application data volume holds memories; no migration or new
 dependency is required. Redis/PostgreSQL adapters and semantic retrieval remain
 future work.
+
+### Shared keyword retrieval preview
+
+`GET /memories/{agent_id}/search` requires an existing positive Agent ID and a
+trimmed, non-blank `query` of at most 500 characters. `limit` defaults to 5 and
+accepts integers from 1 to 20. Invalid inputs return 422; an unknown Agent returns
+404. The query cap keeps percent-encoded Chinese queries within the frontend
+proxy's request-line limit. A valid query with no relevant terms returns 200
+with an empty `results` list.
+
+The response contains `agent_id`, the trimmed `query`, the requested `limit`,
+and ordered `results`. Each result includes the existing `memory` record,
+an integer `score`, and unique `matched_terms`. Score is the number of distinct
+query/content terms in common, not a probability or semantic similarity. Results
+sort by score descending, then Memory ID descending; zero-score records are
+excluded. Repeating query terms does not increase their weight.
+
+`memory_retrieval.rank_agent_memories` is shared by this API and Runtime's
+`retrieve_relevant_memories`. Normalization uses Unicode NFKC and case folding.
+English words retain possessives and technical tokens such as `C++`, `C#`, and
+`Node.js`; straight and curly apostrophes match the same token.
+Chinese text uses overlapping two-character fragments after filtering common
+stop terms. A meaningful single Chinese character is matched literally.
+Matching does not translate between languages or infer semantic relationships.
+Runtime retains its default limit of 5 and its internal blank-query fallback;
+the public search API rejects blank queries. Selecting a preview limit never
+changes Runtime settings.
+
+Search performs no write, message extraction, execution, or model call. Existing
+duplicate/name-memory policies and table definitions are retained. Agent scope
+is not an authentication boundary.
+
+Run `python -m app.check_memory_search --base-url http://frontend` in Mock mode
+for six HTTP scenarios. The command deliberately prepares three stable demo
+memories, checks that searches leave memory/history/conversations unchanged,
+cleans up its temporary record, and separately submits one Runtime probe.
+After recreation, `--verify-persistence` requires all three original records
+before any write and checks duplicate saves retain their IDs and timestamps.
 
 ## Conversation workbench APIs
 
@@ -315,6 +354,9 @@ scenarios. After the initial check and service recreation, add
 `--verify-persistence` to confirm ticket IDs/content and execution history survive.
 `python -m app.check_memory --base-url http://frontend` checks six memory scenarios;
 its persistence option fails if the original demo memory was lost after restart.
+`python -m app.check_memory_search --base-url http://frontend` checks shared
+retrieval previews and a separate Runtime probe; its persistence option requires
+all three original retrieval demo memories before any test write.
 
 The backend image now builds from the repository root to include the separate MCP
 environment. For a manual build, run `docker build -f backend/Dockerfile .` from

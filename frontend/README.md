@@ -3,8 +3,8 @@
 React and TypeScript execution workbench for AgentDesk. It supports task
 submission, execution history, filters, pagination, execution inspection,
 structured traces, snapshots, replay, cancellation, retry, and automatic refresh.
-The Agent Memory panel lists, adds, and deletes persistent memories for the Agent
-selected in the task form.
+The Agent Memory panel lists, adds, deletes, and previews relevant persistent
+memories for the Agent selected in the task form.
 
 ## Requirements
 
@@ -77,6 +77,27 @@ previous selection.
 Memories use the existing backend SQLite database. In Mock mode, Runtime logs
 can confirm relevant memory retrieval, but the reply remains the fixed `[MOCK]`
 message. Use the existing local Ollama provider for model-generated replies.
+
+### Memory retrieval preview
+
+Enter `Python` or `机器学习` in **Memory search query** and select **Search
+memories**. The trimmed query allows 1 to 500 characters. **Result limit** offers
+1, 3, 5, 10, or 20, with 5 selected initially. A search starts only on submission,
+after the selected Agent's memory list has loaded; typing does not send requests.
+
+Results show saved content, the Memory ID, **Keyword matches**, and **Matched
+text**. This uses Runtime's shared keyword ranking. Scores count distinct
+matching terms, and Chinese matches use character fragments; they are not
+semantic confidence scores. An empty result does not clear the saved memory list.
+
+Search sends a read-only GET and creates no chat message, execution, or memory.
+Changing the preview limit does not change Runtime's default limit of 5.
+Query/limit changes invalidate previous requests and results. Saving, deleting,
+reloading, or refreshing memories after chat clears the preview while retaining
+its draft and limit. Switching Agents resets both and ignores late responses.
+Errors preserve the draft and require an explicit **Search memories** retry.
+Returned scope, query, limits, ordering, scores, and match evidence are validated
+before display. Content renders as plain text.
 
 ## Tests and production build
 
