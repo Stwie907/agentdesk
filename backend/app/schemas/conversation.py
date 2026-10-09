@@ -22,3 +22,9 @@ class ConversationResponse(BaseModel):
 class ConversationCreateRequest(BaseModel):
     agent_id: Annotated[int, Field(strict=True, gt=0)]
     title: Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=200)]
+
+
+class ConversationUpdateRequest(BaseModel):
+    title: Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=200)]
+
+    model_config = {"extra": "forbid"}

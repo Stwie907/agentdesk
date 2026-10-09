@@ -219,7 +219,7 @@ trimmed, non-blank title of at most 200 characters. `GET /conversations?agent_id
 returns ordered conversations for that Agent. The existing unfiltered list
 remains available to older clients.
 
-Conversation reads, message reads/writes, chat, and deletion accept an optional
+Conversation reads, message reads/writes, chat, rename, and deletion accept an optional
 positive `agent_id` query. A mismatch or missing conversation returns 404 before
 saving messages, extracting memory, or executing Runtime. The workbench always
 includes its selected Agent ID. This scope check adds no authentication or
@@ -239,6 +239,28 @@ automatic memory, Runtime history/retrieval, and snapshots. It reuses one demo
 conversation and preference; subsequent runs append two turns. After recreation,
 add `--verify-persistence`: conversation, transcript, and extracted memory must
 already exist before new chat writes. No schema migration or dependency is added.
+
+### Conversation management
+
+`PATCH /conversations/{id}?agent_id=ID` accepts only `{"title": "New title"}`.
+The title must be a strict string of 1 to 200 trimmed characters; missing,
+blank, overlong, and extra fields return 422. A missing conversation or wrong
+Agent returns 404. The response retains its ID, Agent, and creation time.
+Legacy callers may omit the optional Agent query.
+
+`DELETE /conversations/{id}?agent_id=ID` retains the existing
+`{"message": "deleted"}` response. ORM `all, delete-orphan` cascade removes
+associated messages in the same transaction, including with SQLite foreign
+keys enabled. A failed commit rolls back both parent and child changes. Agent
+memories, executions, traces, snapshots, and other conversations are preserved.
+Deleting an already missing conversation returns 404. This relationship change
+does not alter table definitions and requires no migration.
+
+Run `python -m app.check_conversation_management --base-url http://frontend` in
+Mock mode for six HTTP scenarios. After recreating services, add
+`--verify-persistence`. The renamed keeper, saved messages, extracted preference,
+and stored execution/snapshot are checked before any repair or test write. The
+check deletes only the temporary conversation it creates.
 
 ## Health and tests
 

@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check
+.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check
 
 help:
 	@printf '%s\n' \
@@ -22,6 +22,7 @@ help:
 	@printf '%s\n' '  mcp-ticket-check  Check MCP ticket writes, deduplication, permissions, and replay'
 	@printf '%s\n' '  memory-check  Check Agent memory storage, scope, deletion, and Runtime retrieval'
 	@printf '%s\n' '  conversation-check  Check multi-turn chat, automatic memory, and Agent scope'
+	@printf '%s\n' '  conversation-management-check  Check rename, message deletion, and retained Agent data'
 
 check:
 	@test -f README.md
@@ -110,6 +111,9 @@ check:
 	@test -f frontend/src/types/conversations.ts
 	@test -f frontend/tests/ConversationPanel.test.tsx
 	@test -f frontend/tests/ConversationFlow.test.tsx
+	@test -f backend/app/check_conversation_management.py
+	@test -f backend/tests/test_conversation_management_api.py
+	@test -f frontend/tests/ConversationManagement.test.tsx
 
 test: check
 	@python -m unittest discover -s evaluation/tests -v
@@ -167,3 +171,7 @@ memory-check:
 conversation-check:
 	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
 		python -m app.check_conversation --base-url http://frontend
+
+conversation-management-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_conversation_management --base-url http://frontend

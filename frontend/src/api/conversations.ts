@@ -32,6 +32,29 @@ export async function createConversation(agentId: number, title: string): Promis
   }
 }
 
+export async function renameConversation(conversationId: number, agentId: number, title: string): Promise<Conversation> {
+  try {
+    const row = validateConversation(await requestJson<unknown>(`/conversations/${conversationId}?agent_id=${agentId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: title.trim() }),
+    }), agentId);
+    if (row.id !== conversationId) throw new ApiError(502, "The server returned a different conversation. Reload conversations.");
+    return row;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 422) {
+      throw new ApiError(422, "Enter a conversation title of 1 to 200 characters.");
+    }
+    throw error;
+  }
+}
+
+export async function deleteConversation(conversationId: number, agentId: number): Promise<void> {
+  const reply = await requestJson<{ message?: string }>(`/conversations/${conversationId}?agent_id=${agentId}`, { method: "DELETE" });
+  if (!reply || reply.message !== "deleted") {
+    throw new ApiError(502, "The server returned an invalid delete result. Reload conversations before trying again.");
+  }
+}
+
 export async function getConversationMessages(conversationId: number, agentId: number): Promise<ConversationMessage[]> {
   const rows = await requestJson<unknown>(`/conversations/${conversationId}/messages?agent_id=${agentId}`, { cache: "no-store" });
   if (!Array.isArray(rows)) throw new ApiError(502, "The server returned an invalid message list.");
