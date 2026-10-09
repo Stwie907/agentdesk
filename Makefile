@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check memory-search-check memory-editing-check
+.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check memory-search-check memory-editing-check user-memory-check
 
 help:
 	@printf '%s\n' \
@@ -25,6 +25,7 @@ help:
 	@printf '%s\n' '  conversation-management-check  Check rename, message deletion, and retained Agent data'
 	@printf '%s\n' '  memory-search-check  Check ranked bilingual previews, Agent scope, and Runtime retrieval'
 	@printf '%s\n' '  memory-editing-check  Check scoped edits, conflicts, and preserved memory identity'
+	@printf '%s\n' '  user-memory-check  Check shared user memory, isolation, conditional edits, and Runtime retrieval'
 
 check:
 	@test -f README.md
@@ -124,6 +125,17 @@ check:
 	@test -f backend/app/check_memory_editing.py
 	@test -f backend/tests/test_memory_editing.py
 	@test -f frontend/tests/MemoryEditing.test.tsx
+	@test -f backend/app/models/user_memory.py
+	@test -f backend/app/schemas/user_memory.py
+	@test -f backend/app/services/user_memory_service.py
+	@test -f backend/app/api/user_memories.py
+	@test -f backend/app/check_user_memory.py
+	@test -f backend/alembic/versions/c84f31a920de_add_user_memories.py
+	@test -f backend/tests/test_user_memory.py
+	@test -f frontend/src/components/UserMemoryPanel.tsx
+	@test -f frontend/src/api/userMemories.ts
+	@test -f frontend/src/types/userMemories.ts
+	@test -f frontend/tests/UserMemoryPanel.test.tsx
 
 test: check
 	@python -m unittest discover -s evaluation/tests -v
@@ -193,3 +205,7 @@ memory-search-check:
 memory-editing-check:
 	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
 		python -m app.check_memory_editing --base-url http://frontend
+
+user-memory-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_user_memory --base-url http://frontend

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.crud.memory import get_memories_by_agent
 from app.models.memory import Memory
+from app.models.user_memory import UserMemory
 
 
 STOP_WORDS = {
@@ -26,7 +27,7 @@ TOKENS = re.compile(r"[a-z0-9_]+(?:[.'-][a-z0-9_]+)*(?:\+\+|#)?|" + HAN + "+")
 
 @dataclass(frozen=True)
 class MemoryMatch:
-    memory: Memory
+    memory: Memory | UserMemory
     score: int
     matched_terms: tuple[str, ...]
 
@@ -46,6 +47,10 @@ def tokenize_memory_text(text: str, *, include_single_chinese: bool = False) -> 
 
 
 def rank_agent_memories(db: Session, agent_id: int, query: str, limit: int = 5) -> list[MemoryMatch]:
+    return rank_memory_rows(get_memories_by_agent(db, agent_id), query, limit)
+
+
+def rank_memory_rows(rows: list[Memory | UserMemory], query: str, limit: int = 5) -> list[MemoryMatch]:
     if limit <= 0:
         return []
     query_terms = tokenize_memory_text(query)
@@ -53,7 +58,7 @@ def rank_agent_memories(db: Session, agent_id: int, query: str, limit: int = 5) 
         return []
     include_single = any(re.fullmatch(HAN, term) for term in query_terms)
     matches = []
-    for memory in get_memories_by_agent(db, agent_id):
+    for memory in rows:
         content_terms = tokenize_memory_text(memory.content, include_single_chinese=include_single)
         overlap = tuple(sorted(query_terms & content_terms))
         if overlap:

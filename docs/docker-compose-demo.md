@@ -217,6 +217,53 @@ Expected: the same `memory_id` and `created_at`, six passed checks, and
 before creating a replacement memory. Avoid editing the acceptance marker
 `AgentDeskMemoryEditRust updated.` when testing your own records.
 
+## Share memories across Agents of one user
+
+Select `Demo Agent`, open **Show shared memories**, and save
+`I prefer concise SQLite examples.`. Switch to `MCP Order Agent`: the owner
+label, shared ID, and content are the same. Agents in separate Projects share
+these records when their Projects have the same owner; another owner has a
+separate list. Ownership scoping does not add login to this local workbench.
+
+Edit `SQLite` to `Rust`: the row keeps its ID/time. Search `Rust` in **Shared
+memory search query** to inspect keyword matches. Canceling keeps an add draft;
+stale or duplicate edits preserve the edit draft and report a conflict. Deletion
+requires confirmation and affects every Agent of the owner. Automatic extraction
+still belongs only to the selected Agent. Mock replies stay fixed; Ollama receives
+relevant shared and Agent context.
+
+Run the initial acceptance from the repository root:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_user_memory --base-url http://frontend
+```
+
+Equivalent: `make user-memory-check`. Expect `status: passed`, `checks_passed: 8`,
+`user_id`, `memory_id`, `isolation_agent_id`, and `persistence_verified: false`.
+The check retains `AgentDeskSharedMemoryRust shared.` for the demo owner and
+`AgentDeskSharedIsolation private.` for a synthetic second User/Project/Agent.
+That isolation Agent appears in the selector. Temporary records are removed.
+Keep both acceptance markers unchanged when editing your own records.
+
+A checkpoint `user-memory-acceptance.json` beside SQLite records both full rows
+and the original execution/trace/snapshot. Recreate while retaining the volume:
+
+```sh
+docker compose down
+sh deployment/start-demo.sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_user_memory --base-url http://frontend --verify-persistence
+```
+
+Expect the original `memory_id`, eight passed checks, and
+`persistence_verified: true`. Both owners, row IDs/content/timestamps, and original
+Runtime inspection are checked before any write; data loss fails instead of
+recreating fixtures. Repeated checks reuse the isolation Agent and never overwrite
+the original checkpoint. Demo initialization/startup adds the new table to existing
+SQLite files without changing old records. The supplied Alembic migration supports
+versioned databases; the normal Mock demo needs no manual migration command.
+
 ## Check services and run the smoke check
 
 ```sh
@@ -487,6 +534,9 @@ Memory retrieval acceptance checks shared ranking, read-only scoped previews,
 and retained retrieval demo memories before and after recreation.
 Memory editing acceptance checks scoped conditional updates, conflicts, updated
 retrieval, and exact retained identity against its checkpoint after recreation.
+Shared user memory acceptance checks same-user sharing, cross-user isolation,
+conditional edits, scoped deletion, and Runtime retrieval before recreation, then
+checks both owners' rows and original Runtime inspection after recreation.
 Standalone protocol checking covers 25
 checks and the MCP test suite contains 52 tests. Ticket protocol tests use
 temporary databases independently of the application's store.
