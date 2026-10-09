@@ -28,6 +28,18 @@ class MemoryResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MemoryUpdateRequest(BaseModel):
+    """Keep the original content verbatim for concurrent-change detection."""
+
+    content: Annotated[
+        str,
+        StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=2000),
+    ]
+    expected_content: Annotated[str, StringConstraints(strict=True)]
+
+    model_config = {"extra": "forbid"}
+
+
 class MemorySearchResult(BaseModel):
     memory: MemoryResponse
     score: int

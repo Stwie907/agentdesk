@@ -3,7 +3,7 @@
 React and TypeScript execution workbench for AgentDesk. It supports task
 submission, execution history, filters, pagination, execution inspection,
 structured traces, snapshots, replay, cancellation, retry, and automatic refresh.
-The Agent Memory panel lists, adds, deletes, and previews relevant persistent
+The Agent Memory panel lists, adds, edits, deletes, and previews relevant persistent
 memories for the Agent selected in the task form.
 
 ## Requirements
@@ -77,6 +77,22 @@ previous selection.
 Memories use the existing backend SQLite database. In Mock mode, Runtime logs
 can confirm relevant memory retrieval, but the reply remains the fixed `[MOCK]`
 message. Use the existing local Ollama provider for model-generated replies.
+
+### Edit saved memory
+
+Select **Edit memory** beside a saved row. **Edited memory content** starts with
+the original text. Enter 1–2000 trimmed characters, then **Save changes**.
+**Cancel editing** sends no request; an unfinished add-memory draft is retained.
+An unchanged draft cannot be submitted. Saving keeps the Memory ID and creation
+time and clears the old retrieval preview without automatically searching again.
+
+Only one record is edited at a time. Other writes and reloads wait until editing
+ends; chat-triggered refreshes are deferred so they cannot erase the draft.
+Requests include the selected Agent and the original saved content. Duplicate
+or stale-content conflicts keep both the saved row and edit draft. Copy any draft
+you want to retain, cancel editing, and reload to review the current record.
+Failed requests are not retried automatically. Switching Agents starts independent
+state and ignores both late success and late failure responses.
 
 ### Memory retrieval preview
 

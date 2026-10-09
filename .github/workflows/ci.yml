@@ -73,6 +73,8 @@ jobs:
         run: make memory-check
       - name: Check ranked bilingual memory previews and Runtime retrieval
         run: make memory-search-check
+      - name: Check scoped memory editing, conflicts, and Runtime retrieval
+        run: make memory-editing-check
       - name: Check multi-turn chat, automatic memory, and Agent scope
         run: make conversation-check
       - name: Check conversation rename, scoped deletion, and retained Agent data
@@ -97,6 +99,8 @@ jobs:
             python -m app.check_memory --base-url http://frontend --verify-persistence
           docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
             python -m app.check_memory_search --base-url http://frontend --verify-persistence
+          docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+            python -m app.check_memory_editing --base-url http://frontend --verify-persistence
           docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
             python -m app.check_conversation --base-url http://frontend --verify-persistence
           docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \

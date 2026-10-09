@@ -105,7 +105,7 @@ See [Docker Compose instructions](docs/docker-compose-demo.md),
 Select an Agent in the task form to view its persistent memories. Enter
 `I prefer concise Python answers.` in **Memory content**, then select **Save
 memory**. The panel supports reload, empty/error states, duplicate reuse, and
-confirmed deletion. Switching Agents starts a new draft and ignores old requests.
+inline editing, and confirmed deletion. Switching Agents starts a new draft and ignores old requests.
 
 Manual writes require an existing Agent and trimmed content of 1 to 2000
 characters. Exact duplicates reuse the same record. Canonical name memories use
@@ -148,7 +148,7 @@ empty result list.
 
 Search only reads saved memories: it creates no execution, conversation, or
 memory. Changes to the query, limit, or saved memories clear stale results.
-Saving, deleting, reloading, or a chat-triggered memory refresh preserves the
+Saving, editing, deleting, reloading, or a chat-triggered memory refresh preserves the
 search draft; switching Agents resets it. Failed searches keep the draft and
 require an explicit retry.
 
@@ -164,6 +164,34 @@ command creates three stable demo memories, removes its temporary scoped record,
 and creates one marked Mock execution for that explicit Runtime probe. After
 recreating services, add `--verify-persistence`; all three memories must already
 exist before any test write. No database migration or dependency is added.
+
+## Edit a saved memory
+
+Select **Edit memory** beside a saved record, change **Edited memory content**,
+then choose **Save changes** or **Cancel editing**. Edits allow 1 to 2000 trimmed
+characters and retain the original Memory ID, Agent, and creation time. Other
+memories, conversations, and saved executions, traces, and snapshots are preserved.
+
+An identical record or another canonical name record for the same Agent causes
+an explicit conflict. If chat or another client changed the original content,
+the edit is rejected rather than overwriting that newer content. Failed edits
+keep the draft. Copy any draft you want to keep, cancel editing, and reload before
+resolving a conflict. Writes and reloads are locked during submission; chat-triggered
+refreshes wait until editing ends. Saving clears the previous retrieval preview.
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_memory_editing --base-url http://frontend
+```
+
+Equivalent: `make memory-editing-check`. Six scenarios check preserved identity,
+updated preview/Runtime retrieval, duplicate conflicts, stale/invalid writes,
+Agent isolation, and protected records. The command retains one edited demo
+memory and a persistence checkpoint beside the SQLite database, removes a
+transient record, and creates one separate Mock Runtime probe. After recreation,
+repeat with `--verify-persistence`: the checkpoint and the exact original ID,
+content, and creation time must exist before any test write. No migration,
+dependency, or paid API is added.
 
 ## Multi-turn conversation workbench
 
@@ -289,6 +317,7 @@ RAG and additional MCP business tools remain future milestones.
 | `make mcp-tracking-check` | Check shipment tasks, permissions, traces, errors, snapshots, and replay through the running Mock API. |
 | `make mcp-ticket-check` | Check ticket creation, duplicate submission, write permissions, traces, snapshots, and replay. |
 | `make memory-check` | Check Agent memory storage, isolation, validation, deletion, and Runtime retrieval. |
+| `make memory-editing-check` | Check scoped edits, conflicts, preserved identity, and updated Runtime retrieval. |
 | `make memory-search-check` | Check shared keyword ranking, scoped read-only previews, match evidence, and Runtime retrieval. |
 | `make conversation-check` | Check scoped multi-turn chat, automatic memory, Runtime context, and saved snapshots. |
 | `make conversation-management-check` | Check rename, scoped message cleanup, protected conversations, and retained Agent data. |

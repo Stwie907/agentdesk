@@ -192,6 +192,7 @@ The workbench uses the existing SQLite memory table and service policy:
 | `POST /memories` | Existing positive integer `agent_id`; string content trimmed to 1–2000 characters. Returns a new or reused record. |
 | `GET /memories/{agent_id}` | Existing positive Agent ID; ordered records for that Agent only. An unknown Agent returns 404. |
 | `GET /memories/{agent_id}/search?query=Python&limit=5` | Read-only ranked matches for the selected Agent, with overlap scores and matched terms. |
+| `PATCH /memories/item/{memory_id}?agent_id={agent_id}` | Required positive Agent scope; validated content and original content; preserves identity/time. |
 | `DELETE /memories/item/{memory_id}?agent_id={agent_id}` | Removes the record only if it belongs to the supplied Agent; a mismatch or absent record returns 404. |
 
 Invalid input returns 422. Exact duplicate content reuses its ID/timestamp.
@@ -212,6 +213,37 @@ the original ID/content/timestamp, and cleans up its temporary scope-test record
 The existing application data volume holds memories; no migration or new
 dependency is required. Redis/PostgreSQL adapters and semantic retrieval remain
 future work.
+
+### Edit a memory
+
+`PATCH /memories/item/{memory_id}?agent_id=ID` requires a positive Agent scope
+and accepts only `content` and `expected_content`:
+
+```json
+{"content": "User likes Rust.", "expected_content": "User likes Python."}
+```
+
+`content` is a strict string trimmed to 1–2000 characters. `expected_content`
+is a strict string containing the original saved content verbatim, including
+legacy content longer than the manual write limit. Missing, invalid, or extra
+fields return 422. A missing memory or mismatched Agent returns 404. Stale content,
+a duplicate within the same Agent, or introducing a second canonical name record
+returns 409. Other Agents do not participate in the duplicate/name checks.
+
+The conditional SQL update checks ID, Agent, and original content together.
+Commit failure rolls back the change. The API preserves ID and creation time,
+changes only the selected record, and creates no execution or conversation.
+Existing create/extraction duplicate and name replacement policies remain intact.
+Runtime and preview read the updated content on their next request.
+
+Run `python -m app.check_memory_editing --base-url http://frontend` from the Mock
+backend. It retains one edited marker and a versioned acceptance checkpoint in
+`memory-edit-acceptance.json` beside the configured SQLite database. The optional
+`--state-file` selects another local checkpoint. After restarting, add
+`--verify-persistence`: missing/changed records or checkpoints fail before any
+replacement write. This file validates demo acceptance; it is not an additional
+application memory store. The check removes its transient memory and creates a
+separate Mock execution to verify Runtime retrieval and its snapshot.
 
 ### Shared keyword retrieval preview
 

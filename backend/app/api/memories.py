@@ -10,11 +10,12 @@ from app.schemas.memory import (
     MemoryResponse,
     MemorySearchResponse,
     MemorySearchResult,
+    MemoryUpdateRequest,
 )
 
 from app.crud.agent import get_agent
 from app.crud.memory import get_memory, get_memories_by_agent, delete_memory
-from app.services.memory_service import save_agent_memory
+from app.services.memory_service import MemoryEditConflict, save_agent_memory, update_agent_memory
 from app.services.memory_retrieval import rank_agent_memories
 
 
@@ -73,6 +74,22 @@ def search_agent_memories(
         results=[MemorySearchResult(memory=MemoryResponse.model_validate(match.memory),
                                    score=match.score, matched_terms=list(match.matched_terms)) for match in matches],
     )
+
+
+@router.patch("/item/{memory_id}", response_model=MemoryResponse)
+def update(
+    memory_id: Annotated[int, Path(gt=0)],
+    memory: MemoryUpdateRequest,
+    agent_id: Annotated[int, Query(gt=0)],
+    db: Session = Depends(get_db),
+):
+    saved = get_memory(db, memory_id)
+    if saved is None or saved.agent_id != agent_id:
+        raise HTTPException(status_code=404, detail="Memory not found for this Agent")
+    try:
+        return update_agent_memory(db, saved, memory.content, memory.expected_content)
+    except MemoryEditConflict as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.delete(
