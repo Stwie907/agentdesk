@@ -13,6 +13,9 @@ from app.services.user_memory_service import (
     UserMemoryConflict, delete_user_memory, list_user_memories, owner_for_agent,
     ranked_user_memories_for_agent, save_user_memory, update_user_memory,
 )
+from app.schemas.semantic_memory import SemanticUserMemoryResult, SemanticUserSearchResponse
+from app.services.memory_embeddings import SemanticMemoryUnavailable, get_embedding_settings
+from app.services.semantic_memory import rank_semantic_rows
 
 
 router = APIRouter(prefix="/user-memories", tags=["user memories"])
@@ -62,6 +65,31 @@ def search(agent_id: Annotated[int, Path(gt=0)], query: Annotated[str, Query(min
     return UserMemorySearchResponse(agent_id=agent_id, user_id=owner.id, query=normalized, limit=limit,
         results=[UserMemorySearchResult(memory=UserMemoryResponse.model_validate(match.memory),
             score=match.score, matched_terms=list(match.matched_terms)) for match in matches])
+
+
+@router.get("/for-agent/{agent_id}/semantic-search", response_model=SemanticUserSearchResponse)
+def search_shared_semantically(
+    agent_id: Annotated[int, Path(gt=0)],
+    query: Annotated[str, Query(min_length=1, max_length=500)],
+    db: Session = Depends(get_db),
+    limit: Annotated[int, Query(ge=1, le=20)] = 5,
+    min_similarity: Annotated[float | None, Query(ge=0, le=1, allow_inf_nan=False)] = None,
+):
+    normalized = query.strip()
+    if not normalized:
+        raise HTTPException(status_code=422, detail="Enter a non-blank semantic memory query")
+    owner = require_owner(db, agent_id)
+    rows = list_user_memories(db, owner.id)
+    try:
+        settings = get_embedding_settings()
+        minimum = settings.memory.min_similarity if min_similarity is None else min_similarity
+        matches = rank_semantic_rows(rows, normalized, settings, limit, minimum)
+    except SemanticMemoryUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    return SemanticUserSearchResponse(agent_id=agent_id, user_id=owner.id, query=normalized, limit=limit,
+        provider=settings.provider, model=settings.model, runtime_mode=settings.memory.mode,
+        min_similarity=minimum, results=[SemanticUserMemoryResult(memory=UserMemoryResponse.model_validate(match.memory),
+                                                                  similarity=match.similarity) for match in matches])
 
 
 @router.patch("/item/{memory_id}", response_model=UserMemoryResponse)

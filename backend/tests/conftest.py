@@ -2,6 +2,7 @@ import pytest
 
 from app.database import SessionLocal
 from app.config import LLM_ENVIRONMENT_KEYS
+from app.memory_config import MEMORY_ENVIRONMENT_KEYS
 
 from app.models.user import User
 from app.models.project import Project
@@ -11,7 +12,7 @@ from app.models.agent import Agent
 @pytest.fixture(autouse=True)
 def isolate_llm_environment(monkeypatch):
     # Tests select providers explicitly, regardless of the developer's shell.
-    for key in LLM_ENVIRONMENT_KEYS:
+    for key in (*LLM_ENVIRONMENT_KEYS, *MEMORY_ENVIRONMENT_KEYS):
         monkeypatch.delenv(key, raising=False)
 
 

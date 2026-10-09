@@ -1,4 +1,9 @@
 from sqlalchemy.orm import Session
+from collections.abc import Callable
+
+from app.memory_config import get_memory_settings
+from app.services.memory_embeddings import SemanticMemoryUnavailable, get_embedding_settings
+from app.services.semantic_memory import rank_semantic_rows
 
 from app.crud.memory import get_memories_by_agent
 from app.schemas.memory import MemoryCreate
@@ -73,25 +78,46 @@ def build_memory_context(
     agent_id: int,
     query: str = "",
     limit: int = 5,
+    on_fallback: Callable[[str], None] | None = None,
 ) -> str:
     """
     Build persistent memory context for the agent runtime.
 
     The returned text can be injected into the LLM prompt.
     """
-    memories = retrieve_relevant_memories(
-        db,
-        agent_id,
-        query,
-        limit,
-    )
+    from app.services.user_memory_service import list_user_memories, owner_for_agent, user_memory_context
+
+    try:
+        mode = get_memory_settings().mode
+    except ValueError as error:
+        mode = "keyword"
+        if on_fallback is not None:
+            on_fallback(str(error))
+    if mode == "semantic" and query.strip() and limit > 0:
+        try:
+            settings = get_embedding_settings()
+            local = get_agent_memories(db, agent_id)
+            owner = owner_for_agent(db, agent_id)
+            shared = [] if owner is None else list_user_memories(db, owner.id)
+            # Embed both sources together. Rank each scope afterward
+            # so shared memories do not consume the Agent memory result budget.
+            matches = rank_semantic_rows([*local, *shared], query, settings, len(local) + len(shared))
+            memories = [match.memory for match in matches if isinstance(match.memory, Memory)][:limit]
+            shared_context = "\n".join([match.memory.content for match in matches
+                                         if not isinstance(match.memory, Memory)][:limit])
+        except SemanticMemoryUnavailable as error:
+            if on_fallback is not None:
+                on_fallback(str(error))
+            memories = retrieve_relevant_memories(db, agent_id, query, limit)
+            shared_context = user_memory_context(db, agent_id, query, limit)
+    else:
+        memories = retrieve_relevant_memories(db, agent_id, query, limit)
+        shared_context = user_memory_context(db, agent_id, query, limit)
 
     agent_context = "\n".join(
         memory.content
         for memory in memories
     )
-    from app.services.user_memory_service import user_memory_context
-    shared_context = user_memory_context(db, agent_id, query, limit)
     if not shared_context:
         return agent_context
     context = "Shared user memory:\n" + shared_context

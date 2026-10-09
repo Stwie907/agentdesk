@@ -2,15 +2,17 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { ApiError } from "../api/executions";
 import { searchMemories } from "../api/memories";
-import type { MemorySearchResponse } from "../types/memories";
+import { searchSemanticMemories, type SemanticSearch } from "../api/semanticMemories";
+import type { Memory, MemorySearchResponse } from "../types/memories";
 
 type Props = { agentId: number; revision: string; disabled: boolean };
 
 export function MemorySearchPanel({ agentId, revision, disabled }: Props) {
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState(5);
+  const [mode, setMode] = useState<"keyword" | "semantic">("keyword");
   const [pending, setPending] = useState(false);
-  const [result, setResult] = useState<{ data: MemorySearchResponse; revision: string } | null>(null);
+  const [result, setResult] = useState<{ data: MemorySearchResponse | SemanticSearch<Memory>; revision: string } | null>(null);
   const [error, setError] = useState<{ message: string; revision: string } | null>(null);
   const mounted = useRef(true);
   const version = useRef(0);
@@ -46,7 +48,8 @@ export function MemorySearchPanel({ agentId, revision, disabled }: Props) {
     const current = () => mounted.current && version.current === requestVersion &&
       latest.current.revision === requestedRevision && !latest.current.disabled;
     try {
-      const data = await searchMemories(agentId, trimmed, limit);
+      const data = mode === "semantic" ? await searchSemanticMemories(agentId, trimmed, limit)
+        : await searchMemories(agentId, trimmed, limit);
       if (current()) setResult({ data, revision: requestedRevision });
     } catch (failure) {
       if (current()) setError({ revision: requestedRevision, message: failure instanceof ApiError ? failure.message :
@@ -63,8 +66,14 @@ export function MemorySearchPanel({ agentId, revision, disabled }: Props) {
   return (
     <section aria-labelledby="memory-search-heading" aria-busy={pending}>
       <h3 id="memory-search-heading">Memory retrieval preview</h3>
-      <p>Preview relevant memories using the same keyword rules as Runtime. The default limit is 5.</p>
+      <p>Choose keyword matches or local embedding similarity. The default limit is 5.</p>
       <form onSubmit={(event) => void handleSearch(event)}>
+        <label htmlFor="memory-search-mode">Memory search method</label>
+        <select id="memory-search-mode" value={mode} disabled={disabled}
+          onChange={event => { setMode(event.target.value as "keyword" | "semantic"); invalidate(); }}>
+          <option value="keyword">Keyword</option>
+          <option value="semantic">Semantic (local embeddings)</option>
+        </select>
         <label htmlFor="memory-search-query">Memory search query</label>
         <input id="memory-search-query" value={query} maxLength={500} disabled={disabled}
           placeholder="Example: Python or 机器学习"
@@ -82,13 +91,16 @@ export function MemorySearchPanel({ agentId, revision, disabled }: Props) {
       {pending && !disabled && <p role="status">Searching saved memories...</p>}
       {!disabled && error?.revision === revision && <p role="alert">{error.message}</p>}
       {shown !== null && <>
+        {"provider" in shown && <p>{shown.provider === "mock" ? "Mock fixture vectors" : "Ollama semantic vectors"}
+          {" · Model: "}{shown.model}{" · Runtime memory mode: "}{shown.runtime_mode}</p>}
+        {"provider" in shown && <p>Cosine similarity measures how close the text vectors are. Runtime uses server configuration.</p>}
         <p role="status">{shown.results.length} relevant {shown.results.length === 1 ? "memory" : "memories"} found.</p>
         {shown.results.length === 0 ? <p>No relevant memories found.</p> :
           <ol aria-label="Memory search results">
             {shown.results.map((row) => <li key={row.memory.id}>
-              <p>Memory {row.memory.id} · Keyword matches: {row.score}</p>
+              <p>Memory {row.memory.id} · {"similarity" in row ? `Cosine similarity: ${row.similarity.toFixed(3)}` : `Keyword matches: ${row.score}`}</p>
               <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{row.memory.content}</p>
-              <p>Matched text: {row.matched_terms.join(", ")}</p>
+              {"matched_terms" in row && <p>Matched text: {row.matched_terms.join(", ")}</p>}
             </li>)}
           </ol>}
       </>}

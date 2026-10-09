@@ -81,6 +81,8 @@ jobs:
         run: make conversation-check
       - name: Check conversation rename, scoped deletion, and retained Agent data
         run: make conversation-management-check
+      - name: Enable Mock semantic Runtime and check scoped vector retrieval
+        run: make semantic-memory-check
       - name: Upload evaluation reports
         if: always()
         uses: actions/upload-artifact@v7
@@ -109,6 +111,10 @@ jobs:
             python -m app.check_conversation --base-url http://frontend --verify-persistence
           docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
             python -m app.check_conversation_management --base-url http://frontend --verify-persistence
+          MEMORY_RETRIEVAL_MODE=semantic docker compose -f docker-compose.yml -f docker-compose.mock.yml \
+            up --detach --wait --wait-timeout 180 backend frontend
+          docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+            python -m app.check_semantic_memory --base-url http://frontend --verify-persistence
       - name: Show container logs
         if: always()
         run: |

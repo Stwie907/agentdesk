@@ -93,6 +93,11 @@ def execute_agent(
             db,
             agent.id,
             execution.input,
+            on_fallback=lambda reason: trace_event(
+                db, execution.id, TraceEvent.MEMORY_RETRIEVAL_FALLBACK,
+                detail="Semantic retrieval unavailable; using keyword ranking. " + reason,
+                level="warning",
+            ),
         )
 
         trace_event(

@@ -264,6 +264,78 @@ the original checkpoint. Demo initialization/startup adds the new table to exist
 SQLite files without changing old records. The supplied Alembic migration supports
 versioned databases; the normal Mock demo needs no manual migration command.
 
+## Optional semantic memory retrieval
+
+The keyword default continues to work without an embedding model. Both memory
+panels now offer a Semantic search method. With real Ollama, install the separate
+local `embeddinggemma` model; chat continues to use `qwen2.5:7b`. The model
+requires Ollama v0.11.10 or later; see its
+[official model page](https://ollama.com/library/embeddinggemma).
+
+For the offline Mock acceptance, start the demo and enable semantic Runtime:
+
+```sh
+sh deployment/start-demo.sh
+MEMORY_RETRIEVAL_MODE=semantic docker compose -f docker-compose.yml -f docker-compose.mock.yml \
+  up --detach --wait --wait-timeout 180 backend frontend
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_semantic_memory --base-url http://frontend
+```
+
+Equivalent after starting the demo: `make semantic-memory-check`. This target
+recreates services with semantic Runtime enabled while retaining the data volume.
+Expected JSON includes `status: passed`, `checks_passed: 8`,
+`embedding_provider: mock`, `runtime_mode: semantic`, and
+`persistence_verified: false`. The fixed vectors validate the pipeline without
+calling Ollama. They do not measure a real embedding model's semantic quality.
+
+The acceptance retains an Agent fixture `I prefer concise answers.`, a shared
+fixture `我喜欢简洁的回答。`, and a shared fixture for a synthetic isolation
+User/Project/Agent. Temporary edit records are uniquely named and removed.
+Keep these acceptance rows unchanged; the checkpoint records their original
+IDs, content, and timestamps plus one execution/trace/snapshot.
+
+After recreation, enable semantic mode again and verify:
+
+```sh
+docker compose down
+sh deployment/start-demo.sh
+MEMORY_RETRIEVAL_MODE=semantic docker compose -f docker-compose.yml -f docker-compose.mock.yml \
+  up --detach --wait --wait-timeout 180 backend frontend
+docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+  python -m app.check_semantic_memory --base-url http://frontend --verify-persistence
+```
+
+Expect the same memory IDs and `persistence_verified: true`. Missing or changed
+checkpoints, Agent/shared/isolation rows, or original Runtime inspection fail
+before replacement writes. The checkpoint lives beside SQLite in the retained volume.
+
+To try real Ollama vectors:
+
+```sh
+ollama pull embeddinggemma
+LLM_PROVIDER=ollama MEMORY_RETRIEVAL_MODE=semantic docker compose \
+  up --build --detach --wait --wait-timeout 180 backend frontend
+```
+
+Use the base Compose file for this step so the Mock provider override is omitted.
+Save a concise-answer preference and query `Keep it brief.` in Semantic preview;
+expect `provider: ollama` and your configured embedding model. Inspect the actual
+retrieved content; model-specific quality and scores require local acceptance.
+No minimum fixed score is promised for arbitrary real-model queries.
+
+The root `.env` controls the four memory variables in the configuration table.
+Compose still maps the local Ollama address through `COMPOSE_OLLAMA_BASE_URL`.
+A failed semantic preview displays an error; semantic Runtime records a warning
+and uses keyword retrieval. Restore keyword Mock Runtime with:
+
+```sh
+MEMORY_RETRIEVAL_MODE=keyword sh deployment/start-demo.sh
+```
+
+Semantic previews are read-only and calculate fresh vectors for each request.
+They require no new SQLite table or migration.
+
 ## Check services and run the smoke check
 
 ```sh
@@ -537,6 +609,9 @@ retrieval, and exact retained identity against its checkpoint after recreation.
 Shared user memory acceptance checks same-user sharing, cross-user isolation,
 conditional edits, scoped deletion, and Runtime retrieval before recreation, then
 checks both owners' rows and original Runtime inspection after recreation.
+The semantic check then enables Mock Runtime semantic mode and verifies explicit
+fixture vectors before and after recreation. It covers both memory scopes and
+never downloads or requires an Ollama model in CI.
 Standalone protocol checking covers 25
 checks and the MCP test suite contains 52 tests. Ticket protocol tests use
 temporary databases independently of the application's store.

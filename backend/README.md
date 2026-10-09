@@ -211,8 +211,8 @@ container. After a successful initial check and service recreation, add
 `--verify-persistence`. It validates the stored marker before writing, compares
 the original ID/content/timestamp, and cleans up its temporary scope-test record.
 The existing application data volume holds memories; no migration or new
-dependency is required. Redis/PostgreSQL adapters and semantic retrieval remain
-future work.
+dependency is required. Persistent vector indexing and Redis/PostgreSQL adapters
+remain future work.
 
 ## Shared user memory
 
@@ -329,6 +329,65 @@ memories, checks that searches leave memory/history/conversations unchanged,
 cleans up its temporary record, and separately submits one Runtime probe.
 After recreation, `--verify-persistence` requires all three original records
 before any write and checks duplicate saves retain their IDs and timestamps.
+
+## Local semantic memory APIs
+
+Keyword endpoints retain their original response format. The optional endpoints
+`GET /memories/{agent_id}/semantic-search` and
+`GET /user-memories/for-agent/{agent_id}/semantic-search` accept:
+
+| Parameter | Meaning |
+| --- | --- |
+| `query` | Required, 1–500 characters; whitespace-only queries are rejected. |
+| `limit` | 1–20, default 5. |
+| `min_similarity` | Optional finite value from 0 to 1; defaults to server configuration. |
+
+Responses include `mode: semantic`, `provider`, `model`, `runtime_mode`,
+`min_similarity`, and ranked `results`. Each result has `memory` and a positive
+`similarity` up to 1. Similarities are rounded to six decimals and sorted
+descending, with newer row IDs first on ties. Shared results also identify the
+resolved `user_id`. Only scoped rows enter the embedding request; another Agent's
+private rows and another user's shared rows are excluded beforehand.
+
+Configuration:
+
+| Variable | Default |
+| --- | --- |
+| `MEMORY_RETRIEVAL_MODE` | `keyword` |
+| `OLLAMA_EMBEDDING_MODEL` | `embeddinggemma` |
+| `MEMORY_EMBEDDING_TIMEOUT_SECONDS` | `60` |
+| `MEMORY_SEMANTIC_MIN_SIMILARITY` | `0.35` |
+
+Ollama embeddings use the existing `OLLAMA_BASE_URL` and a separate model;
+planning/final chat keep the existing qwen2.5:7b configuration. Native requests
+bypass proxy environment variables and redirects. Inputs are batched by 32 with
+`truncate: false`, so oversized inputs fail explicitly. Invalid JSON, model
+metadata, vector counts/dimensions, non-finite values, and zero vectors are rejected.
+
+Explicit semantic previews return 503 on unavailable embeddings. Runtime in
+semantic mode loads up to five records per scope; failures use the keyword path
+and persist a warning `memory_retrieval_fallback` log. Empty-query internal
+behavior and the default keyword context format remain compatible.
+
+Vectors are generated per request and kept in memory for that request. No SQL
+writes occur during either search mode, and edits/deletes need no reindexing.
+This is a linear scan for the local workbench; persistent indexing and additional
+storage adapters remain later work.
+
+`LLM_PROVIDER=mock` always uses `mock-fixtures-v1` and makes no embedding HTTP
+requests. Supported queries are `Keep it brief.`, `请用简短的方式解释。`,
+`Can saved information stay after reboot?`, and `Unrelated semantic fixture.`.
+Other queries return 503 when the scope has records, with a fixture explanation.
+These fixed vectors test integration, not learned semantic quality.
+
+Run `app.check_semantic_memory` against Mock services configured with
+`MEMORY_RETRIEVAL_MODE=semantic`. Eight checks cover ranking without keyword
+overlap, Chinese fixtures, thresholds/limits, Agent/User scope, read-only previews,
+fresh edit/delete results, validation, and semantic Runtime retrieval. The command
+retains three markers and one synthetic isolation User/Project/Agent. Restart
+validation checks the immutable checkpoint and original Runtime inspection before
+writes. Temporary edit records use unique IDs in their content to preserve
+existing user-created fixture records.
 
 ## Conversation workbench APIs
 
