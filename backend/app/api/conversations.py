@@ -1,7 +1,8 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.crud.agent import get_agent
 from app.crud.conversation import (
@@ -14,6 +15,8 @@ from app.crud.conversation import (
 )
 from app.database import get_db
 from app.services.conversation_export import EXPORT_SCHEMA_VERSION, export_snapshot, serialize_export
+from app.services import conversation_import as importer
+from app.schemas.conversation_import import ConversationImportResponse
 from app.schemas.conversation import (
     ConversationCreateRequest, ConversationPageResponse, ConversationResponse, ConversationUpdateRequest,
 )
@@ -60,6 +63,27 @@ def page(
         has_more=offset + len(items) < total,
         items=[ConversationResponse.model_validate(row) for row in items],
     )
+
+
+@router.post("/import", response_model=ConversationImportResponse, status_code=201,
+             description="Import a complete version-1 AgentDesk JSON export as a new conversation for the selected Agent.",
+             openapi_extra={"requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"},
+                 "example": {"schema_version": 1, "conversation": {"id": 1, "agent_id": 1, "title": "Saved chat", "created_at": "2026-10-10T06:00:00"},
+                             "message_count": 0, "messages": []}}}}})
+async def import_conversation(
+    request: Request, response: Response,
+    agent_id: Annotated[int, Query(gt=0, le=9223372036854775807)],
+    db: Session = Depends(get_db),
+):
+    if request.headers.get("content-type", "").split(";")[0].strip().lower() != "application/json":
+        raise HTTPException(status_code=415, detail="Use an application/json AgentDesk backup.")
+    raw = bytearray()
+    async for chunk in request.stream():
+        if len(raw) + len(chunk) > importer.MAX_IMPORT_BYTES:
+            raise HTTPException(status_code=413, detail="Conversation import exceeds the 10 MiB file limit.")
+        raw.extend(chunk)
+    response.headers["Cache-Control"] = "no-store"
+    return await run_in_threadpool(importer.import_archive, db, agent_id, bytes(raw))
 
 
 @router.get("/{conversation_id}", response_model=ConversationResponse)

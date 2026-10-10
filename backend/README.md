@@ -765,3 +765,36 @@ three fixture conversations and 26 messages, then runs eight read-only export
 checks and saves a separate checkpoint. Add `--verify-persistence` after restart
 for read-only verification of original IDs, records, vectors, prior checkpoint
 files, and attachment hashes. See the [complete instructions](../docs/conversation-export.md).
+
+## Conversation JSON import API
+
+`POST /conversations/import?agent_id=ID` accepts an `application/json` body containing
+a complete AgentDesk version-1 JSON export. Required positive SQLite-range
+`agent_id` selects the destination; source IDs are metadata and are never assigned
+as local primary or foreign keys. A successful 201 response contains
+`schema_version`, the new `conversation`, and `message_count`, with `Cache-Control:
+no-store`. New conversation/message IDs are allocated by SQLite. Original title,
+roles, content, naive UTC timestamps, and chronological timestamp/ID order are
+preserved. A legacy null title becomes `Imported untitled conversation`.
+
+The endpoint streams a bounded body, validates the complete archive before writes,
+and commits the conversation and all messages in one transaction. A failed write
+rolls back partial inserts. Missing destination Agents return 404, unsupported
+media types return 415, malformed/unsupported/incomplete backups return 422, and
+more than 10,000 messages or 10 MiB returns 413. Duplicate JSON keys, non-finite
+numbers, extra fields, foreign messages, duplicate IDs, invalid UTF-8/surrogates,
+out-of-order records, and invalid timestamps are rejected. Original exported
+timestamps have no timezone suffix and up to six fractional digits.
+
+Imports create no chat execution, memory, or vector and do not call Ollama. They
+do not restore executions or replay plans. Re-importing a valid file explicitly
+creates another copy; the API is not idempotent. After a connection failure, inspect
+the conversation list before retrying. The frontend does not retry automatically.
+
+`python -m app.check_conversation_import --base-url http://frontend` imports three
+fixture conversations and 50 messages, verifies eight checks, and saves a separate
+checkpoint beside SQLite. Reuse and `--verify-persistence` perform only GETs and
+retain original IDs and export hashes. Missing/changed evidence fails without
+repair, including missing checkpoints with existing marked fixtures. Follow
+[initial/restart acceptance](../docs/conversation-import.md) consecutively before
+normal writes. CI runs this pair after the earlier export persistence check.

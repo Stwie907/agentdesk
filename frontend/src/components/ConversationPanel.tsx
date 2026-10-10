@@ -5,6 +5,7 @@ import {
   renameConversation, sendConversationMessage,
 } from "../api/conversations";
 import { ConversationExport } from "./ConversationExport";
+import { ConversationImport } from "./ConversationImport";
 import { ApiError } from "../api/executions";
 import type { Conversation, ConversationMessage } from "../types/conversations";
 
@@ -44,7 +45,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
   const [nextBeforeId, setNextBeforeId] = useState<number | null>(null);
   const [listKey, setListKey] = useState(0);
   const [messageKey, setMessageKey] = useState(0);
-  const [pending, setPending] = useState<"create" | "chat" | "rename" | "delete" | null>(null);
+  const [pending, setPending] = useState<"create" | "chat" | "rename" | "delete" | "import" | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [messageError, setMessageError] = useState<string | null>(null);
   const [writeError, setWriteError] = useState<string | null>(null);
@@ -363,6 +364,13 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
           {pending === "create" ? "Creating..." : "Create conversation"}
         </button>
       </form>
+      <ConversationImport agentId={agentId} disabled={loadingList || !listLoaded || pending !== null || confirmDelete || loadingOlder}
+        onStart={() => {
+          if (writeInProgress.current || pending !== null || confirmDelete || loadingList || !listLoaded || loadingOlder) return false;
+          writeInProgress.current = true; setPending("import"); return true;
+        }}
+        onFinish={() => { writeInProgress.current = false; if (mounted.current) setPending(null); }}
+        onImported={() => { if (mounted.current) refreshList(); }} />
       <label htmlFor="conversation-select">Conversation</label>
       <select id="conversation-select" value={selectedId}
         disabled={loadingList || !listLoaded || pending !== null || confirmDelete || (conversations.length === 0 && !selectedConversation)}

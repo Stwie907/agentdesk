@@ -131,6 +131,14 @@ jobs:
           make demo
           docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
             python -m app.check_conversation_export --base-url http://frontend --verify-persistence
+      - name: Check atomic conversation JSON imports and export round trips
+        run: make conversation-import-check
+      - name: Recreate services and verify original imported transcripts
+        run: |
+          make stop
+          make demo
+          docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+            python -m app.check_conversation_import --base-url http://frontend --verify-persistence
       - name: Show container logs
         if: always()
         run: |
