@@ -745,3 +745,23 @@ without repair when saved data is missing or changed. Run initial and restart
 checks consecutively without chats, edits, or other acceptance writes between
 them. Normal subsequent activity invalidates this strict snapshot by design.
 An unavailable page route fails before fixture preparation writes anything.
+
+## Complete conversation export API
+
+`GET /conversations/{conversation_id}/export` requires positive SQLite-range
+`agent_id` and accepts `format=json` (default) or `format=markdown`. It returns a
+complete UTF-8 attachment in creation-time/ID order. JSON schema version 1 retains
+conversation metadata, message count, and every message field. Markdown keeps
+user-supplied titles, roles, and content in literal code fences. A single scoped
+SQL statement reads metadata and transcript consistently, without model calls or
+database writes. Responses disable caching and use numeric-ID filenames.
+
+Missing/foreign records return 404, invalid parameters return 422, and an export
+over 10,000 messages or 10 MiB returns 413 without a partial file. The legacy
+full-message API, message pages, and Runtime context are retained.
+
+`python -m app.check_conversation_export --base-url http://frontend` prepares
+three fixture conversations and 26 messages, then runs eight read-only export
+checks and saves a separate checkpoint. Add `--verify-persistence` after restart
+for read-only verification of original IDs, records, vectors, prior checkpoint
+files, and attachment hashes. See the [complete instructions](../docs/conversation-export.md).

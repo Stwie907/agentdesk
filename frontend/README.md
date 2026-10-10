@@ -231,3 +231,22 @@ preserve microseconds. Conversation/Agent changes and **Reload messages**
 ignore stale older responses. Reload keeps the unsent chat draft and returns
 to the latest 20; a completed chat also refreshes that latest page. Conversation
 title search/paging preserves already loaded older messages for the active chat.
+
+## Download complete conversations
+
+**Export JSON** and **Export Markdown** download the selected conversation's
+complete saved transcript, including history outside the loaded 20-message page.
+Unsent chat, rename, and creation drafts remain on the page. JSON downloads retain
+structured IDs, roles, timestamps, and content; Markdown treats original text
+literally, including Chinese, HTML, and embedded code fences.
+
+Both buttons are disabled during an export or chat/management write and delete
+confirmation. Failed exports preserve drafts and loaded history for retry.
+Switching Agent/conversation cancels the request and suppresses late downloads.
+Off-page selected conversations remain exportable. The client checks attachment
+headers and validates JSON scope, count, ordering, timestamps, and message IDs
+before creating a short-lived browser download URL. The existing frontend proxy
+handles this API; no new dependency is required.
+
+See [export acceptance and limits](../docs/conversation-export.md), including
+manual validation of full history without loading earlier messages.

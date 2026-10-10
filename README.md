@@ -589,3 +589,16 @@ Restart/reuse performs only reads, expects the original IDs and fingerprints,
 and fails on missing or changed data without recreating fixtures. Keep the
 initial/restart pair idle; subsequent normal activity changes its strict
 fingerprint. Older acceptance checkpoints are preserved byte for byte.
+
+## Export a complete conversation
+
+Select **Export JSON** or **Export Markdown** under **Conversation Chat** to
+download all saved messages, including history not yet loaded on the page. JSON
+preserves structured metadata; Markdown preserves the transcript as literal text.
+Exports keep unsent drafts and do not execute chat. Empty conversations are valid;
+foreign conversations are rejected. See [export instructions](docs/conversation-export.md)
+for the API contract, limits, and eight-check initial/restart Docker acceptance.
+
+Run `make conversation-export-check` against the existing running demo. The first
+run adds three fixture conversations and 26 messages; restart verification is
+read-only and checks that both formats retain their original bytes.

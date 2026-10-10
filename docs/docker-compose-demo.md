@@ -984,3 +984,17 @@ while retaining that draft. Searching other conversation titles keeps the active
 chat and its loaded history. An older-page error keeps the displayed history;
 retry explicitly. A deleted cursor returns 404, so use a latest-page reload.
 The Runtime's full context and local `qwen2.5:7b` setup remain unchanged.
+
+## Complete JSON and Markdown conversation exports
+
+The workbench downloads complete saved transcripts with **Export JSON** and
+**Export Markdown**, while keeping current drafts and loaded history. Follow
+the [full export acceptance instructions](conversation-export.md) for both
+Docker commands and the manual browser check.
+
+`python -m app.check_conversation_export --base-url http://frontend` runs eight
+checks after preparing three conversations and 26 messages. Repeat after service
+recreation with `--verify-persistence`, preserving the volume and keeping records
+idle between the pair. Both formats must have identical original SHA-256 values;
+restart creates zero records and retains existing vectors and older checkpoints.
+This checker works with both the existing Ollama configuration and the Mock demo.

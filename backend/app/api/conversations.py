@@ -1,6 +1,6 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from sqlalchemy.orm import Session
 
 from app.crud.agent import get_agent
@@ -13,6 +13,7 @@ from app.crud.conversation import (
     update_conversation_title,
 )
 from app.database import get_db
+from app.services.conversation_export import EXPORT_SCHEMA_VERSION, export_snapshot, serialize_export
 from app.schemas.conversation import (
     ConversationCreateRequest, ConversationPageResponse, ConversationResponse, ConversationUpdateRequest,
 )
@@ -80,3 +81,24 @@ def remove(conversation_id: Annotated[int, Path(gt=0)], db: Session = Depends(ge
     require_conversation(db, conversation_id, agent_id)
     delete_conversation(db, conversation_id)
     return {"message": "deleted"}
+
+
+@router.get("/{conversation_id}/export", response_class=Response)
+def export_conversation(
+    conversation_id: Annotated[int, Path(gt=0, le=9223372036854775807)],
+    agent_id: Annotated[int, Query(gt=0, le=9223372036854775807)],
+    db: Session = Depends(get_db),
+    format: Literal["json", "markdown"] = "json",
+):
+    snapshot = export_snapshot(db, conversation_id, agent_id)
+    content = serialize_export(snapshot, format)
+    extension = "json" if format == "json" else "md"
+    return Response(content, media_type="application/json" if format == "json" else "text/markdown", headers={
+        "Content-Disposition": f'attachment; filename="conversation-{conversation_id}.{extension}"',
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+        "X-Conversation-ID": str(conversation_id),
+        "X-Agent-ID": str(agent_id),
+        "X-Message-Count": str(snapshot["message_count"]),
+        "X-Export-Schema-Version": str(EXPORT_SCHEMA_VERSION),
+    })

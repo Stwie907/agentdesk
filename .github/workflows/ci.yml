@@ -123,6 +123,14 @@ jobs:
             python -m app.check_memory_evidence --base-url http://frontend --verify-persistence
           docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
             python -m app.check_memory_vector_cache --base-url http://frontend --verify-persistence
+      - name: Check complete conversation JSON and Markdown exports
+        run: make conversation-export-check
+      - name: Recreate services and verify original exported files
+        run: |
+          make stop
+          make demo
+          docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+            python -m app.check_conversation_export --base-url http://frontend --verify-persistence
       - name: Show container logs
         if: always()
         run: |
