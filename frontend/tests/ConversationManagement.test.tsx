@@ -3,7 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 
 import { ConversationPanel } from "../src/components/ConversationPanel";
 import { deferredResponse, jsonResponse } from "./taskFixtures";
-import { conversationPageResponse } from "./conversationFixtures";
+import { conversationMessagePageResponse, conversationPageResponse } from "./conversationFixtures";
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
@@ -16,7 +16,7 @@ const messages = [
 
 async function activePanel() {
   const fetchMock = vi.fn().mockResolvedValueOnce(conversationPageResponse([conversation, other]))
-    .mockResolvedValueOnce(jsonResponse(messages));
+    .mockResolvedValueOnce(conversationMessagePageResponse(messages));
   vi.stubGlobal("fetch", fetchMock);
   const onActivity = vi.fn();
   const view = render(<ConversationPanel agentId={7} onActivity={onActivity} />);
@@ -162,7 +162,7 @@ test("ignores a late transcript after its conversation is deleted", async () => 
   fireEvent.click(screen.getByRole("button", { name: "Delete conversation" }));
   fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
   await screen.findByText(/Conversation 91 deleted/);
-  await act(async () => { pending.resolve(jsonResponse(messages)); });
+  await act(async () => { pending.resolve(conversationMessagePageResponse(messages)); });
   expect(screen.queryByText("Saved answer")).not.toBeInTheDocument();
   expect(screen.queryByRole("list", { name: "Conversation messages" })).not.toBeInTheDocument();
 });

@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import {
-  createConversation, deleteConversation, getConversation, getConversationMessages, getConversationPage,
+  compareConversationMessages, createConversation, deleteConversation, getConversation, getConversationMessagePage, getConversationPage,
   renameConversation, sendConversationMessage,
 } from "../api/conversations";
 import { ApiError } from "../api/executions";
@@ -38,6 +38,9 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
   const [listLoaded, setListLoaded] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [olderError, setOlderError] = useState<string | null>(null);
+  const [nextBeforeId, setNextBeforeId] = useState<number | null>(null);
   const [listKey, setListKey] = useState(0);
   const [messageKey, setMessageKey] = useState(0);
   const [pending, setPending] = useState<"create" | "chat" | "rename" | "delete" | null>(null);
@@ -49,6 +52,8 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
   const writeInProgress = useRef(false);
   const selectedRef = useRef<Conversation | null>(null);
   const validateSelection = useRef(false);
+  const messageGeneration = useRef(0);
+  const olderInProgress = useRef(false);
   const selectedId = selectedConversation === null ? "" : String(selectedConversation.id);
   const conversationId = selectedConversation?.id ?? null;
 
@@ -132,6 +137,11 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
 
   useEffect(() => {
     let cancelled = false;
+    messageGeneration.current += 1;
+    olderInProgress.current = false;
+    setLoadingOlder(false);
+    setOlderError(null);
+    setNextBeforeId(null);
     setMessages([]);
     setMessagesLoaded(false);
     setMessageError(null);
@@ -139,9 +149,10 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
     if (conversationId === null) return;
     async function load() {
       try {
-        const rows = await getConversationMessages(conversationId!, agentId);
+        const page = await getConversationMessagePage(conversationId!, agentId);
         if (!cancelled) {
-          setMessages(rows);
+          setMessages(page.items);
+          setNextBeforeId(page.next_before_id);
           setMessagesLoaded(true);
         }
       } catch (error) {
@@ -154,6 +165,36 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
     void load();
     return () => { cancelled = true; };
   }, [agentId, conversationId, messageKey]);
+
+  async function loadOlderMessages() {
+    if (conversationId === null || nextBeforeId === null || loadingMessages || !messagesLoaded ||
+        pending !== null || confirmDelete || olderInProgress.current) return;
+    const generation = messageGeneration.current;
+    const anchor = messages[0];
+    if (!anchor || anchor.id !== nextBeforeId) return;
+    olderInProgress.current = true;
+    setLoadingOlder(true);
+    setOlderError(null);
+    try {
+      const page = await getConversationMessagePage(conversationId, agentId, 20, nextBeforeId);
+      if (!mounted.current || generation !== messageGeneration.current || selectedRef.current?.id !== conversationId) return;
+      const existing = new Set(messages.map((row) => row.id));
+      if (page.items.some((row) => existing.has(row.id) || compareConversationMessages(row, anchor) >= 0)) {
+        throw new ApiError(502, "The server returned overlapping history. Reload messages before continuing.");
+      }
+      setMessages((rows) => [...page.items, ...rows]);
+      setNextBeforeId(page.next_before_id);
+    } catch (error) {
+      if (mounted.current && generation === messageGeneration.current) {
+        setOlderError(error instanceof ApiError ? error.message : "Unable to load older messages. Your loaded messages and draft were kept. Try again.");
+      }
+    } finally {
+      if (mounted.current && generation === messageGeneration.current) {
+        olderInProgress.current = false;
+        setLoadingOlder(false);
+      }
+    }
+  }
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -181,7 +222,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
     }
   }
 
-  const managementDisabled = pending !== null || confirmDelete || loadingList || !listLoaded || conversationId === null;
+  const managementDisabled = pending !== null || confirmDelete || loadingList || !listLoaded || loadingOlder || conversationId === null;
   const chatDisabled = managementDisabled || loadingMessages || !messagesLoaded;
 
   function managementError(error: unknown, action: string): string {
@@ -273,7 +314,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
   }
 
   return (
-    <div aria-busy={pending !== null || loadingList || loadingMessages}>
+    <div aria-busy={pending !== null || loadingList || loadingMessages || loadingOlder}>
       <p>Conversations for Agent {agentId}</p>
       <form onSubmit={(event) => {
         event.preventDefault();
@@ -369,7 +410,16 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
       {conversationId === null && <p>Create or select a conversation to send a message.</p>}
       {conversationId !== null && loadingMessages && <p role="status">Loading messages...</p>}
       {conversationId !== null && messageError !== null && <p role="alert">{messageError}</p>}
+      {conversationId !== null && olderError !== null && <p role="alert">{olderError}</p>}
       {conversationId !== null && messagesLoaded && messages.length === 0 && <p>No messages in this conversation.</p>}
+      {conversationId !== null && messagesLoaded && messages.length > 0 && (
+        <div>
+          <p>{messages.length} messages loaded. {nextBeforeId === null ? "All saved messages are loaded." : "Earlier messages are available."}</p>
+          <button type="button" disabled={nextBeforeId === null || loadingOlder || loadingMessages || pending !== null || confirmDelete}
+            onClick={() => void loadOlderMessages()}>{loadingOlder ? "Loading older messages..." : "Load older messages"}</button>
+          <p>Reload messages returns to the latest 20 messages and keeps your unsent draft.</p>
+        </div>
+      )}
       {conversationId !== null && messagesLoaded && messages.length > 0 && (
         <ol aria-label="Conversation messages">
           {messages.map((row) => <li key={row.id}>

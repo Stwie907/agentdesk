@@ -1,4 +1,4 @@
-import { conversationPageResponse } from "./conversationFixtures";
+import { conversationMessagePageResponse, conversationPageResponse } from "./conversationFixtures";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -25,7 +25,7 @@ test("conversation chat refreshes Agent memories, history, and execution inspect
       submitted = true;
       return jsonResponse({ execution_id: 101, status: "completed", response: execution.output });
     }
-    if (url.pathname === "/conversations/91/messages") return jsonResponse(submitted ? [
+    if (url.pathname === "/conversations/91/messages/page") return conversationMessagePageResponse(submitted ? [
       { id: 1, conversation_id: 91, role: "user", content: execution.input, created_at: memory.created_at },
       { id: 2, conversation_id: 91, role: "assistant", content: execution.output, created_at: memory.created_at },
     ] : []);

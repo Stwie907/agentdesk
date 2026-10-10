@@ -22,3 +22,13 @@ export type ConversationPage = {
   has_more: boolean;
   items: Conversation[];
 };
+
+export type ConversationMessagePage = {
+  conversation_id: number;
+  agent_id: number;
+  limit: number;
+  before_id: number | null;
+  has_more: boolean;
+  next_before_id: number | null;
+  items: ConversationMessage[];
+};

@@ -15,3 +15,13 @@ class MessageResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class MessagePageResponse(BaseModel):
+    conversation_id: int
+    agent_id: int
+    limit: int
+    before_id: int | None
+    has_more: bool
+    next_before_id: int | None
+    items: list[MessageResponse]
