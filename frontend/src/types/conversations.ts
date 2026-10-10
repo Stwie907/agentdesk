@@ -12,3 +12,13 @@ export type ConversationMessage = {
   content: string;
   created_at: string;
 };
+
+export type ConversationPage = {
+  agent_id: number;
+  query: string;
+  limit: number;
+  offset: number;
+  total: number;
+  has_more: boolean;
+  items: Conversation[];
+};

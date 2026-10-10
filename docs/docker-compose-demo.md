@@ -750,6 +750,70 @@ The renamed keeper, transcript, memory, and stored execution/snapshot must exist
 before any test writes. Missing data fails instead of being recreated to pass.
 This uses the existing `/data/agentdesk.db` volume without a schema migration.
 
+## Search and paginate conversations
+
+Select `Demo Agent`, then use **Conversation title search** and **Search
+conversations**. Search `Python`, `记忆`, or a literal `%`/`_` in a title.
+**Clear conversation search** restores all titles. Only the selected Agent's
+titles are searched; messages and other Agents' conversations are excluded.
+
+**Conversations per page** offers 5, 10, 20, and 50. Newest conversations appear
+first. **Previous conversations** and **Next conversations** use the matching
+count. Search/size changes return to the first page. The active conversation
+and unsent drafts stay selected when it leaves the current results. Choosing a
+different conversation clears the chat draft. Create clears the search; rename
+updates filtered results; deleting the last record on a final page moves back.
+
+The acceptance command works in either Mock or Ollama and makes no model request.
+If the existing backend uses Ollama semantic memory and its vector cache, keep
+that configuration when rebuilding:
+
+```sh
+LLM_PROVIDER=ollama MEMORY_RETRIEVAL_MODE=semantic MEMORY_VECTOR_CACHE_ENABLED=true \
+docker compose -f docker-compose.yml \
+  up --build --detach --wait --wait-timeout 180 backend frontend &&
+docker compose -f docker-compose.yml exec -T backend \
+  python -m app.check_conversation_pagination --base-url http://frontend
+```
+
+For an existing Mock demo, build with its usual two Compose files and invoke
+the same checker module from that backend. `make conversation-pagination-check`
+checks the currently running backend without changing its provider.
+
+The initial run prepares five uniquely marked `AgentDeskConversationPage-*`
+conversations for `Demo Agent`, one same-title record for `MCP Order Agent`,
+and one direct saved user message. It creates no chat execution and preserves
+all original rows and document vectors. Eight probes verify scoped pages,
+English/Chinese search, literal punctuation, empty/no-match queries, validation,
+foreign-Agent isolation, saved identity/transcript, and unchanged SQLite data.
+
+Expected first result: `checks_passed: 8`, `conversations_created: 6`,
+`messages_created: 1`, `chat_executions_created: 0`, and
+`persistence_verified: false`. `read_only: false` accounts for fixture setup;
+`probe_read_only: true` describes the page and search checks.
+
+The immutable `conversation-pagination-acceptance.json` checkpoint beside
+SQLite records the original conversations, message, and all table fingerprints,
+including cached document vectors. Keep application records unchanged until
+restart verification finishes; perform manual UI edits before the first run or
+after the pair of checks. Recreate services while retaining the named volume:
+
+```sh
+docker compose -f docker-compose.yml down &&
+LLM_PROVIDER=ollama MEMORY_RETRIEVAL_MODE=semantic MEMORY_VECTOR_CACHE_ENABLED=true \
+docker compose -f docker-compose.yml \
+  up --detach --wait --wait-timeout 180 backend frontend &&
+docker compose -f docker-compose.yml exec -T backend \
+  python -m app.check_conversation_pagination --base-url http://frontend --verify-persistence
+```
+
+Expected restart result: eight checks, identical `conversation_ids`,
+`foreign_conversation_id`, and `saved_message_id`, with `persistence_verified`,
+`checkpoint_reused`, and `read_only` all true. Created conversation/message/chat
+counts are all zero. Every SQLite row and existing acceptance checkpoint stays
+unchanged. Missing or changed evidence fails before repair or page probes.
+This adds no database migration, dependency, or paid API.
+
 ## Switch to local Ollama
 
 Use the base Compose file without the Mock override. Ollama must run on the host,

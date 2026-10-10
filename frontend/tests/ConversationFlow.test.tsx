@@ -1,3 +1,4 @@
+import { conversationPageResponse } from "./conversationFixtures";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -18,7 +19,7 @@ test("conversation chat refreshes Agent memories, history, and execution inspect
       memoryReads += 1;
       return jsonResponse(submitted ? [memory] : []);
     }
-    if (url.pathname === "/conversations") return jsonResponse([{ id: 91, agent_id: 7, title: "Memory demo", created_at: "2026-10-08T14:00:00" }]);
+    if (url.pathname === "/conversations/page") return conversationPageResponse([{ id: 91, agent_id: 7, title: "Memory demo", created_at: "2026-10-08T14:00:00" }]);
     if (url.pathname === "/conversations/91/chat" && init?.method === "POST") {
       expect(url.searchParams.get("agent_id")).toBe("7");
       submitted = true;

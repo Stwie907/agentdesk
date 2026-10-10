@@ -4,6 +4,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { ConversationPanel } from "../src/components/ConversationPanel";
 import type { Conversation, ConversationMessage } from "../src/types/conversations";
 import { deferredResponse, jsonResponse } from "./taskFixtures";
+import { conversationPageResponse } from "./conversationFixtures";
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
@@ -13,7 +14,7 @@ const assistant: ConversationMessage = { ...user, id: 2, role: "assistant", cont
 const reply = { execution_id: 101, status: "completed", response: assistant.content };
 
 async function activePanel() {
-  const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse([conversation])).mockResolvedValueOnce(jsonResponse([]));
+  const fetchMock = vi.fn().mockResolvedValueOnce(conversationPageResponse([conversation])).mockResolvedValueOnce(jsonResponse([]));
   const onActivity = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
   const view = render(<ConversationPanel agentId={7} onActivity={onActivity} />);
@@ -36,7 +37,7 @@ test("does not load conversations before selecting an Agent", () => {
 });
 
 test("reloads a failed conversation list and keeps writes disabled until recovery", async () => {
-  const fetchMock = vi.fn().mockRejectedValueOnce(new TypeError("offline")).mockResolvedValueOnce(jsonResponse([]));
+  const fetchMock = vi.fn().mockRejectedValueOnce(new TypeError("offline")).mockResolvedValueOnce(conversationPageResponse([]));
   vi.stubGlobal("fetch", fetchMock);
   render(<ConversationPanel agentId={7} onActivity={vi.fn()} />);
   await screen.findByRole("alert");
@@ -50,8 +51,8 @@ test("reloads a failed conversation list and keeps writes disabled until recover
 
 test("creates a trimmed title once and selects the returned conversation", async () => {
   const pending = deferredResponse();
-  const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse([])).mockReturnValueOnce(pending.promise)
-    .mockResolvedValueOnce(jsonResponse([]));
+  const fetchMock = vi.fn().mockResolvedValueOnce(conversationPageResponse([])).mockReturnValueOnce(pending.promise)
+    .mockResolvedValueOnce(conversationPageResponse([conversation])).mockResolvedValueOnce(jsonResponse([]));
   vi.stubGlobal("fetch", fetchMock);
   render(<ConversationPanel agentId={7} onActivity={vi.fn()} />);
   await screen.findByText("No conversations for this Agent.");
@@ -71,7 +72,7 @@ test("creates a trimmed title once and selects the returned conversation", async
 });
 
 test("keeps the title on a failed create without automatic retries", async () => {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse([])).mockRejectedValueOnce(new TypeError("offline")));
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(conversationPageResponse([])).mockRejectedValueOnce(new TypeError("offline")));
   render(<ConversationPanel agentId={7} onActivity={vi.fn()} />);
   await screen.findByText("No conversations for this Agent.");
   fireEvent.change(screen.getByLabelText("New conversation title"), { target: { value: "Keep title" } });
@@ -83,7 +84,7 @@ test("keeps the title on a failed create without automatic retries", async () =>
 
 test("renders the ordered transcript as plain text", async () => {
   const content = '<img src="x" onerror="alert(1)">';
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse([conversation]))
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(conversationPageResponse([conversation]))
     .mockResolvedValueOnce(jsonResponse([{ ...user, content }, assistant])));
   render(<ConversationPanel agentId={7} onActivity={vi.fn()} />);
   await screen.findByRole("option", { name: "Memory demo (ID: 91)" });
@@ -155,7 +156,7 @@ test("a failed transcript reload after successful chat does not resend the messa
 test("ignores a late transcript after selecting another conversation", async () => {
   const pending = deferredResponse();
   const other = { ...conversation, id: 92, title: "Other conversation" };
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse([conversation, other]))
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(conversationPageResponse([conversation, other]))
     .mockReturnValueOnce(pending.promise).mockResolvedValueOnce(jsonResponse([{ ...user, conversation_id: 92, content: "Current transcript" }])));
   render(<ConversationPanel agentId={7} onActivity={vi.fn()} />);
   await screen.findByRole("option", { name: "Other conversation (ID: 92)" });
@@ -168,18 +169,18 @@ test("ignores a late transcript after selecting another conversation", async () 
 
 test("ignores a late conversation list after switching Agents", async () => {
   const pending = deferredResponse();
-  vi.stubGlobal("fetch", vi.fn().mockReturnValueOnce(pending.promise).mockResolvedValueOnce(jsonResponse([])));
+  vi.stubGlobal("fetch", vi.fn().mockReturnValueOnce(pending.promise).mockResolvedValueOnce(conversationPageResponse([], { agent_id: 8 })));
   const { rerender } = render(<ConversationPanel agentId={7} onActivity={vi.fn()} />);
   rerender(<ConversationPanel agentId={8} onActivity={vi.fn()} />);
   await screen.findByText("No conversations for this Agent.");
-  await act(async () => { pending.resolve(jsonResponse([conversation])); });
+  await act(async () => { pending.resolve(conversationPageResponse([conversation])); });
   expect(screen.queryByRole("option", { name: "Memory demo (ID: 91)" })).not.toBeInTheDocument();
 });
 
 test("ignores a late create after switching Agents", async () => {
   const pending = deferredResponse();
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse([])).mockReturnValueOnce(pending.promise)
-    .mockResolvedValueOnce(jsonResponse([])));
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(conversationPageResponse([])).mockReturnValueOnce(pending.promise)
+    .mockResolvedValueOnce(conversationPageResponse([], { agent_id: 8 })));
   const { rerender } = render(<ConversationPanel agentId={7} onActivity={vi.fn()} />);
   await screen.findByText("No conversations for this Agent.");
   fireEvent.change(screen.getByLabelText("New conversation title"), { target: { value: "Old conversation" } });
@@ -195,7 +196,7 @@ test("ignores a late create after switching Agents", async () => {
 test("ignores a late chat result after switching Agents", async () => {
   const { fetchMock, onActivity, rerender } = await activePanel();
   const pending = deferredResponse();
-  fetchMock.mockReturnValueOnce(pending.promise).mockResolvedValueOnce(jsonResponse([]));
+  fetchMock.mockReturnValueOnce(pending.promise).mockResolvedValueOnce(conversationPageResponse([], { agent_id: 8 }));
   draft();
   fireEvent.click(screen.getByRole("button", { name: "Send message" }));
   rerender(<ConversationPanel agentId={8} onActivity={onActivity} />);
@@ -206,14 +207,14 @@ test("ignores a late chat result after switching Agents", async () => {
 });
 
 test("rejects another Agent's conversation list", async () => {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse([{ ...conversation, agent_id: 8 }])));
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(conversationPageResponse([{ ...conversation, agent_id: 8 }])));
   render(<ConversationPanel agentId={7} onActivity={vi.fn()} />);
   expect(await screen.findByRole("alert")).toHaveTextContent("invalid conversation data for this Agent");
   expect(screen.queryByRole("option", { name: "Memory demo (ID: 91)" })).not.toBeInTheDocument();
 });
 
 test("rejects messages from another conversation and disables sending", async () => {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse([conversation]))
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(conversationPageResponse([conversation]))
     .mockResolvedValueOnce(jsonResponse([{ ...user, conversation_id: 92 }])));
   render(<ConversationPanel agentId={7} onActivity={vi.fn()} />);
   await screen.findByRole("option", { name: "Memory demo (ID: 91)" });

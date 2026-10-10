@@ -44,6 +44,16 @@ def get_conversations(
     return query.order_by(Conversation.created_at.asc(), Conversation.id.asc()).all()
 
 
+def get_conversation_page(db: Session, agent_id: int, query: str, limit: int, offset: int):
+    rows = db.query(Conversation).filter(Conversation.agent_id == agent_id)
+    if query:
+        # User text is a literal substring, including %, _, and the escape character.
+        rows = rows.filter(Conversation.title.icontains(query, autoescape=True))
+    total = rows.count()
+    items = rows.order_by(Conversation.created_at.desc(), Conversation.id.desc()).offset(offset).limit(limit).all()
+    return items, total
+
+
 
 def update_conversation_title(db: Session, conversation: Conversation, title: str):
     conversation.title = title

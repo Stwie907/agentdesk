@@ -600,6 +600,45 @@ Mock mode for six HTTP scenarios. After recreating services, add
 and stored execution/snapshot are checked before any repair or test write. The
 check deletes only the temporary conversation it creates.
 
+### Conversation title search and pages
+
+`GET /conversations/page` requires a positive `agent_id`. It returns
+`agent_id`, trimmed `query`, `limit`, `offset`, matching `total`, `has_more`,
+and `items`. The default limit is 10; accepted limits are 1–50 and offsets
+are nonnegative. Agent IDs and offsets must fit SQLite's signed 64-bit integer
+range. A missing Agent returns 404 and invalid parameters return 422.
+
+An omitted, empty, or whitespace-only query lists all conversations for that
+Agent. Other queries allow at most 200 characters and match a literal title
+substring: ASCII English matching ignores case, Chinese text matches directly,
+and `%`, `_`, and `/` remain literal characters. Messages are not searched.
+Rows sort by creation time descending and then ID descending. The count and
+page use the same Agent/title filters, and SQL bounds the returned rows.
+Offset pages reflect current data; concurrent inserts or deletes may shift
+their boundaries. The legacy `GET /conversations` response and ascending order
+remain available.
+
+The endpoint only reads SQLite and does not call a model or change memories,
+messages, executions, traces, snapshots, or cached embeddings. It uses the
+existing Agent scope checks without adding authentication.
+
+Run `python -m app.check_conversation_pagination --base-url http://frontend`
+with either Mock or Ollama configuration. The first run prepares five uniquely
+marked conversations for `Demo Agent`, one same-title conversation for
+`MCP Order Agent`, and one direct saved user message. It creates no chat
+execution and calls no model. Eight checks cover bounded pages, English/Chinese
+search, literal punctuation, empty/no-match searches, validation, isolation,
+saved identity/transcript, and unchanged records/vectors/checkpoints.
+
+The separate `conversation-pagination-acceptance.json` checkpoint stores IDs,
+titles, timestamps, the message, and SQLite row fingerprints. Reusing it performs
+only reads. After restarting services with the same volume, add
+`--verify-persistence`: every original fixture and all SQLite fingerprints must
+match before page probes. Missing or changed evidence fails without repair.
+Keep application records unchanged between the two runs. Explore the workbench
+before the initial check or after the restart check. `--state-file PATH.json`
+selects a separate checkpoint. No migration or dependency is added.
+
 ## Health and tests
 
 `GET /health` continues to return `{"status": "ok"}`.

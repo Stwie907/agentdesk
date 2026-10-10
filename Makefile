@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check memory-search-check memory-editing-check user-memory-check semantic-memory-check ollama-memory-check memory-evidence-check memory-vector-cache-check ollama-memory-vector-cache-check
+.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check conversation-pagination-check memory-search-check memory-editing-check user-memory-check semantic-memory-check ollama-memory-check memory-evidence-check memory-vector-cache-check ollama-memory-vector-cache-check
 
 help:
 	@printf '%s\n' \
@@ -23,6 +23,7 @@ help:
 	@printf '%s\n' '  memory-check  Check Agent memory storage, scope, deletion, and Runtime retrieval'
 	@printf '%s\n' '  conversation-check  Check multi-turn chat, automatic memory, and Agent scope'
 	@printf '%s\n' '  conversation-management-check  Check rename, message deletion, and retained Agent data'
+	@printf '%s\n' '  conversation-pagination-check  Check scoped conversation pages, literal title search, and read-only probes'
 	@printf '%s\n' '  memory-search-check  Check ranked bilingual previews, Agent scope, and Runtime retrieval'
 	@printf '%s\n' '  memory-editing-check  Check scoped edits, conflicts, and preserved memory identity'
 	@printf '%s\n' '  user-memory-check  Check shared user memory, isolation, conditional edits, and Runtime retrieval'
@@ -121,6 +122,12 @@ check:
 	@test -f frontend/tests/ConversationFlow.test.tsx
 	@test -f backend/app/check_conversation_management.py
 	@test -f backend/tests/test_conversation_management_api.py
+	@test -f backend/app/check_conversation_pagination.py
+	@test -f backend/tests/test_conversation_pagination.py
+	@test -f backend/tests/test_conversation_pagination_acceptance.py
+	@test -f frontend/tests/ConversationPagination.test.tsx
+	@test -f frontend/tests/conversationPaginationApi.test.ts
+	@test -f frontend/tests/conversationFixtures.ts
 	@test -f frontend/tests/ConversationManagement.test.tsx
 	@test -f backend/app/services/memory_retrieval.py
 	@test -f backend/app/check_memory_search.py
@@ -225,6 +232,10 @@ conversation-check:
 conversation-management-check:
 	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
 		python -m app.check_conversation_management --base-url http://frontend
+
+conversation-pagination-check:
+	docker compose -f docker-compose.yml exec -T backend \
+		python -m app.check_conversation_pagination --base-url http://frontend
 
 memory-search-check:
 	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \

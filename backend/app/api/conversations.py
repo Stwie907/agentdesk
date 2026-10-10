@@ -8,11 +8,14 @@ from app.crud.conversation import (
     create_conversation,
     delete_conversation,
     get_conversation,
+    get_conversation_page,
     get_conversations,
     update_conversation_title,
 )
 from app.database import get_db
-from app.schemas.conversation import ConversationCreateRequest, ConversationResponse, ConversationUpdateRequest
+from app.schemas.conversation import (
+    ConversationCreateRequest, ConversationPageResponse, ConversationResponse, ConversationUpdateRequest,
+)
 
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
@@ -37,6 +40,25 @@ def list_all(db: Session = Depends(get_db), agent_id: Annotated[int | None, Quer
     if agent_id is not None and get_agent(db, agent_id) is None:
         raise HTTPException(status_code=404, detail="Agent not found")
     return get_conversations(db, agent_id)
+
+
+@router.get("/page", response_model=ConversationPageResponse)
+def page(
+    agent_id: Annotated[int, Query(gt=0, le=9223372036854775807)],
+    db: Session = Depends(get_db),
+    query: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    offset: Annotated[int, Query(ge=0, le=9223372036854775807)] = 0,
+):
+    if get_agent(db, agent_id) is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    normalized = query.strip()
+    items, total = get_conversation_page(db, agent_id, normalized, limit, offset)
+    return ConversationPageResponse(
+        agent_id=agent_id, query=normalized, limit=limit, offset=offset, total=total,
+        has_more=offset + len(items) < total,
+        items=[ConversationResponse.model_validate(row) for row in items],
+    )
 
 
 @router.get("/{conversation_id}", response_model=ConversationResponse)

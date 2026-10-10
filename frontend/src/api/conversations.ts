@@ -1,5 +1,5 @@
 import type { AgentChatResponse } from "../types/agents";
-import type { Conversation, ConversationMessage } from "../types/conversations";
+import type { Conversation, ConversationMessage, ConversationPage } from "../types/conversations";
 import { ApiError, requestJson } from "./executions";
 
 function validateConversation(value: unknown, agentId: number): Conversation {
@@ -15,6 +15,33 @@ export async function getConversations(agentId: number): Promise<Conversation[]>
   const rows = await requestJson<unknown>(`/conversations?agent_id=${agentId}`, { cache: "no-store" });
   if (!Array.isArray(rows)) throw new ApiError(502, "The server returned an invalid conversation list.");
   return rows.map((row) => validateConversation(row, agentId));
+}
+
+export async function getConversationPage(agentId: number, query = "", limit = 10, offset = 0): Promise<ConversationPage> {
+  const normalized = query.trim();
+  const params = new URLSearchParams({ agent_id: String(agentId), limit: String(limit), offset: String(offset) });
+  if (normalized) params.set("query", normalized);
+  const value = await requestJson<unknown>(`/conversations/page?${params}`, { cache: "no-store" });
+  const page = value as Partial<ConversationPage> | null;
+  const total = page?.total;
+  if (!page || page.agent_id !== agentId || page.query !== normalized || page.limit !== limit || page.offset !== offset ||
+      !Number.isSafeInteger(total) || (total ?? -1) < 0 || !Array.isArray(page.items) ||
+      page.items.length !== Math.min(limit, Math.max(0, total! - offset)) ||
+      page.has_more !== (offset + page.items.length < total!)) {
+    throw new ApiError(502, "The server returned an invalid conversation page. Reload conversations.");
+  }
+  const items = page.items.map((row) => validateConversation(row, agentId));
+  if (new Set(items.map((row) => row.id)).size !== items.length) {
+    throw new ApiError(502, "The server returned duplicate conversations. Reload conversations.");
+  }
+  return { ...page, items } as ConversationPage;
+}
+
+export async function getConversation(conversationId: number, agentId: number): Promise<Conversation> {
+  const row = validateConversation(await requestJson<unknown>(`/conversations/${conversationId}?agent_id=${agentId}`,
+    { cache: "no-store" }), agentId);
+  if (row.id !== conversationId) throw new ApiError(502, "The server returned a different conversation. Reload conversations.");
+  return row;
 }
 
 export async function createConversation(agentId: number, title: string): Promise<Conversation> {

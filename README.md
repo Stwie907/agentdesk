@@ -437,6 +437,42 @@ add `--verify-persistence`; the renamed keeper, transcript, memory, and stored
 execution must already exist before any test write. No migration or dependency
 is added.
 
+## Search and paginate conversations
+
+Use **Conversation title search** to find saved titles for the selected Agent.
+Choose **Search conversations** to apply a trimmed title fragment, or
+**Clear conversation search** to browse all titles. English ASCII matching
+ignores case, Chinese fragments match directly, and punctuation such as `%`
+and `_` stays literal. This searches titles rather than message contents.
+
+The workbench loads 10 conversations per page, newest first. Choose 5, 10, 20,
+or 50 under **Conversations per page**, then use **Previous conversations** and
+**Next conversations**. Changing the search or size returns to the first page.
+The matching count is shown separately from the selected chat.
+
+Paging and searching retain the active conversation, transcript, chat draft,
+rename draft, and new-conversation draft. An active conversation outside the
+results is kept under **Current conversation**. Selecting a different chat
+clears its unsent chat draft. Creating a new conversation clears the applied
+search and selects the new record on the first page. A rename refreshes filtered
+results; deletion fills the page or moves back when the final page becomes empty.
+Reload validates an off-page selection with the existing scoped read endpoint.
+
+```sh
+docker compose -f docker-compose.yml exec -T backend \
+  python -m app.check_conversation_pagination --base-url http://frontend
+```
+
+Equivalent: `make conversation-pagination-check`. It works with either Mock
+or Ollama, creates six acceptance conversations and one saved message initially,
+and makes no model or chat-execution request. Eight checks cover pages, bilingual
+literal title search, validation, scope, original identity/transcript, and
+unchanged data during reads. After recreating services, add
+`--verify-persistence`; original IDs, messages, timestamps, and SQLite fingerprints
+must match before read-only probes. Keep records unchanged between the two runs.
+The new `/conversations/page` endpoint is additive; legacy lists remain available.
+See the [Compose guide](docs/docker-compose-demo.md) for the complete commands.
+
 ## Runtime evaluation
 
 After starting the Mock demo, run this from the repository root:
