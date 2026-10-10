@@ -60,6 +60,32 @@ Conversation and memory data use the same SQLite volume. Mock responses remain
 fixed, while previous history and relevant memories reach the existing Runtime.
 Ollama uses that context for generated replies. No paid service is added.
 
+### Title search and paging
+
+The panel uses the scoped `/conversations/page` endpoint to load 10 newest
+conversations initially. **Conversation title search** applies a trimmed title
+fragment only on **Search conversations**. A blank query or **Clear conversation
+search** lists all titles for that Agent. Matching is literal, with ASCII English
+case ignored and Chinese fragments supported. Message contents are not searched.
+
+**Conversations per page** offers 5, 10, 20, and 50. **Previous conversations**
+and **Next conversations** respect the returned count and page boundaries.
+Search and size changes reset the offset. A failed page blocks writes until an
+explicit successful retry. Scoped response validation rejects wrong metadata,
+foreign rows, duplicate IDs, and inconsistent totals or boundaries.
+
+The active chat lives separately from the page. Searching or paging keeps its
+transcript and all drafts; an off-page selection is shown under **Current
+conversation** with an explanatory message. Explicitly selecting another chat
+clears its chat draft. Reload verifies an off-page selection; only a scoped 404
+clears it, while other errors retain drafts and block writes.
+
+Create clears the search and selects the new conversation on the first page.
+Rename refreshes a filtered list without losing the selected transcript.
+Delete reloads and fills the page, or returns to the preceding available page.
+Browse controls are locked during writes and deletion confirmation. Agent
+changes reset the panel and invalidate late page and write responses.
+
 ## Agent Memory
 
 Select an Agent in the task form. Its memories load below that form. Enter, for

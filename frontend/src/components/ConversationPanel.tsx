@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import {
-  createConversation, deleteConversation, getConversationMessages, getConversations,
+  createConversation, deleteConversation, getConversation, getConversationMessages, getConversationPage,
   renameConversation, sendConversationMessage,
 } from "../api/conversations";
 import { ApiError } from "../api/executions";
@@ -24,7 +24,11 @@ export function ConversationPanel({ agentId, onActivity }: Props) {
 
 function AgentConversations({ agentId, onActivity }: { agentId: number; onActivity: Props["onActivity"] }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [searchDraft, setSearchDraft] = useState("");
+  const [browse, setBrowse] = useState({ query: "", limit: 10, offset: 0 });
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const [title, setTitle] = useState("");
   const [renameTitle, setRenameTitle] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -43,8 +47,30 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
   const [notice, setNotice] = useState<string | null>(null);
   const mounted = useRef(true);
   const writeInProgress = useRef(false);
-  const selectedConversation = conversations.find((row) => String(row.id) === selectedId);
+  const selectedRef = useRef<Conversation | null>(null);
+  const validateSelection = useRef(false);
+  const selectedId = selectedConversation === null ? "" : String(selectedConversation.id);
   const conversationId = selectedConversation?.id ?? null;
+
+  function chooseConversation(row: Conversation | null) {
+    selectedRef.current = row;
+    setSelectedConversation(row);
+  }
+
+  function refreshList(validateCurrent = false) {
+    validateSelection.current = validateCurrent;
+    setLoadingList(true);
+    setListLoaded(false);
+    setListKey((key) => key + 1);
+  }
+
+  function changeBrowse(next: typeof browse) {
+    setLoadingList(true);
+    setListLoaded(false);
+    setListError(null);
+    setBrowse(next);
+    setListKey((key) => key + 1);
+  }
 
   useEffect(() => {
     setRenameTitle(selectedConversation?.title ?? "");
@@ -58,15 +84,40 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
 
   useEffect(() => {
     let cancelled = false;
+    const current = selectedRef.current;
+    const validateCurrent = validateSelection.current;
+    validateSelection.current = false;
     setLoadingList(true);
     setListLoaded(false);
     setListError(null);
     async function load() {
       try {
-        const rows = await getConversations(agentId);
+        const page = await getConversationPage(agentId, browse.query, browse.limit, browse.offset);
+        if (cancelled) return;
+        if (browse.offset > 0 && browse.offset >= page.total) {
+          validateSelection.current = validateCurrent;
+          setBrowse((previous) => ({ ...previous, offset: page.total === 0 ? 0 : Math.floor((page.total - 1) / browse.limit) * browse.limit }));
+          return;
+        }
+        let selected = page.items.find((row) => row.id === current?.id) ?? current;
+        if (validateCurrent && current && !page.items.some((row) => row.id === current.id)) {
+          try { selected = await getConversation(current.id, agentId); }
+          catch (error) {
+            if (!(error instanceof ApiError) || error.status !== 404) throw error;
+            selected = null;
+          }
+        }
         if (!cancelled) {
-          setConversations(rows);
-          setSelectedId((current) => rows.some((row) => String(row.id) === current) ? current : "");
+          setConversations(page.items);
+          setTotal(page.total);
+          setHasMore(page.has_more);
+          if (selectedRef.current?.id === current?.id) {
+            chooseConversation(selected);
+            if (current && selected === null) {
+              setMessage("");
+              setNotice("The selected conversation was removed. Choose another conversation.");
+            }
+          }
           setListLoaded(true);
         }
       } catch (error) {
@@ -77,7 +128,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
     }
     void load();
     return () => { cancelled = true; };
-  }, [agentId, listKey]);
+  }, [agentId, browse.query, browse.limit, browse.offset, listKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,8 +165,9 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
     try {
       const saved = await createConversation(agentId, title);
       if (mounted.current) {
-        setConversations((rows) => [...rows, saved]);
-        setSelectedId(String(saved.id));
+        chooseConversation(saved);
+        setSearchDraft("");
+        changeBrowse({ ...browse, query: "", offset: 0 });
         setTitle("");
         setMessage("");
         setNotice(`Conversation ${saved.id} created.`);
@@ -151,9 +203,11 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
     try {
       const saved = await renameConversation(conversationId, agentId, renameTitle);
       if (mounted.current) {
+        chooseConversation(saved);
         setConversations((rows) => rows.map((row) => row.id === saved.id ? saved : row));
         setRenameTitle(saved.title);
         setNotice(`Conversation ${saved.id} renamed.`);
+        if (browse.query) refreshList();
       }
     } catch (error) {
       if (mounted.current) setWriteError(managementError(error, "rename"));
@@ -173,13 +227,14 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
       await deleteConversation(conversationId, agentId);
       if (mounted.current) {
         setConversations((rows) => rows.filter((row) => row.id !== conversationId));
-        setSelectedId("");
+        chooseConversation(null);
         setMessage("");
         setMessages([]);
         setMessagesLoaded(false);
         setLoadingMessages(false);
         setMessageError(null);
         setNotice(`Conversation ${conversationId} deleted. Agent memories and execution history were kept.`);
+        refreshList();
       }
     } catch (error) {
       if (mounted.current) setWriteError(managementError(error, "delete"));
@@ -220,12 +275,43 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
   return (
     <div aria-busy={pending !== null || loadingList || loadingMessages}>
       <p>Conversations for Agent {agentId}</p>
-      <button type="button" disabled={loadingList || pending !== null || confirmDelete} onClick={() => setListKey((key) => key + 1)}>
+      <form onSubmit={(event) => {
+        event.preventDefault();
+        if (loadingList || pending !== null || confirmDelete || searchDraft.trim().length > 200) return;
+        changeBrowse({ ...browse, query: searchDraft.trim(), offset: 0 });
+      }}>
+        <label htmlFor="conversation-search">Conversation title search</label>
+        <input id="conversation-search" value={searchDraft} maxLength={200}
+          disabled={loadingList || pending !== null || confirmDelete}
+          onChange={(event) => setSearchDraft(event.target.value)} />
+        <button type="submit" disabled={loadingList || pending !== null || confirmDelete || searchDraft.trim().length > 200}>
+          Search conversations
+        </button>
+        <button type="button" disabled={loadingList || pending !== null || confirmDelete || (!searchDraft && !browse.query)}
+          onClick={() => {
+            setSearchDraft("");
+            if (browse.query) changeBrowse({ ...browse, query: "", offset: 0 });
+          }}>Clear conversation search</button>
+      </form>
+      <label htmlFor="conversation-page-size">Conversations per page</label>
+      <select id="conversation-page-size" value={browse.limit} disabled={loadingList || pending !== null || confirmDelete}
+        onChange={(event) => changeBrowse({ ...browse, limit: Number(event.target.value), offset: 0 })}>
+        {[5, 10, 20, 50].map((size) => <option key={size} value={size}>{size}</option>)}
+      </select>
+      <button type="button" disabled={loadingList || pending !== null || confirmDelete} onClick={() => refreshList(true)}>
         Reload conversations
       </button>
       {loadingList && <p role="status">Loading conversations...</p>}
       {listError !== null && <p role="alert">{listError}</p>}
-      {listLoaded && conversations.length === 0 && <p>No conversations for this Agent.</p>}
+      {listLoaded && total === 0 && <p>{browse.query ? "No conversations match this title search." : "No conversations for this Agent."}</p>}
+      {listLoaded && <p>Showing {total === 0 ? 0 : browse.offset + 1}–{browse.offset + conversations.length} of {total} conversations.
+        {browse.query && <> Title contains “{browse.query}”.</>}</p>}
+      <nav aria-label="Conversation pages">
+        <button type="button" disabled={loadingList || !listLoaded || pending !== null || confirmDelete || browse.offset === 0}
+          onClick={() => changeBrowse({ ...browse, offset: Math.max(0, browse.offset - browse.limit) })}>Previous conversations</button>
+        <button type="button" disabled={loadingList || !listLoaded || pending !== null || confirmDelete || !hasMore}
+          onClick={() => changeBrowse({ ...browse, offset: browse.offset + browse.limit })}>Next conversations</button>
+      </nav>
       <form onSubmit={(event) => void handleCreate(event)}>
         <label htmlFor="conversation-title">New conversation title</label>
         <input id="conversation-title" value={title} maxLength={200}
@@ -237,11 +323,21 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
       </form>
       <label htmlFor="conversation-select">Conversation</label>
       <select id="conversation-select" value={selectedId}
-        disabled={loadingList || !listLoaded || pending !== null || confirmDelete || conversations.length === 0}
-        onChange={(event) => { setSelectedId(event.target.value); setMessage(""); setNotice(null); setWriteError(null); }}>
+        disabled={loadingList || !listLoaded || pending !== null || confirmDelete || (conversations.length === 0 && !selectedConversation)}
+        onChange={(event) => {
+          chooseConversation(conversations.find((row) => String(row.id) === event.target.value) ??
+            (event.target.value === selectedId ? selectedConversation : null));
+          setMessage(""); setNotice(null); setWriteError(null);
+        }}>
         <option value="">Select a conversation</option>
+        {selectedConversation && !conversations.some((row) => row.id === conversationId) &&
+          <optgroup label="Current conversation">
+            <option value={selectedConversation.id}>{selectedConversation.title} (ID: {selectedConversation.id})</option>
+          </optgroup>}
         {conversations.map((row) => <option key={row.id} value={row.id}>{row.title} (ID: {row.id})</option>)}
       </select>
+      {listLoaded && selectedConversation && !conversations.some((row) => row.id === conversationId) &&
+        <p>Your current conversation is outside these results. Its messages and unsent draft stay selected.</p>}
       {conversationId !== null && (
         <div>
           <form onSubmit={(event) => void handleRename(event)}>

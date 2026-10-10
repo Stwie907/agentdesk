@@ -3,6 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 
 import { ConversationPanel } from "../src/components/ConversationPanel";
 import { deferredResponse, jsonResponse } from "./taskFixtures";
+import { conversationPageResponse } from "./conversationFixtures";
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
@@ -14,7 +15,7 @@ const messages = [
 ];
 
 async function activePanel() {
-  const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse([conversation, other]))
+  const fetchMock = vi.fn().mockResolvedValueOnce(conversationPageResponse([conversation, other]))
     .mockResolvedValueOnce(jsonResponse(messages));
   vi.stubGlobal("fetch", fetchMock);
   const onActivity = vi.fn();
@@ -95,7 +96,7 @@ test("cancels deletion without issuing a request or changing the transcript", as
 test("confirms deletion once, clears the transcript and draft, and retains other conversations", async () => {
   const { fetchMock, onActivity } = await activePanel();
   const pending = deferredResponse();
-  fetchMock.mockReturnValueOnce(pending.promise);
+  fetchMock.mockReturnValueOnce(pending.promise).mockResolvedValueOnce(conversationPageResponse([other]));
   fireEvent.change(screen.getByLabelText("Chat message"), { target: { value: "Old draft" } });
   fireEvent.click(screen.getByRole("button", { name: "Delete conversation" }));
   fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
@@ -124,7 +125,7 @@ test.each(["network", "missing", "invalid_reply"])("preserves selection after %s
   expect(screen.getByLabelText("Conversation")).toHaveValue("91");
   expect(screen.getByText("Saved answer")).toBeInTheDocument();
   expect(fetchMock).toHaveBeenCalledTimes(3);
-  fetchMock.mockResolvedValueOnce(jsonResponse([other]));
+  fetchMock.mockResolvedValueOnce(conversationPageResponse([other])).mockResolvedValueOnce(jsonResponse({ detail: "Conversation not found" }, 404));
   fireEvent.click(screen.getByRole("button", { name: "Reload conversations" }));
   await screen.findByText("Create or select a conversation to send a message.");
   expect(screen.queryByText("Saved answer")).not.toBeInTheDocument();
@@ -134,7 +135,7 @@ test.each(["network", "missing", "invalid_reply"])("preserves selection after %s
 test.each(["rename", "delete"])("ignores a late %s result after switching Agents", async (action) => {
   const { fetchMock, onActivity, rerender } = await activePanel();
   const pending = deferredResponse();
-  fetchMock.mockReturnValueOnce(pending.promise).mockResolvedValueOnce(jsonResponse([]));
+  fetchMock.mockReturnValueOnce(pending.promise).mockResolvedValueOnce(conversationPageResponse([], { agent_id: 8 }));
   if (action === "rename") {
     renameDraft(); fireEvent.click(screen.getByRole("button", { name: "Rename conversation" }));
   } else {
@@ -152,8 +153,8 @@ test.each(["rename", "delete"])("ignores a late %s result after switching Agents
 
 test("ignores a late transcript after its conversation is deleted", async () => {
   const pending = deferredResponse();
-  const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse([conversation]))
-    .mockReturnValueOnce(pending.promise).mockResolvedValueOnce(jsonResponse({ message: "deleted" }));
+  const fetchMock = vi.fn().mockResolvedValueOnce(conversationPageResponse([conversation]))
+    .mockReturnValueOnce(pending.promise).mockResolvedValueOnce(jsonResponse({ message: "deleted" })).mockResolvedValueOnce(conversationPageResponse([]));
   vi.stubGlobal("fetch", fetchMock);
   render(<ConversationPanel agentId={7} onActivity={vi.fn()} />);
   await screen.findByRole("option", { name: "Memory demo (ID: 91)" });
