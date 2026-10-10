@@ -371,6 +371,19 @@ zero `cache_written`. Missing or changed checkpoints or original cache entries
 fail before the proof chat can regenerate them. See the
 [demo guide](docs/docker-compose-demo.md) for the complete sequence.
 
+For the installed local Ollama embedding model, run
+`make ollama-memory-vector-cache-check` after starting the real-provider backend
+with semantic retrieval and caching enabled. The check invokes the Runtime
+memory context builder, records the real embedding inputs, and verifies four
+warm scopes using query-only embeddings. It also runs the existing real-model
+preview quality checks. It does not invoke the chat model or create executions.
+
+The initial run may populate document cache rows and saves a separate Ollama
+checkpoint. After container recreation, `--verify-persistence` validates the
+original cache and every business table before any embedding call, then performs
+read-only retrieval. Existing Mock namespaces, source records, and checkpoints
+are preserved. See the [demo guide](docs/docker-compose-demo.md) for both commands.
+
 ## Multi-turn conversation workbench
 
 Select an Agent, then create or select a conversation under **Conversation Chat**.

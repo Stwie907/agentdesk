@@ -333,8 +333,9 @@ and uses keyword retrieval. Restore keyword Mock Runtime with:
 MEMORY_RETRIEVAL_MODE=keyword sh deployment/start-demo.sh
 ```
 
-Semantic previews are read-only and calculate fresh vectors for each request.
-They require no new SQLite table or migration.
+Semantic previews are read-only and generate a fresh query vector for each
+request. They can reuse valid document vectors already stored by Runtime;
+missing vectors are generated in memory without populating the cache.
 
 ## Read-only acceptance with real Ollama
 
@@ -511,6 +512,67 @@ Caching defaults to enabled for semantic retrieval. To bypass it, set
 `MEMORY_VECTOR_CACHE_ENABLED=false` in the root `.env` and recreate the backend.
 This bypass retains stored cache data. Embeddings, ranking, and the local
 `qwen2.5:7b` chat model remain available with the original configuration.
+
+## Verify real Ollama document cache reuse and restart persistence
+
+Keep the existing semantic checkpoint and named volume from Mock acceptance.
+Start the real-provider backend, using the installed local embedding model:
+
+```sh
+LLM_PROVIDER=ollama MEMORY_RETRIEVAL_MODE=semantic MEMORY_VECTOR_CACHE_ENABLED=true \
+  docker compose -f docker-compose.yml \
+  up --build --detach --wait --wait-timeout 180 backend frontend
+docker compose -f docker-compose.yml exec -T backend \
+  python -m app.check_ollama_memory_vector_cache --base-url http://frontend
+```
+
+Equivalent acceptance target: `make ollama-memory-vector-cache-check`. Use the
+real-provider Compose configuration without `docker-compose.mock.yml`.
+`OLLAMA_EMBEDDING_MODEL`, `COMPOSE_OLLAMA_BASE_URL`, threshold, and embedding
+timeout use the existing root `.env` configuration.
+
+This invokes the Runtime memory context builder directly and forwards recorded
+input texts to the production Ollama `/api/embed` client. The initial check
+may write scoped document cache rows and a separate Ollama JSON checkpoint.
+It does not create chat executions or invoke the chat model. It verifies
+English/Chinese retrieval, shared vectors for one user, a separate user's
+scope, and the existing read-only real-model preview quality checks. A warm
+retrieval must embed exactly one query, with zero document misses or writes.
+
+Recreate the containers without deleting their volume:
+
+```sh
+docker compose -f docker-compose.yml down
+LLM_PROVIDER=ollama MEMORY_RETRIEVAL_MODE=semantic MEMORY_VECTOR_CACHE_ENABLED=true \
+  docker compose -f docker-compose.yml \
+  up --detach --wait --wait-timeout 180 backend frontend
+docker compose -f docker-compose.yml exec -T backend \
+  python -m app.check_ollama_memory_vector_cache --base-url http://frontend --verify-persistence
+```
+
+Both runs should report `status: passed`, `checks_passed: 8`,
+`preview_checks_passed: 7`, `warm_embedding_inputs: 1`, warm hits greater than
+zero, zero warm misses/writes, and `chat_executions_created: 0`.
+The restart additionally reports `persistence_verified: true`,
+`checkpoint_reused: true`, `read_only: true`, and `cache_rows_written: 0`.
+The original `source_execution_id`, model digest, and saved vectors must survive.
+No fixed semantic similarity is expected from the learned model.
+
+Keep `ollama-memory-vector-cache-acceptance.json`, the semantic checkpoint,
+and all database records intact between these two commands. Verification
+checks original data before any embedding call, so lost or changed vectors,
+model digests, business records, or checkpoints fail without being repaired.
+Every business table is fingerprinted; unrelated chats or edits also invalidate
+the acceptance checkpoint. The initial check preserves other cache namespaces,
+including existing Mock entries. Both successful reuse and preview are read-only.
+
+The earlier `check_ollama_memory` stays read-only on every run. CI covers the new
+check with controlled protocol responses without downloading a learned model.
+After completing the acceptance pair, restore the Mock workbench if desired:
+
+```sh
+MEMORY_RETRIEVAL_MODE=keyword sh deployment/start-demo.sh
+```
 
 ## Check services and run the smoke check
 

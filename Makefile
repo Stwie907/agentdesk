@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check memory-search-check memory-editing-check user-memory-check semantic-memory-check ollama-memory-check memory-evidence-check memory-vector-cache-check
+.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check memory-search-check memory-editing-check user-memory-check semantic-memory-check ollama-memory-check memory-evidence-check memory-vector-cache-check ollama-memory-vector-cache-check
 
 help:
 	@printf '%s\n' \
@@ -30,6 +30,7 @@ help:
 	@printf '%s\n' '  ollama-memory-check  Read-only real Ollama retrieval acceptance using saved semantic fixtures'
 	@printf '%s\n' '  memory-evidence-check  Check saved Runtime retrieval evidence using existing Mock semantic fixtures'
 	@printf '%s\n' '  memory-vector-cache-check  Check scoped vector reuse, invalidation, and cache persistence'
+	@printf '%s\n' '  ollama-memory-vector-cache-check  Verify real Ollama query-only cache reuse without creating chats'
 
 check:
 	@test -f README.md
@@ -161,6 +162,8 @@ check:
 	@test -f backend/app/check_memory_vector_cache.py
 	@test -f backend/tests/test_memory_vector_cache.py
 	@test -f backend/tests/test_memory_vector_cache_acceptance.py
+	@test -f backend/app/check_ollama_memory_vector_cache.py
+	@test -f backend/tests/test_ollama_memory_vector_cache_acceptance.py
 
 test: check
 	@python -m unittest discover -s evaluation/tests -v
@@ -251,3 +254,7 @@ memory-evidence-check:
 memory-vector-cache-check:
 	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
 		python -m app.check_memory_vector_cache --base-url http://frontend
+
+ollama-memory-vector-cache-check:
+	docker compose -f docker-compose.yml exec -T backend \
+		python -m app.check_ollama_memory_vector_cache --base-url http://frontend
