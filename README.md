@@ -602,3 +602,24 @@ for the API contract, limits, and eight-check initial/restart Docker acceptance.
 Run `make conversation-export-check` against the existing running demo. The first
 run adds three fixture conversations and 26 messages; restart verification is
 read-only and checks that both formats retain their original bytes.
+
+## Import a conversation backup
+
+Choose an Agent and a **Conversation JSON backup**, inspect its title and saved
+message count, then select **Confirm import as new conversation**. A new local
+conversation retains the backup's message roles, text, timestamps, and full history.
+The selected chat, loaded messages, and all drafts remain available. Find the new
+conversation by its title after import. JSON schema version 1 supports up to
+10,000 messages and 10 MiB; Markdown is a readable export format.
+
+Imports use new local IDs and the explicitly selected destination Agent. Existing
+records, memories, cached vectors, executions, and source backup files remain
+available. Importing does not run chat or extract memories. No migration or new
+dependency is required. See [import instructions](docs/conversation-import.md).
+
+`make conversation-import-check` imports three marked fixture conversations and
+50 messages with zero chat executions. Eight checks verify a real export/import
+round trip, original text and timestamps, scope, empty history, a valid upload
+larger than 1 MiB through Nginx, validation errors, and preserved existing data.
+Restart verification is read-only and retains the original local IDs and all six
+export hashes. Keep the initial/restart pair idle and retain its checkpoint.

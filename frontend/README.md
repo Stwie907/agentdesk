@@ -250,3 +250,27 @@ handles this API; no new dependency is required.
 
 See [export acceptance and limits](../docs/conversation-export.md), including
 manual validation of full history without loading earlier messages.
+
+## Import a JSON backup as a separate conversation
+
+**Conversation JSON backup** reads a local file and previews its title, saved
+message count, and selected destination Agent. File selection performs no HTTP
+request. **Confirm import as new conversation** sends the backup only after
+confirmation. A successful import refreshes the conversation list while keeping
+the current selection, active title filter, loaded history, and chat/create/rename
+drafts. Search for the imported title to select the new local conversation.
+
+The client validates UTF-8, complete version-1 metadata, counts, scope within the
+source transcript, unique IDs, timestamps, and ordering. It preserves original
+JSON text for the request; the backend independently validates duplicate keys and
+strict numeric types. Import creates no chat execution and does not notify the
+execution inspector. The Nginx proxy permits bodies up to the matching 10 MiB cap.
+
+Pending imports block duplicate submissions and other conversation writes. File
+replacement/clearing and Agent changes ignore stale file reads; unmounting ignores
+late responses. An already submitted request retains its original destination
+Agent and may finish even after the Agent selection changes. There is no automatic
+retry: after an uncertain response, reload conversations and check the imported
+title before confirming again. Failed imports retain the file preview and drafts.
+
+See [import acceptance and limitations](../docs/conversation-import.md).

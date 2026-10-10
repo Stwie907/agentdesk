@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check conversation-pagination-check message-pagination-check conversation-export-check memory-search-check memory-editing-check user-memory-check semantic-memory-check ollama-memory-check memory-evidence-check memory-vector-cache-check ollama-memory-vector-cache-check
+.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check conversation-pagination-check message-pagination-check conversation-export-check conversation-import-check memory-search-check memory-editing-check user-memory-check semantic-memory-check ollama-memory-check memory-evidence-check memory-vector-cache-check ollama-memory-vector-cache-check
 
 help:
 	@printf '%s\n' \
@@ -26,6 +26,7 @@ help:
 	@printf '%s\n' '  conversation-pagination-check  Check scoped conversation pages, literal title search, and read-only probes'
 	@printf '%s\n' '  message-pagination-check  Check bounded older-message cursors and read-only restart persistence'
 	@printf '%s\n' '  conversation-export-check  Check complete JSON/Markdown downloads and immutable restart evidence'
+	@printf '%s\n' '  conversation-import-check  Check atomic JSON backup imports and original IDs after restart'
 	@printf '%s\n' '  memory-search-check  Check ranked bilingual previews, Agent scope, and Runtime retrieval'
 	@printf '%s\n' '  memory-editing-check  Check scoped edits, conflicts, and preserved memory identity'
 	@printf '%s\n' '  user-memory-check  Check shared user memory, isolation, conditional edits, and Runtime retrieval'
@@ -66,6 +67,17 @@ check:
 	@test -f frontend/tests/conversationExportApi.test.ts
 	@test -f frontend/tests/conversationExportFixtures.ts
 	@test -f docs/conversation-export.md
+	@test -f backend/app/schemas/conversation_import.py
+	@test -f backend/app/services/conversation_import.py
+	@test -f backend/app/check_conversation_import.py
+	@test -f backend/tests/test_conversation_import.py
+	@test -f backend/tests/test_conversation_import_acceptance.py
+	@test -f frontend/src/api/conversationImport.ts
+	@test -f frontend/src/components/ConversationImport.tsx
+	@test -f frontend/tests/ConversationImport.test.tsx
+	@test -f frontend/tests/conversationImportApi.test.ts
+	@test -f frontend/tests/conversationImportFixtures.ts
+	@test -f docs/conversation-import.md
 	@test -d frontend/src/components
 	@test -d frontend/src/pages
 	@test -d frontend/tests
@@ -294,3 +306,7 @@ ollama-memory-vector-cache-check:
 conversation-export-check:
 	docker compose -f docker-compose.yml exec -T backend \
 		python -m app.check_conversation_export --base-url http://frontend
+
+conversation-import-check:
+	docker compose -f docker-compose.yml exec -T backend \
+		python -m app.check_conversation_import --base-url http://frontend

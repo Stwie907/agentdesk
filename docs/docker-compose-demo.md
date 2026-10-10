@@ -998,3 +998,25 @@ recreation with `--verify-persistence`, preserving the volume and keeping record
 idle between the pair. Both formats must have identical original SHA-256 values;
 restart creates zero records and retains existing vectors and older checkpoints.
 This checker works with both the existing Ollama configuration and the Mock demo.
+
+## Import JSON backups without changing original records
+
+Select an Agent, choose a **Conversation JSON backup**, review its title and message
+count, then select **Confirm import as new conversation**. Import saves a separate
+conversation with new local IDs and preserves existing chat drafts and history.
+Follow [the complete Docker import instructions](conversation-import.md) for the
+initial check, immediate restart verification, and manual browser acceptance.
+
+`python -m app.check_conversation_import --base-url http://frontend` runs eight
+checks and imports three marked conversations and 50 messages, with zero chat
+executions or model requests. One empty JSON backup contains enough valid leading
+whitespace to exceed Nginx's old 1 MiB default while storing a normal empty history.
+An actual JSON export is re-imported into the other Agent to verify destination
+scope and full transcript preservation. Previous records, vectors, and acceptance
+checkpoint bytes remain unchanged.
+
+Restart with the SQLite volume retained and immediately add `--verify-persistence`.
+Successful reuse and restart use only GETs, create zero records, and verify the
+original IDs and six JSON/Markdown attachment hashes. Finish each earlier milestone's
+restart pair before this initial import check adds new rows. Earlier checkpoints
+remain byte-identical; their full-database snapshots intentionally predate new imports.
