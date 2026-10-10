@@ -4,6 +4,7 @@ import {
   compareConversationMessages, createConversation, deleteConversation, getConversation, getConversationMessagePage, getConversationPage,
   renameConversation, sendConversationMessage,
 } from "../api/conversations";
+import { ConversationExport } from "./ConversationExport";
 import { ApiError } from "../api/executions";
 import type { Conversation, ConversationMessage } from "../types/conversations";
 
@@ -405,6 +406,8 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
           )}
         </div>
       )}
+      {conversationId !== null && <ConversationExport key={conversationId} conversationId={conversationId} agentId={agentId}
+        disabled={pending !== null || confirmDelete} />}
       <button type="button" disabled={conversationId === null || loadingMessages || pending !== null || confirmDelete}
         onClick={() => setMessageKey((key) => key + 1)}>Reload messages</button>
       {conversationId === null && <p>Create or select a conversation to send a message.</p>}
