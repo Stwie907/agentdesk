@@ -510,6 +510,46 @@ source memories, inspections, and checkpoint files remain unchanged. Missing or
 changed original data fails before that chat. The previous memory-evidence and
 real Ollama acceptance checks retain their read-only behavior.
 
+## Real Ollama vector cache acceptance
+
+With the existing semantic fixture checkpoint, run:
+
+```sh
+python -m app.check_ollama_memory_vector_cache --base-url http://127.0.0.1:5173
+python -m app.check_ollama_memory_vector_cache --base-url http://127.0.0.1:5173 --verify-persistence
+```
+
+Use `LLM_PROVIDER=ollama`, `MEMORY_RETRIEVAL_MODE=semantic`, and enabled caching
+in both the CLI and running backend. This check calls the production Runtime
+`build_memory_context` component directly, with a process-local observer that
+forwards unchanged input texts to the real `/api/embed` client. It does not
+invoke the planner or chat model, create executions, or test generated replies.
+The existing `qwen2.5:7b` chat configuration is preserved.
+
+The initial run can populate scoped document cache entries and atomically saves
+`ollama-memory-vector-cache-acceptance.json` beside SQLite. It accepts already
+warmed entries without forcing a cache reset. Four read-only warm retrievals
+cover English, Chinese, same-user sharing, and a separate user; each must send
+exactly one query text for embedding and have zero document misses or writes.
+The existing seven-check real Ollama preview acceptance also runs and reports
+actual model scores and ranks. Model digest, local/API source identity, and
+every business table are validated. Other cache namespaces remain untouched.
+
+Reuse and `--verify-persistence` first validate the original model, source
+checkpoint, every business-table fingerprint, cache row fingerprints, saved
+retrieval evidence, and vector validity. Missing or changed data fails before
+any embedding call; the check never repairs a failed restart. All successful
+reuse work is read-only, including the original cache and both checkpoint files.
+Keep the SQLite volume and avoid chats or record edits between the initial and
+restart checks. Such changes correctly invalidate this acceptance checkpoint.
+
+Successful JSON includes `checks_passed: 8`, `preview_checks_passed: 7`,
+`warm_embedding_inputs: 1`, `warm_cache_hits > 0`, zero warm misses/writes,
+and `chat_executions_created: 0`. Restart adds `persistence_verified: true`,
+`checkpoint_reused: true`, `read_only: true`, and `cache_rows_written: 0`.
+CI uses controlled HTTP protocol vectors; learned-model and container acceptance
+are run locally with the installed Ollama embedding model.
+
 ## Conversation workbench APIs
 
 `POST /conversations` requires an existing positive integer Agent ID and a
