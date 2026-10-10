@@ -3,7 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 
 import { ConversationPanel } from "../src/components/ConversationPanel";
 import type { Conversation } from "../src/types/conversations";
-import { conversationPageResponse } from "./conversationFixtures";
+import { conversationMessagePageResponse, conversationPageResponse } from "./conversationFixtures";
 import { deferredResponse, jsonResponse } from "./taskFixtures";
 
 afterEach(() => { vi.unstubAllGlobals(); });
@@ -25,8 +25,8 @@ function setup(initialRows = rows) {
       const filtered = saved.filter((row) => row.title.toLowerCase().includes(query.toLowerCase()));
       return conversationPageResponse(filtered.slice(offset, offset + limit), { query, limit, offset, total: filtered.length });
     }
-    if (url.pathname.endsWith("/messages")) {
-      return jsonResponse([{ id: 100, conversation_id: Number(url.pathname.split("/")[2]), role: "user",
+    if (url.pathname.endsWith("/messages/page")) {
+      return conversationMessagePageResponse([{ id: 100, conversation_id: Number(url.pathname.split("/")[2]), role: "user",
         content: "Saved transcript", created_at: rows[0].created_at }]);
     }
     if (url.pathname === "/conversations" && init?.method === "POST") {

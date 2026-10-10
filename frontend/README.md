@@ -213,3 +213,21 @@ origin; the browser does not need to resolve Docker service names.
 
 See [the Docker Compose guide](../docs/docker-compose-demo.md) for normal Ollama
 mode, persistence, smoke checks, shutdown, and troubleshooting.
+
+### Load older saved messages
+
+The selected conversation initially requests its latest 20 messages using the
+scoped `/conversations/{id}/messages/page` route. Messages display in ascending
+timestamp/ID order. **Load older messages** prepends the next page and keeps the
+chat, rename, and new-conversation drafts. The counter shows loaded messages
+and whether earlier history is available. No full transcript fetch is needed
+for this panel; legacy API callers and Runtime context keep their full history.
+
+Older loads keep already rendered messages visible, block duplicate requests
+and chat/management writes while loading, and support an explicit retry after
+failure. Invalid scope, duplicate IDs, ordering, cursors, or overlapping
+responses are rejected before they can enter the transcript. Timestamp checks
+preserve microseconds. Conversation/Agent changes and **Reload messages**
+ignore stale older responses. Reload keeps the unsent chat draft and returns
+to the latest 20; a completed chat also refreshes that latest page. Conversation
+title search/paging preserves already loaded older messages for the active chat.

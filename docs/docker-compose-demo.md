@@ -929,3 +929,58 @@ temporary databases independently of the application's store.
 References: [Compose startup order](https://docs.docker.com/compose/how-tos/startup-order/),
 [Compose networking](https://docs.docker.com/compose/how-tos/networking/), and
 [Nginx proxy module](https://nginx.org/en/docs/http/ngx_http_proxy_module.html).
+
+## Verify bounded message history and restart persistence
+
+Keep the current provider configuration; this check works with Mock and Ollama
+and never executes a chat or calls a model. With the existing Ollama semantic
+configuration, rebuild the changed backend and frontend first:
+
+```bash
+LLM_PROVIDER=ollama MEMORY_RETRIEVAL_MODE=semantic MEMORY_VECTOR_CACHE_ENABLED=true \
+  docker compose -f docker-compose.yml \
+  up --build --detach --wait --wait-timeout 180 backend frontend &&
+docker compose -f docker-compose.yml exec -T backend \
+  python -m app.check_message_pagination --base-url http://frontend
+```
+
+The initial run creates three unique `AgentDeskMessagePage-*` conversations:
+a 45-message history and an empty history for `Demo Agent`, plus one saved
+message in the foreign `MCP Order Agent` scope. The messages are saved directly;
+there are no chat executions, memory extractions, or embedding requests. All
+original conversations/messages and other SQLite rows, including vector cache
+rows, remain unchanged. Existing acceptance files are preserved byte for byte.
+
+Expected JSON: `status: passed`, `checks_passed: 8`, `saved_message_count: 45`,
+`pages_walked: 3`, `conversations_created: 3`, `messages_created: 46`,
+`chat_executions_created: 0`, `probe_read_only: true`, and
+`records_and_vectors_unchanged: true`. Save the conversation and message IDs.
+
+Immediately verify restart without chats, edits, or other acceptance writes:
+
+```bash
+docker compose -f docker-compose.yml down &&
+LLM_PROVIDER=ollama MEMORY_RETRIEVAL_MODE=semantic MEMORY_VECTOR_CACHE_ENABLED=true \
+  docker compose -f docker-compose.yml \
+  up --detach --wait --wait-timeout 180 backend frontend &&
+docker compose -f docker-compose.yml exec -T backend \
+  python -m app.check_message_pagination --base-url http://frontend --verify-persistence
+```
+
+Do not delete the SQLite volume. Expected restart: the same eight checks and
+IDs, `persistence_verified`, `checkpoint_reused`, and `read_only` true, with
+created conversation/message/chat counts all zero. The separate
+`message-pagination-acceptance.json` checkpoint sits beside SQLite. Reuse and
+restart verification never repair missing or changed evidence. Normal later
+business activity changes the full database fingerprint; run this strict pair
+before manual UI testing. Old checkpoint bytes are retained, and old checkers'
+previous full-database snapshots are not rewritten for these new fixture rows.
+
+After the pair passes, select `Demo Agent` and the saved `History` conversation.
+Confirm only the latest 20 appear, enter an unsent chat draft, and click
+**Load older messages** twice. Expect 20, 40, and 45 loaded messages, ascending
+order, no duplicates, and the same draft. **Reload messages** returns to 20
+while retaining that draft. Searching other conversation titles keeps the active
+chat and its loaded history. An older-page error keeps the displayed history;
+retry explicitly. A deleted cursor returns 404, so use a latest-page reload.
+The Runtime's full context and local `qwen2.5:7b` setup remain unchanged.

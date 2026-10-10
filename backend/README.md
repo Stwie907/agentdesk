@@ -702,3 +702,46 @@ the repository root.
 
 See [the Docker Compose guide](../docs/docker-compose-demo.md) for complete
 commands, switching providers, persistence verification, and troubleshooting.
+
+### Bounded conversation message history
+
+`GET /conversations/{conversation_id}/messages/page` adds chronological history
+pages while retaining the existing full `/messages` list and chat endpoints.
+
+| Parameter | Contract |
+| --- | --- |
+| `conversation_id` | Positive signed 64-bit path ID. |
+| `agent_id` | Required positive signed 64-bit ID; the conversation must belong to this Agent. |
+| `limit` | 1 to 100, default 20. |
+| `before_id` | Optional positive signed 64-bit ID for a saved message in this conversation. Omitted means latest history. |
+
+Response fields are `conversation_id`, `agent_id`, `limit`, `before_id`,
+`has_more`, `next_before_id`, and `items`. Items are ascending by
+`created_at, id` within each page. Internally SQL reads at most `limit + 1`
+newest eligible rows; older queries use a strict `(created_at, id)` boundary
+looked up from the scoped cursor. `next_before_id` is the first returned item's
+ID when more history exists, otherwise null. No count or unbounded transcript
+query is needed for this route.
+
+An empty conversation or a cursor at its earliest message returns an empty
+page without an older cursor. Invalid parameters return 422. Missing/foreign
+conversations or missing/foreign/deleted message cursors return 404. Reads use
+current data rather than a frozen snapshot: newer inserts do not shift an
+existing older boundary, and a deleted cursor requires a latest-page reload.
+The existing Agent filter is retained; this does not add authentication.
+The Runtime still builds its full ordered history before executing a turn.
+
+Run `python -m app.check_message_pagination --base-url http://frontend` from the
+running backend. The first run saves three isolated conversations, 45 messages
+in the primary transcript, and one foreign-scope message. It executes no chats
+and makes no model requests, including with Ollama/semantic/cache settings.
+Eight checks verify latest/older pages, custom limits, empty history, scope,
+invalid parameters, the legacy transcript, identity, and read-only probes.
+
+The immutable `message-pagination-acceptance.json` stores saved rows and full
+SQLite fingerprints, including cached vectors. Existing acceptance checkpoint
+bytes are preserved. Reuse and `--verify-persistence` create no records and fail
+without repair when saved data is missing or changed. Run initial and restart
+checks consecutively without chats, edits, or other acceptance writes between
+them. Normal subsequent activity invalidates this strict snapshot by design.
+An unavailable page route fails before fixture preparation writes anything.

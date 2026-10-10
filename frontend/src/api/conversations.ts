@@ -1,5 +1,5 @@
 import type { AgentChatResponse } from "../types/agents";
-import type { Conversation, ConversationMessage, ConversationPage } from "../types/conversations";
+import type { Conversation, ConversationMessage, ConversationMessagePage, ConversationPage } from "../types/conversations";
 import { ApiError, requestJson } from "./executions";
 
 function validateConversation(value: unknown, agentId: number): Conversation {
@@ -93,6 +93,47 @@ export async function getConversationMessages(conversationId: number, agentId: n
     }
     return row as ConversationMessage;
   });
+}
+
+function messageTime(row: ConversationMessage): number {
+  const parts = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}:\d{2})?$/.exec(row.created_at);
+  const timestamp = parts ? Date.parse(parts[1] + (parts[3] ?? "Z")) * 1000 + Number((parts[2] ?? "").padEnd(6, "0")) : NaN;
+  if (!Number.isSafeInteger(timestamp)) throw new ApiError(502, "The server returned an invalid message timestamp.");
+  return timestamp;
+}
+
+export function compareConversationMessages(left: ConversationMessage, right: ConversationMessage): number {
+  return messageTime(left) - messageTime(right) || left.id - right.id;
+}
+
+export async function getConversationMessagePage(
+  conversationId: number, agentId: number, limit = 20, beforeId: number | null = null,
+): Promise<ConversationMessagePage> {
+  const params = new URLSearchParams({ agent_id: String(agentId), limit: String(limit) });
+  if (beforeId !== null) params.set("before_id", String(beforeId));
+  const value = await requestJson<unknown>(`/conversations/${conversationId}/messages/page?${params}`, { cache: "no-store" });
+  const page = value as Partial<ConversationMessagePage> | null;
+  if (!page || page.conversation_id !== conversationId || page.agent_id !== agentId || page.limit !== limit ||
+      page.before_id !== beforeId || typeof page.has_more !== "boolean" || !Array.isArray(page.items) ||
+      page.items.length > limit || (page.has_more && page.items.length !== limit)) {
+    throw new ApiError(502, "The server returned an invalid message page. Reload messages.");
+  }
+  const items = page.items.map((value) => {
+    const row = value as Partial<ConversationMessage> | null;
+    if (!row || !Number.isSafeInteger(row.id) || (row.id ?? 0) <= 0 || row.conversation_id !== conversationId ||
+        typeof row.role !== "string" || typeof row.content !== "string" || typeof row.created_at !== "string") {
+      throw new ApiError(502, "The server returned invalid messages for this conversation.");
+    }
+    messageTime(row as ConversationMessage);
+    return row as ConversationMessage;
+  });
+  if (new Set(items.map((row) => row.id)).size !== items.length ||
+      items.some((row, index) => index > 0 && compareConversationMessages(items[index - 1], row) >= 0) ||
+      items.some((row) => row.id === beforeId) ||
+      page.next_before_id !== (page.has_more ? items[0]?.id : null)) {
+    throw new ApiError(502, "The server returned invalid message order or cursor. Reload messages.");
+  }
+  return { ...page, items } as ConversationMessagePage;
 }
 
 export async function sendConversationMessage(conversationId: number, agentId: number, message: string): Promise<AgentChatResponse> {

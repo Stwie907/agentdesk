@@ -556,3 +556,36 @@ RAG and additional MCP business tools remain future milestones.
 The application keeps Ollama as its default provider. The Mock Compose override
 selects deterministic demo behavior. Use the Docker guide to switch an existing
 demo to a local Ollama server without deleting its data.
+
+## Load older conversation messages
+
+Selecting a conversation loads its latest 20 saved messages in chronological
+order. **Load older messages** prepends another page while keeping the selected
+conversation and all drafts. The loaded count and older-history availability are
+shown above the transcript. Failed older loads retain the rendered history and
+allow an explicit retry. **Reload messages** returns to the latest 20 and keeps
+the chat draft; a completed chat also refreshes the latest page. Late responses
+from another conversation or Agent are ignored.
+
+The additive `GET /conversations/{id}/messages/page` endpoint requires `agent_id`,
+accepts `limit` from 1 to 100 (default 20), and uses an exclusive `before_id`
+cursor. Timestamp and ID ties are handled together. The legacy full-message
+endpoint and the Runtime's complete conversation context stay available.
+No dependency, database schema, model, or paid API changes are required.
+
+```bash
+docker compose -f docker-compose.yml exec -T backend \
+  python -m app.check_message_pagination --base-url http://frontend
+```
+
+Equivalent: `make message-pagination-check`. The first run creates three
+uniquely marked conversations and 46 saved fixture messages, with no chat
+executions or model requests. Eight checks walk all 45 main-history messages,
+verify an empty history and a foreign scope, and preserve all existing rows,
+vectors, and checkpoint files. Restart the services without deleting the SQLite
+volume and immediately run the same command with `--verify-persistence`.
+The checkpoint is `message-pagination-acceptance.json` beside SQLite.
+Restart/reuse performs only reads, expects the original IDs and fingerprints,
+and fails on missing or changed data without recreating fixtures. Keep the
+initial/restart pair idle; subsequent normal activity changes its strict
+fingerprint. Older acceptance checkpoints are preserved byte for byte.

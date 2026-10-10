@@ -4,7 +4,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { ConversationPanel } from "../src/components/ConversationPanel";
 import type { Conversation, ConversationMessage } from "../src/types/conversations";
 import { deferredResponse, jsonResponse } from "./taskFixtures";
-import { conversationPageResponse } from "./conversationFixtures";
+import { conversationMessagePageResponse, conversationPageResponse } from "./conversationFixtures";
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
@@ -14,7 +14,7 @@ const assistant: ConversationMessage = { ...user, id: 2, role: "assistant", cont
 const reply = { execution_id: 101, status: "completed", response: assistant.content };
 
 async function activePanel() {
-  const fetchMock = vi.fn().mockResolvedValueOnce(conversationPageResponse([conversation])).mockResolvedValueOnce(jsonResponse([]));
+  const fetchMock = vi.fn().mockResolvedValueOnce(conversationPageResponse([conversation])).mockResolvedValueOnce(conversationMessagePageResponse([]));
   const onActivity = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
   const view = render(<ConversationPanel agentId={7} onActivity={onActivity} />);
@@ -52,7 +52,7 @@ test("reloads a failed conversation list and keeps writes disabled until recover
 test("creates a trimmed title once and selects the returned conversation", async () => {
   const pending = deferredResponse();
   const fetchMock = vi.fn().mockResolvedValueOnce(conversationPageResponse([])).mockReturnValueOnce(pending.promise)
-    .mockResolvedValueOnce(conversationPageResponse([conversation])).mockResolvedValueOnce(jsonResponse([]));
+    .mockResolvedValueOnce(conversationPageResponse([conversation])).mockResolvedValueOnce(conversationMessagePageResponse([]));
   vi.stubGlobal("fetch", fetchMock);
   render(<ConversationPanel agentId={7} onActivity={vi.fn()} />);
   await screen.findByText("No conversations for this Agent.");
@@ -85,7 +85,7 @@ test("keeps the title on a failed create without automatic retries", async () =>
 test("renders the ordered transcript as plain text", async () => {
   const content = '<img src="x" onerror="alert(1)">';
   vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(conversationPageResponse([conversation]))
-    .mockResolvedValueOnce(jsonResponse([{ ...user, content }, assistant])));
+    .mockResolvedValueOnce(conversationMessagePageResponse([{ ...user, content }, assistant])));
   render(<ConversationPanel agentId={7} onActivity={vi.fn()} />);
   await screen.findByRole("option", { name: "Memory demo (ID: 91)" });
   fireEvent.change(screen.getByLabelText("Conversation"), { target: { value: "91" } });
@@ -97,7 +97,7 @@ test("renders the ordered transcript as plain text", async () => {
 test("sends trimmed chat in the selected scope once and reloads its transcript", async () => {
   const { fetchMock, onActivity } = await activePanel();
   const pending = deferredResponse();
-  fetchMock.mockReturnValueOnce(pending.promise).mockResolvedValueOnce(jsonResponse([user, assistant]));
+  fetchMock.mockReturnValueOnce(pending.promise).mockResolvedValueOnce(conversationMessagePageResponse([user, assistant]));
   draft("  I like Python  ");
   const form = screen.getByRole("button", { name: "Send message" }).closest("form")!;
   fireEvent.submit(form);
@@ -112,7 +112,7 @@ test("sends trimmed chat in the selected scope once and reloads its transcript",
   expect(onActivity).toHaveBeenCalledExactlyOnceWith(7, 101);
   expect(screen.getByLabelText("Chat message")).toHaveValue("");
   expect(screen.getByText(assistant.content)).toBeInTheDocument();
-  expect(fetchMock).toHaveBeenLastCalledWith("/conversations/91/messages?agent_id=7", { cache: "no-store" });
+  expect(fetchMock).toHaveBeenLastCalledWith("/conversations/91/messages/page?agent_id=7&limit=20", { cache: "no-store" });
 });
 
 test.each(["network", "validation"])("keeps the draft after a %s send failure", async (kind) => {
@@ -130,7 +130,7 @@ test.each(["network", "validation"])("keeps the draft after a %s send failure", 
 test("retains the draft for a failed execution and still opens its inspection", async () => {
   const { fetchMock, onActivity } = await activePanel();
   fetchMock.mockResolvedValueOnce(jsonResponse({ ...reply, status: "failed", response: "Tool failed" }))
-    .mockResolvedValueOnce(jsonResponse([user, { ...assistant, content: "Tool failed" }]));
+    .mockResolvedValueOnce(conversationMessagePageResponse([user, { ...assistant, content: "Tool failed" }]));
   draft();
   fireEvent.click(screen.getByRole("button", { name: "Send message" }));
   await screen.findByText("Tool failed");
@@ -142,7 +142,7 @@ test("retains the draft for a failed execution and still opens its inspection", 
 test("a failed transcript reload after successful chat does not resend the message", async () => {
   const { fetchMock, onActivity } = await activePanel();
   fetchMock.mockResolvedValueOnce(jsonResponse(reply)).mockRejectedValueOnce(new TypeError("offline"))
-    .mockResolvedValueOnce(jsonResponse([user, assistant]));
+    .mockResolvedValueOnce(conversationMessagePageResponse([user, assistant]));
   draft();
   fireEvent.click(screen.getByRole("button", { name: "Send message" }));
   await screen.findByRole("alert");
@@ -157,13 +157,13 @@ test("ignores a late transcript after selecting another conversation", async () 
   const pending = deferredResponse();
   const other = { ...conversation, id: 92, title: "Other conversation" };
   vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(conversationPageResponse([conversation, other]))
-    .mockReturnValueOnce(pending.promise).mockResolvedValueOnce(jsonResponse([{ ...user, conversation_id: 92, content: "Current transcript" }])));
+    .mockReturnValueOnce(pending.promise).mockResolvedValueOnce(conversationMessagePageResponse([{ ...user, conversation_id: 92, content: "Current transcript" }])));
   render(<ConversationPanel agentId={7} onActivity={vi.fn()} />);
   await screen.findByRole("option", { name: "Other conversation (ID: 92)" });
   fireEvent.change(screen.getByLabelText("Conversation"), { target: { value: "91" } });
   fireEvent.change(screen.getByLabelText("Conversation"), { target: { value: "92" } });
   await screen.findByText("Current transcript");
-  await act(async () => { pending.resolve(jsonResponse([user, assistant])); });
+  await act(async () => { pending.resolve(conversationMessagePageResponse([user, assistant])); });
   expect(screen.queryByText(user.content)).not.toBeInTheDocument();
 });
 
@@ -215,7 +215,7 @@ test("rejects another Agent's conversation list", async () => {
 
 test("rejects messages from another conversation and disables sending", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(conversationPageResponse([conversation]))
-    .mockResolvedValueOnce(jsonResponse([{ ...user, conversation_id: 92 }])));
+    .mockResolvedValueOnce(conversationMessagePageResponse([{ ...user, conversation_id: 92 }], { conversation_id: 91 })));
   render(<ConversationPanel agentId={7} onActivity={vi.fn()} />);
   await screen.findByRole("option", { name: "Memory demo (ID: 91)" });
   fireEvent.change(screen.getByLabelText("Conversation"), { target: { value: "91" } });
