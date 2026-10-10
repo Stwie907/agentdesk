@@ -1,5 +1,10 @@
 # Docker Compose demo
 
+Full-history message search has a read-only initial/restart acceptance pair using
+the retained JSON import records. Run it after the import restart verification;
+see [conversation message search](conversation-message-search.md). Both runs create
+zero conversation/message/execution records and preserve every older checkpoint.
+
 This guide runs the existing FastAPI, React/Vite, and SQLite application with
 Docker Compose. Mock mode uses deterministic planning and marked replies; the
 Calculator, MCP order, tracking, and ticket tools execute through Runtime V4. No local model or API key is

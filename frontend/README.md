@@ -1,5 +1,11 @@
 # AgentDesk Frontend
 
+**Message content search** searches the selected conversation's entire saved
+history. Role filters, paged previews, and **Read full message** keep the active
+chat, loaded messages, title filter, and drafts intact. Requests run only on an
+explicit action; late responses are invalidated after relevant changes.
+See [message search](../docs/conversation-message-search.md) for a browser checklist.
+
 React and TypeScript execution workbench for AgentDesk. It supports task
 submission, execution history, filters, pagination, execution inspection,
 structured traces, snapshots, replay, cancellation, retry, and automatic refresh.

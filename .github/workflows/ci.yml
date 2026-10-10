@@ -139,6 +139,14 @@ jobs:
           make demo
           docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
             python -m app.check_conversation_import --base-url http://frontend --verify-persistence
+      - name: Check read-only full-history message search using retained imports
+        run: make message-search-check
+      - name: Recreate services and verify original message search results
+        run: |
+          make stop
+          make demo
+          docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+            python -m app.check_message_search --base-url http://frontend --verify-persistence
       - name: Show container logs
         if: always()
         run: |
