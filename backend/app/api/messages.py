@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from sqlalchemy.orm import Session
 
 from app.api.conversations import require_conversation
@@ -8,7 +8,9 @@ from app.crud.message import create_message, get_message_cursor, get_message_pag
 from app.database import get_db
 from app.schemas.chat import ChatResponse, ConversationChatRequest
 from app.schemas.message import MessageCreate, MessagePageResponse, MessageResponse
+from app.schemas.message_search import MessageRoleFilter, MessageSearchResponse
 from app.services.conversation_service import run_conversation_chat
+from app.services.message_search import search_messages
 
 
 router = APIRouter(prefix="/conversations", tags=["messages"])
@@ -48,6 +50,47 @@ def page_messages(
         has_more=has_more, next_before_id=items[0].id if has_more else None,
         items=[MessageResponse.model_validate(row) for row in items],
     )
+
+
+@router.get("/{conversation_id}/messages/search", response_model=MessageSearchResponse)
+def search_saved_messages(
+    conversation_id: Annotated[int, Path(gt=0, le=9223372036854775807)],
+    agent_id: Annotated[int, Query(gt=0, le=9223372036854775807)],
+    query: Annotated[str, Query(min_length=1, max_length=200)],
+    response: Response,
+    db: Session = Depends(get_db),
+    role: MessageRoleFilter | None = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    offset: Annotated[int, Query(ge=0, le=9223372036854775807)] = 0,
+):
+    normalized = query.strip()
+    if not normalized or "\x00" in normalized:
+        raise HTTPException(status_code=422, detail="Enter a message search query of 1 to 200 characters without NUL.")
+    require_conversation(db, conversation_id, agent_id)
+    items, total = search_messages(db, conversation_id, normalized, role, limit, offset)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return MessageSearchResponse(
+        conversation_id=conversation_id, agent_id=agent_id, query=normalized, role=role,
+        limit=limit, offset=offset, total=total, has_more=offset + len(items) < total, items=items,
+    )
+
+
+@router.get("/{conversation_id}/messages/{message_id}", response_model=MessageResponse)
+def read_saved_message(
+    conversation_id: Annotated[int, Path(gt=0, le=9223372036854775807)],
+    message_id: Annotated[int, Path(gt=0, le=9223372036854775807)],
+    agent_id: Annotated[int, Query(gt=0, le=9223372036854775807)],
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    require_conversation(db, conversation_id, agent_id)
+    message = get_message_cursor(db, conversation_id, message_id)
+    if message is None:
+        raise HTTPException(status_code=404, detail="Message not found in this conversation")
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return message
 
 
 @router.post("/{conversation_id}/chat", response_model=ChatResponse)

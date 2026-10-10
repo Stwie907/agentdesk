@@ -1,5 +1,10 @@
 # AgentDesk
 
+Complete saved message history now supports literal content search, role filters,
+bounded previews, and explicit full-message details without changing the active
+chat or drafts. See [conversation message search](docs/conversation-message-search.md)
+for API limits, local Ollama acceptance, and read-only restart verification.
+
 AgentDesk is a local Agent workbench built with FastAPI, React, TypeScript,
 SQLite, and Ollama. Runtime V4 supports execution plans, tool permissions,
 structured traces, snapshots, and replay. The workbench supports task submission,

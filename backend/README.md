@@ -1,5 +1,11 @@
 # AgentDesk Backend
 
+Scoped read-only message search and single-message details are available at
+`GET /conversations/{id}/messages/search?agent_id=ID&query=TEXT` and
+`GET /conversations/{id}/messages/{message_id}?agent_id=ID`. Search the complete
+saved history with literal text, optional role filters, and bounded previews.
+See [message search acceptance](../docs/conversation-message-search.md).
+
 FastAPI backend for AgentDesk. Runtime V4 plans and executes tasks with tool
 permissions, stores execution traces and snapshots, and replays stored plans.
 Ollama is the default provider. Explicit Mock mode supports offline demonstrations.
