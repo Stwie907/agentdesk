@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { ApiError } from "../api/executions";
 import { getMessageContext, type MessageContext } from "../api/messageContext";
 import type { MessageSearchItem } from "../api/messageSearch";
+import { MessageContextExport } from "./MessageContextExport";
 
 type Props = {
   conversationId: number; agentId: number; message: MessageSearchItem; disabled: boolean; onClose: () => void;
@@ -79,6 +80,7 @@ export function ConversationMessageContext({ conversationId, agentId, message, d
     <button type="button" onClick={() => { cancel(); onClose(); }}>Close message context</button>
     {error !== null && <p role="alert">{error}</p>}
     {context !== null && <>
+      <MessageContextExport context={context} disabled={disabled} />
       <p role="status">Showing {context.anchor_index} earlier messages, the selected message, and {context.items.length - context.anchor_index - 1} later messages.</p>
       {context.has_more_before && <p>Earlier saved messages remain outside this context.</p>}
       {context.has_more_after && <p>Later saved messages remain outside this context.</p>}

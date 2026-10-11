@@ -155,6 +155,14 @@ jobs:
           make demo
           docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
             python -m app.check_message_context --base-url http://frontend --verify-persistence
+      - name: Check read-only JSON and Markdown context attachments using original evidence
+        run: make message-context-export-check
+      - name: Recreate services and verify original context attachment bytes
+        run: |
+          make stop
+          make demo
+          docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+            python -m app.check_message_context_export --base-url http://frontend --verify-persistence
       - name: Show container logs
         if: always()
         run: |

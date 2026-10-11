@@ -833,3 +833,20 @@ retain original IDs and export hashes. Missing/changed evidence fails without
 repair, including missing checkpoints with existing marked fixtures. Follow
 [initial/restart acceptance](../docs/conversation-import.md) consecutively before
 normal writes. CI runs this pair after the earlier export persistence check.
+## Saved-message context attachments
+
+`GET /conversations/{conversation_id}/messages/{message_id}/context/export`
+requires `agent_id`, accepts independent `before`/`after` counts of 0 to 10
+(default 3), and supports `format=json|markdown` (default JSON).
+It reuses the scoped chronological context window, exports at most 21 complete
+messages, and rejects UTF-8 attachments larger than 10 MiB without a partial file.
+JSON uses `export_kind: agentdesk.message_context` and schema version 1;
+these excerpts are distinct from importable complete conversation backups.
+Markdown preserves each role/content in a literal fence and marks the anchor.
+
+Both formats disable caching, use safe numeric filenames, and perform only reads.
+Run `python -m app.check_message_context_export --base-url http://frontend` after
+the original import/search/context acceptance pairs. Recreate services and add
+`--verify-persistence` to verify the original 18 attachment hashes and 39 earlier
+response hashes. Keep the existing SQLite volume and all checkpoint files.
+See [context export acceptance](../docs/conversation-message-context-export.md).

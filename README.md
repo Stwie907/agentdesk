@@ -1,5 +1,11 @@
 # AgentDesk
 
+Use **Export context JSON** or **Export context Markdown** to download the
+displayed saved-message excerpt with its selected message, scope, bounds, and
+original text. Complete conversation backups remain available separately.
+See [context exports](docs/conversation-message-context-export.md) for the
+10 MiB limit and read-only initial/restart acceptance preserving earlier evidence.
+
 Search results now support **Read surrounding messages** to inspect the selected
 message and nearby saved turns without replacing the loaded chat or its drafts.
 See [message context](docs/conversation-message-context.md) for scope, bounds,
