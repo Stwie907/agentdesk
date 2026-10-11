@@ -1,5 +1,33 @@
 # AgentDesk Frontend
 
+## Navigate the workbench
+
+The sidebar links directly to tasks/Agent selection, runtime configuration,
+conversation chat, Agent/shared memory, execution history and Inspector. Narrow
+screens use the same links in a horizontal header. Native in-page navigation
+keeps the existing components mounted and retains their state without new API
+requests or writes. Controls use larger targets and responsive form layouts.
+
+**Conversation** selection is at the top of the chat area. After selecting a
+conversation, use **填写标题草稿** or **填写聊天草稿** to jump to the existing title
+and message inputs. These links do not rename a conversation or send a message.
+Saved messages have their own scrollable transcript so long history does not
+push the composer far down the page. Existing search, backup, import, draft,
+memory and Runtime V4 controls remain available under their original labels.
+
+## Read current Runtime configuration
+
+Next to **Submit Task** on wide screens (below on narrow screens), expand
+**Runtime Configuration** to read the current
+provider, selected Agent's saved chat model, configured planner model and memory
+settings. The panel starts collapsed and reads only on expansion, refresh or an
+Agent change while open. Late/cancelled reads cannot replace the new Agent's
+settings. Chat/title drafts, conversation selection and Inspector are retained.
+Model availability is explicitly unchecked; reading does not call a model.
+Vite and Nginx both proxy `/runtime` to the existing FastAPI backend.
+See [configuration acceptance](../docs/runtime-configuration.md) for the retained
+HTTP pair, UI controls and the separate browser draft checks.
+
 ## Open a saved result in its conversation
 
 On an Agent search result, choose **Open message ID in chat**. The client reads

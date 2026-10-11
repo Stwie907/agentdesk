@@ -563,7 +563,17 @@ and connection pooling remain future MCP work.
 
 RAG and additional MCP business tools remain future milestones.
 
+## Runtime configuration
+
+The optional **Runtime Configuration** panel below **Submit Task** displays the
+current provider, selected Agent's saved chat model, configured planner model,
+memory retrieval mode and vector-cache setting/activity. Expand or refresh it to
+read settings without model requests or data writes. Configuration does not
+verify Ollama availability. See [the configuration guide](docs/runtime-configuration.md)
+for the scoped API, retained-data initial/restart pair and browser acceptance.
+
 ## Commands
+
 
 | Command | Purpose |
 | --- | --- |

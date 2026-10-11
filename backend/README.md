@@ -1,5 +1,21 @@
 # AgentDesk Backend
 
+## Read-only Runtime configuration
+
+`GET /runtime/config` reads validated process settings. Add `?agent_id=ID` to
+include that saved Agent's chat model, independently of the configured planner
+model. Version-1 responses distinguish configured embedding/cache settings from
+their activity in keyword or semantic retrieval. No model availability probe or
+record write occurs. Endpoint credentials, URLs and database paths are omitted.
+Invalid settings return a redacted 503; missing Agents return 404 and invalid IDs
+return 422. `/health` keeps its liveness response. The frontend proxies `/runtime`.
+
+`python -m app.check_runtime_configuration --base-url http://frontend --agent-id 1`
+checks API scope, current settings, all SQLite rows/vectors and existing acceptance
+checkpoint bytes without creating evidence files. Optional expected provider,
+chat/planner model, memory mode and cache arguments make configuration mismatches
+fail. See [the local configuration guide](../docs/runtime-configuration.md).
+
 ## Search messages across an Agent's conversations
 
 `GET /agents/{agent_id}/messages/search?query=TEXT` searches message content across

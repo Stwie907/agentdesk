@@ -16,6 +16,7 @@ from app.api import (
     conversations,
     messages,
     agent_messages,
+    runtime,
 )
 
 from app.config import APP_NAME
@@ -73,3 +74,5 @@ app.include_router(
 )
 
 app.include_router(agent_messages.router)
+
+app.include_router(runtime.router)
