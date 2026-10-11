@@ -39,11 +39,15 @@ including whitespace. A conversation with no rename edits uses its fresh saved
 title. The **New conversation title**, title-search draft, and Agent-search
 controls remain available during navigation.
 
-These are browser session drafts, not SQLite records or persistent backups.
-Changing Agent or reloading the browser starts a fresh draft session. Successful
-sends clear the sent chat draft; successful renames update that conversation's
-rename draft; deletion removes the deleted conversation's drafts. Existing
-write-failure draft retention continues to apply.
+Browser saving defaults to off, so changing Agent or reloading starts a fresh
+draft session. Enable **Keep this Agent's drafts on this browser** to restore
+chat/title drafts after re-selecting their original Agent and conversation.
+Browser copies are scoped to the original conversation creation time as well
+as its Agent and ID. See [conversation drafts](conversation-drafts.md) for scope,
+clearing and acceptance. These drafts are separate from SQLite records and
+conversation backup exports. Successful sends clear the sent chat draft;
+successful renames update its title draft; deletion removes its drafts. Existing
+write-failure retention continues to apply.
 
 ## Pending requests and errors
 

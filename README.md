@@ -1,5 +1,12 @@
 # AgentDesk
 
+Under **Conversation Chat**, enable **Keep this Agent's drafts on this browser**
+to retain unsent chat and title drafts through reloads and Agent changes.
+Re-select the original Agent and conversation to restore them. Saving defaults
+to off and can be cleared separately for each Agent. See
+[conversation drafts](docs/conversation-drafts.md) for browser scope, failure
+handling, and exact acceptance steps.
+
 Choose **Open message ID in chat** on an Agent search result to select its original
 conversation and focus the saved-message context, including an older message
 outside the latest 20-message page. Chat and rename drafts stay with each
