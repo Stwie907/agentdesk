@@ -28,7 +28,7 @@ test("opens global settings and makes model availability distinct from configura
   expect(valueFor("Active embedding model")).toHaveTextContent("Not used in keyword mode");
   expect(valueFor("Vector cache setting")).toHaveTextContent("Enabled");
   expect(valueFor("Vector cache activity")).toHaveTextContent("Inactive");
-  expect(screen.getByText("Current settings only. Model availability has not been checked.")).toBeInTheDocument();
+  expect(screen.getByText("Current settings only. Use the model check below to inspect installed local models.")).toBeInTheDocument();
   expect(fetchMock.mock.calls[0][0]).toBe("/runtime/config");
 });
 

@@ -671,3 +671,11 @@ round trip, original text and timestamps, scope, empty history, a valid upload
 larger than 1 MiB through Nginx, validation errors, and preserved existing data.
 Restart verification is read-only and retains the original local IDs and all six
 export hashes. Keep the initial/restart pair idle and retain its checkpoint.
+
+## Local Ollama model checks
+
+Open Runtime Configuration and click **检查本地 Ollama 模型** to inspect the saved
+Agent chat, planner and active embedding model names in local inventory. This is
+a metadata-only read; installation does not certify inference or embedding
+capability. Mock and keyword embedding checks are explicitly skipped. See
+[diagnostics and existing-data acceptance](docs/ollama-diagnostics.md).

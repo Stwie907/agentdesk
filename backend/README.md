@@ -892,3 +892,15 @@ the original import/search/context acceptance pairs. Recreate services and add
 `--verify-persistence` to verify the original 18 attachment hashes and 39 earlier
 response hashes. Keep the existing SQLite volume and all checkpoint files.
 See [context export acceptance](../docs/conversation-message-context-export.md).
+
+## Read-only Ollama model diagnostics
+
+GET `/runtime/ollama` accepts optional `agent_id` and reads local `/api/tags` only
+on explicit requests. It separates missing models from unknown installation after
+connection/timeout/HTTP/format errors, caps inventory size and timeouts, and
+returns no upstream URLs or bodies. Mock performs no Ollama request.
+
+Run `python -m app.check_ollama_diagnostics --base-url http://frontend --agent-id 1
+--expected-provider ollama --require-installed` in the existing backend container
+(as one command). The checker preserves records, vectors and checkpoint bytes.
+See [model diagnostics](../docs/ollama-diagnostics.md).

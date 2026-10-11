@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { ApiError } from "../api/executions";
 import { getRuntimeConfiguration, type RuntimeConfiguration } from "../api/runtimeConfiguration";
+import { OllamaDiagnosticsPanel } from "./OllamaDiagnosticsPanel";
 
 type Props = { agentId: number | null };
 
@@ -43,7 +44,7 @@ function RuntimeConfigurationSession({ agentId, shown, onToggle }: Props & { sho
         {shown ? "Hide runtime configuration" : "Show runtime configuration"}
       </button>
       {shown && <div id="runtime-configuration-details" aria-busy={loading}>
-        <p>Current settings only. Model availability has not been checked.</p>
+        <p>Current settings only. Use the model check below to inspect installed local models.</p>
         <button type="button" disabled={loading} onClick={() => setRefreshKey((key) => key + 1)}>Refresh runtime configuration</button>
         {loading && <p role="status">Loading runtime configuration...</p>}
         {error !== null && <p role="alert">{error}</p>}
@@ -60,6 +61,7 @@ function RuntimeConfigurationSession({ agentId, shown, onToggle }: Props & { sho
           <dt>Vector cache activity</dt><dd>{configuration.memory.vector_cache_active ? "Active for semantic retrieval" : "Inactive"}</dd>
           <dt>Database backend</dt><dd>{configuration.database_backend === "sqlite" ? "SQLite" : configuration.database_backend}</dd>
         </dl>}
+        {configuration !== null && <OllamaDiagnosticsPanel key={refreshKey} agentId={agentId} />}
       </div>}
     </section>
   );
