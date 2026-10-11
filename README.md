@@ -1,5 +1,12 @@
 # AgentDesk
 
+Under **Conversation Chat**, use **Search all Agent conversations** to search
+saved message content across the selected Agent's conversations. A conversation
+selection is optional. Results show each saved title and ID; full-message reads,
+surrounding context, and JSON/Markdown context downloads retain the current chat
+and its drafts. See [Agent message search](docs/agent-message-search.md) for exact
+controls, scope limits, and read-only initial/restart acceptance.
+
 Use **Export context JSON** or **Export context Markdown** to download the
 displayed saved-message excerpt with its selected message, scope, bounds, and
 original text. Complete conversation backups remain available separately.
@@ -567,6 +574,7 @@ RAG and additional MCP business tools remain future milestones.
 | `make ollama-memory-check` | Check real Ollama fixture retrieval, scope, measured quality, and unchanged saved data using only GET requests. |
 | `make conversation-check` | Check scoped multi-turn chat, automatic memory, Runtime context, and saved snapshots. |
 | `make conversation-management-check` | Check rename, scoped message cleanup, protected conversations, and retained Agent data. |
+| `make agent-message-search-check` | Search retained Agent histories across conversations while preserving 57 prior responses and all saved data. |
 | `make stop` | Stop services while retaining the data volume. |
 
 The application keeps Ollama as its default provider. The Mock Compose override

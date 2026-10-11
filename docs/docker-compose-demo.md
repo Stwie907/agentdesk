@@ -1,5 +1,17 @@
 # Docker Compose demo
 
+## Verify message search across an Agent's conversations
+
+Follow [Agent message search acceptance](agent-message-search.md) after the
+original import, message-search, context, and context-export pairs. Keep all four
+source checkpoints and original records. Rebuild services, run
+`python -m app.check_agent_message_search --base-url http://frontend`, immediately
+recreate without deleting the volume, and repeat with `--verify-persistence`.
+Ten read-only checks cover multiple existing Agent conversations, preserve all
+57 prior response hashes and cached vectors, and create zero records. The linked
+guide contains exact local Ollama commands and controls; missing or changed
+evidence fails without repair. Complete the idle pair before normal activity.
+
 ## Verify surrounding saved message context
 
 Follow [message context acceptance](conversation-message-context.md) after the

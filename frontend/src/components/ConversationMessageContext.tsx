@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { ApiError } from "../api/executions";
 import { getMessageContext, type MessageContext } from "../api/messageContext";
@@ -10,6 +10,7 @@ type Props = {
 };
 
 export function ConversationMessageContext({ conversationId, agentId, message, disabled, onClose }: Props) {
+  const controlId = useId();
   const [before, setBefore] = useState(3);
   const [after, setAfter] = useState(3);
   const [context, setContext] = useState<MessageContext | null>(null);
@@ -64,13 +65,13 @@ export function ConversationMessageContext({ conversationId, agentId, message, d
   return <section aria-label="Saved message context" aria-busy={loading}>
     <h4>Context around message {message.id}</h4>
     <p>Read saved messages before and after this result in time order. All roles are included.</p>
-    <label htmlFor={`message-context-before-${message.id}`}>Messages before selected</label>
-    <select id={`message-context-before-${message.id}`} value={before} disabled={disabled}
+    <label htmlFor={`${controlId}-before`}>Messages before selected</label>
+    <select id={`${controlId}-before`} value={before} disabled={disabled}
       onChange={(event) => { setBefore(Number(event.target.value)); clear(); }}>
       {[0, 1, 3, 5, 10].map((count) => <option key={count} value={count}>{count}</option>)}
     </select>
-    <label htmlFor={`message-context-after-${message.id}`}>Messages after selected</label>
-    <select id={`message-context-after-${message.id}`} value={after} disabled={disabled}
+    <label htmlFor={`${controlId}-after`}>Messages after selected</label>
+    <select id={`${controlId}-after`} value={after} disabled={disabled}
       onChange={(event) => { setAfter(Number(event.target.value)); clear(); }}>
       {[0, 1, 3, 5, 10].map((count) => <option key={count} value={count}>{count}</option>)}
     </select>

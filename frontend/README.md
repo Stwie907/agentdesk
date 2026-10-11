@@ -1,5 +1,27 @@
 # AgentDesk Frontend
 
+## Search all conversations for the selected Agent
+
+Under **Conversation Chat**, **Search all Agent conversations** sits above
+**Conversation title search**. Select an Agent above; selecting a conversation
+is optional. Enter `中文` or `turn 01` in **Agent message content search**, keep
+**Agent message role** at **All roles**, and choose **Search Agent messages**.
+The space in `turn 01` is part of the literal query.
+
+Results identify their saved conversation title/ID. **Read full Agent message ID**
+loads that result's complete content; **Read Agent message context ID** loads its
+surrounding messages using the result's conversation scope. Loaded context offers
+**Export context JSON** and **Export context Markdown**. The active chat, loaded
+transcript, title filter, drafts, and Inspector selection are retained. Context
+controls have unique labels even when the same message is open in both panels.
+
+Use **Agent search results per page** and the Agent matching-message buttons to
+page. Query, role, size, and clear changes do not submit automatically. Errors
+retain the query and require explicit retries. Data revisions, write/delete locks,
+Agent changes, and unmounting abort pending reads/downloads. Title browsing retains
+Agent results and their displayed context.
+See [Agent message search](../docs/agent-message-search.md) for exact acceptance.
+
 ## Read surrounding saved messages
 
 After searching saved message content, select **Read surrounding messages ID**.

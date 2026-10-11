@@ -41,6 +41,22 @@ export function compareSearchMessages(left: Pick<ConversationMessage, "id" | "cr
   return a === b ? left.id - right.id : a < b ? -1 : 1;
 }
 
+export function validateMessageSearchItem(value: unknown, conversationId: number, query: string, role: MessageRoleFilter): MessageSearchItem {
+  const row = value as MessageSearchItem;
+  if (!validIdentity(row, conversationId) || (role !== null && row.role !== role) || typeof row.snippet !== "string" ||
+      typeof row.truncated_before !== "boolean" || typeof row.truncated_after !== "boolean") {
+    throw new ApiError(502, "The server returned invalid or foreign message search results.");
+  }
+  timestampKey(row.created_at);
+  const characters = [...row.snippet];
+  if (characters.length === 0 || characters.length > 240 || !Number.isSafeInteger(row.match_start) ||
+      !Number.isSafeInteger(row.match_end) || row.match_start < 0 || row.match_end <= row.match_start ||
+      row.match_end > characters.length || asciiLower(characters.slice(row.match_start, row.match_end).join("")) !== asciiLower(query)) {
+    throw new ApiError(502, "The server returned invalid message previews or match positions.");
+  }
+  return row;
+}
+
 export async function searchConversationMessages(
   conversationId: number, agentId: number, query: string, role: MessageRoleFilter = null, limit = 10, offset = 0,
   signal?: AbortSignal,
@@ -62,21 +78,7 @@ export async function searchConversationMessages(
       page.has_more !== (offset + page.items.length < page.total!)) {
     throw new ApiError(502, "The server returned an invalid message search page. Search again.");
   }
-  const items = page.items.map((value) => {
-    const row = value as MessageSearchItem;
-    if (!validIdentity(row, conversationId) || (role !== null && row.role !== role) || typeof row.snippet !== "string" ||
-        typeof row.truncated_before !== "boolean" || typeof row.truncated_after !== "boolean") {
-      throw new ApiError(502, "The server returned invalid or foreign message search results.");
-    }
-    timestampKey(row.created_at);
-    const characters = [...row.snippet];
-    if (characters.length === 0 || characters.length > 240 || !Number.isSafeInteger(row.match_start) ||
-        !Number.isSafeInteger(row.match_end) || row.match_start < 0 || row.match_end <= row.match_start ||
-        row.match_end > characters.length || asciiLower(characters.slice(row.match_start, row.match_end).join("")) !== asciiLower(normalized)) {
-      throw new ApiError(502, "The server returned invalid message previews or match positions.");
-    }
-    return row;
-  });
+  const items = page.items.map((value) => validateMessageSearchItem(value, conversationId, normalized, role));
   if (new Set(items.map((row) => row.id)).size !== items.length ||
       items.some((row, index) => index > 0 && compareSearchMessages(items[index - 1], row) <= 0)) {
     throw new ApiError(502, "The server returned duplicate or unordered message search results.");

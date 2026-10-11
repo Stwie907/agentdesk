@@ -15,6 +15,7 @@ from app.api import (
     execution_logs,
     conversations,
     messages,
+    agent_messages,
 )
 
 from app.config import APP_NAME
@@ -70,3 +71,5 @@ app.include_router(
 app.include_router(
     messages.router
 )
+
+app.include_router(agent_messages.router)
