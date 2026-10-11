@@ -12,6 +12,12 @@ selected**, then choose **Reload message context**. Count changes clear stale
 context without an automatic request. **Close message context** leaves the
 search results available. Failures preserve drafts and allow an explicit retry.
 
+Choose **Export context JSON** or **Export context Markdown** to download the
+currently displayed window. Excerpts preserve the selected message and full
+literal contents, with a 10 MiB attachment limit. Use complete-conversation
+**Export JSON** for importable backups. See [context exports](conversation-message-context-export.md)
+for attachment validation and the later read-only acceptance milestone.
+
 ## API contract
 
 `GET /conversations/{conversation_id}/messages/{message_id}/context`

@@ -1038,3 +1038,13 @@ Successful reuse and restart use only GETs, create zero records, and verify the
 original IDs and six JSON/Markdown attachment hashes. Finish each earlier milestone's
 restart pair before this initial import check adds new rows. Earlier checkpoints
 remain byte-identical; their full-database snapshots intentionally predate new imports.
+## Verify saved-message context downloads
+
+Follow [context export acceptance](conversation-message-context-export.md) after
+the original import, search, and surrounding-message acceptance pairs. Retain
+their checkpoint files and original records. Rebuild services, run
+`python -m app.check_message_context_export --base-url http://frontend`, recreate
+services without deleting the volume, and repeat with `--verify-persistence`.
+Each run performs ten read-only checks, verifies 18 JSON/Markdown attachment
+hashes and all 39 prior response hashes, and creates zero database records.
+Keep the initial/restart pair idle, then complete the manual download checks.

@@ -301,3 +301,19 @@ retry: after an uncertain response, reload conversations and check the imported
 title before confirming again. Failed imports retain the file preview and drafts.
 
 See [import acceptance and limitations](../docs/conversation-import.md).
+## Export the displayed saved-message context
+
+Open surrounding messages from a saved message search result, then choose
+**Export context JSON** or **Export context Markdown**. Only the displayed
+window is exported; use the existing complete-conversation **Export JSON** for
+an importable backup. Count edits require **Reload message context** first.
+
+The client validates scope, anchor, counts, UTF-8, size, headers, and complete
+attachment contents before starting a download. If the saved window changed,
+reload context before exporting again. Errors retain context and all drafts.
+Changing counts/search/scope, refreshing, closing context, or unmounting cancels
+pending downloads. Late responses cannot start a download in another context.
+The selected chat, loaded transcript, title filter, and drafts remain available.
+
+See [context exports](../docs/conversation-message-context-export.md) for browser
+checks and the API's read-only initial/restart acceptance. No dependency is added.

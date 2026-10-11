@@ -8,16 +8,17 @@ export type MessageContext = {
   has_more_before: boolean; has_more_after: boolean; items: ConversationMessage[];
 };
 
-export async function getMessageContext(
-  conversationId: number, agentId: number, messageId: number, before = 3, after = 3, signal?: AbortSignal,
-): Promise<MessageContext> {
+export function validateContextRequest(conversationId: number, agentId: number, messageId: number, before: number, after: number): void {
   if (![conversationId, agentId, messageId].every((id) => Number.isSafeInteger(id) && id > 0) ||
       ![before, after].every((count) => Number.isInteger(count) && count >= 0 && count <= 10)) {
     throw new ApiError(422, "Use valid saved-message identities and 0 to 10 messages on each side.");
   }
-  const params = new URLSearchParams({ agent_id: String(agentId), before: String(before), after: String(after) });
-  const value = await requestJson<unknown>(`/conversations/${conversationId}/messages/${messageId}/context?${params}`,
-    { cache: "no-store", signal });
+}
+
+export function validateMessageContext(
+  value: unknown, conversationId: number, agentId: number, messageId: number, before: number, after: number,
+): MessageContext {
+  validateContextRequest(conversationId, agentId, messageId, before, after);
   const page = value as Partial<MessageContext> | null;
   if (!page || page.conversation_id !== conversationId || page.agent_id !== agentId || page.anchor_message_id !== messageId ||
       page.before !== before || page.after !== after || !Number.isSafeInteger(page.anchor_index) || page.anchor_index! < 0 ||
@@ -34,4 +35,14 @@ export async function getMessageContext(
     throw new ApiError(502, "The server returned a missing, duplicate, or unordered context message.");
   }
   return { ...page, items } as MessageContext;
+}
+
+export async function getMessageContext(
+  conversationId: number, agentId: number, messageId: number, before = 3, after = 3, signal?: AbortSignal,
+): Promise<MessageContext> {
+  validateContextRequest(conversationId, agentId, messageId, before, after);
+  const params = new URLSearchParams({ agent_id: String(agentId), before: String(before), after: String(after) });
+  const value = await requestJson<unknown>(`/conversations/${conversationId}/messages/${messageId}/context?${params}`,
+    { cache: "no-store", signal });
+  return validateMessageContext(value, conversationId, agentId, messageId, before, after);
 }

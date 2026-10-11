@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from sqlalchemy.orm import Session
@@ -12,6 +12,7 @@ from app.schemas.message_context import MessageContextResponse
 from app.schemas.message_search import MessageRoleFilter, MessageSearchResponse
 from app.services.conversation_service import run_conversation_chat
 from app.services.message_context import get_message_context
+from app.services.message_context_export import CONTEXT_EXPORT_KIND, CONTEXT_EXPORT_SCHEMA_VERSION, serialize_message_context_export
 from app.services.message_search import search_messages
 
 
@@ -78,6 +79,19 @@ def search_saved_messages(
     )
 
 
+def _saved_context(db: Session, conversation_id: int, message_id: int, agent_id: int, before: int, after: int) -> MessageContextResponse:
+    require_conversation(db, conversation_id, agent_id)
+    anchor = get_message_cursor(db, conversation_id, message_id)
+    if anchor is None:
+        raise HTTPException(status_code=404, detail="Message not found in this conversation")
+    items, index, more_before, more_after = get_message_context(db, anchor, before, after)
+    return MessageContextResponse(
+        conversation_id=conversation_id, agent_id=agent_id, anchor_message_id=message_id,
+        before=before, after=after, anchor_index=index, has_more_before=more_before, has_more_after=more_after,
+        items=[MessageResponse.model_validate(row) for row in items],
+    )
+
+
 @router.get("/{conversation_id}/messages/{message_id}/context", response_model=MessageContextResponse)
 def read_saved_message_context(
     conversation_id: Annotated[int, Path(gt=0, le=9223372036854775807)],
@@ -88,18 +102,34 @@ def read_saved_message_context(
     before: Annotated[int, Query(ge=0, le=10)] = 3,
     after: Annotated[int, Query(ge=0, le=10)] = 3,
 ):
-    require_conversation(db, conversation_id, agent_id)
-    anchor = get_message_cursor(db, conversation_id, message_id)
-    if anchor is None:
-        raise HTTPException(status_code=404, detail="Message not found in this conversation")
-    items, index, more_before, more_after = get_message_context(db, anchor, before, after)
+    context = _saved_context(db, conversation_id, message_id, agent_id, before, after)
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    return MessageContextResponse(
-        conversation_id=conversation_id, agent_id=agent_id, anchor_message_id=message_id,
-        before=before, after=after, anchor_index=index, has_more_before=more_before, has_more_after=more_after,
-        items=[MessageResponse.model_validate(row) for row in items],
-    )
+    return context
+
+
+@router.get("/{conversation_id}/messages/{message_id}/context/export", response_class=Response,
+            responses={200: {"content": {"application/json": {}, "text/markdown": {}}}})
+def export_saved_message_context(
+    conversation_id: Annotated[int, Path(gt=0, le=9223372036854775807)],
+    message_id: Annotated[int, Path(gt=0, le=9223372036854775807)],
+    agent_id: Annotated[int, Query(gt=0, le=9223372036854775807)],
+    db: Session = Depends(get_db),
+    before: Annotated[int, Query(ge=0, le=10)] = 3,
+    after: Annotated[int, Query(ge=0, le=10)] = 3,
+    format: Literal["json", "markdown"] = "json",
+):
+    context = _saved_context(db, conversation_id, message_id, agent_id, before, after)
+    content = serialize_message_context_export(context, format)
+    extension, mime = ("json", "application/json") if format == "json" else ("md", "text/markdown")
+    return Response(content=content, media_type=f"{mime}; charset=utf-8", headers={
+        "Content-Disposition": f'attachment; filename="conversation-{conversation_id}-message-{message_id}-context.{extension}"',
+        "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
+        "X-Conversation-ID": str(conversation_id), "X-Agent-ID": str(agent_id),
+        "X-Anchor-Message-ID": str(message_id), "X-Message-Count": str(len(context.items)),
+        "X-Context-Export-Kind": CONTEXT_EXPORT_KIND,
+        "X-Context-Export-Schema-Version": str(CONTEXT_EXPORT_SCHEMA_VERSION),
+    })
 
 
 @router.get("/{conversation_id}/messages/{message_id}", response_model=MessageResponse)

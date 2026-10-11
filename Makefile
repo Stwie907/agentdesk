@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check conversation-pagination-check message-pagination-check conversation-export-check conversation-import-check message-search-check message-context-check memory-search-check memory-editing-check user-memory-check semantic-memory-check ollama-memory-check memory-evidence-check memory-vector-cache-check ollama-memory-vector-cache-check
+.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check conversation-pagination-check message-pagination-check conversation-export-check conversation-import-check message-search-check message-context-check message-context-export-check memory-search-check memory-editing-check user-memory-check semantic-memory-check ollama-memory-check memory-evidence-check memory-vector-cache-check ollama-memory-vector-cache-check
 
 help:
 	@printf '%s\n' \
@@ -29,6 +29,7 @@ help:
 	@printf '%s\n' '  conversation-import-check  Check atomic JSON backup imports and original IDs after restart'
 	@printf '%s\n' '  message-search-check  Read-only search across retained complete conversation history'
 	@printf '%s\n' '  message-context-check  Read-only surrounding messages using original import/search evidence'
+	@printf '%s\n' '  message-context-export-check  Read-only JSON/Markdown excerpts using original context evidence'
 	@printf '%s\n' '  memory-search-check  Check ranked bilingual previews, Agent scope, and Runtime retrieval'
 	@printf '%s\n' '  memory-editing-check  Check scoped edits, conflicts, and preserved memory identity'
 	@printf '%s\n' '  user-memory-check  Check shared user memory, isolation, conditional edits, and Runtime retrieval'
@@ -101,6 +102,16 @@ check:
 	@test -f frontend/tests/messageContextApi.test.ts
 	@test -f frontend/tests/ConversationMessageContext.test.tsx
 	@test -f frontend/tests/messageContextFixtures.ts
+	@test -f backend/app/services/message_context_export.py
+	@test -f backend/app/check_message_context_export.py
+	@test -f backend/tests/test_message_context_export.py
+	@test -f backend/tests/test_message_context_export_acceptance.py
+	@test -f frontend/src/api/messageContextExport.ts
+	@test -f frontend/src/components/MessageContextExport.tsx
+	@test -f frontend/tests/messageContextExportApi.test.ts
+	@test -f frontend/tests/MessageContextExport.test.tsx
+	@test -f frontend/tests/messageContextExportFixtures.ts
+	@test -f docs/conversation-message-context-export.md
 	@test -d frontend/src/components
 	@test -d frontend/src/pages
 	@test -d frontend/tests
@@ -239,6 +250,10 @@ message-search-check:
 message-context-check:
 	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
 		python -m app.check_message_context --base-url http://frontend
+
+message-context-export-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_message_context_export --base-url http://frontend
 
 build:
 	docker compose build backend frontend
