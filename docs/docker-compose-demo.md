@@ -1,5 +1,18 @@
 # Docker Compose demo
 
+## Verify surrounding saved message context
+
+Follow [message context acceptance](conversation-message-context.md) after the
+original JSON import and message-search pairs have passed. The new checker
+reuses those records and checkpoints, preserves all 30 earlier response hashes,
+and creates zero conversations, messages, or executions. Run
+`python -m app.check_message_context --base-url http://frontend` after rebuilding;
+immediately recreate services with the SQLite volume retained and repeat with
+`--verify-persistence`. Each run has nine checks and nine context response hashes,
+with 25 saved messages, 20 loaded messages, and context windows of 4/4/7/21.
+Missing or changed evidence fails without repair. Complete this idle pair before
+manual UI acceptance; the linked guide includes exact Ollama commands.
+
 Full-history message search has a read-only initial/restart acceptance pair using
 the retained JSON import records. Run it after the import restart verification;
 see [conversation message search](conversation-message-search.md). Both runs create

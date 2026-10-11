@@ -1,5 +1,10 @@
 # AgentDesk
 
+Search results now support **Read surrounding messages** to inspect the selected
+message and nearby saved turns without replacing the loaded chat or its drafts.
+See [message context](docs/conversation-message-context.md) for scope, bounds,
+and read-only initial/restart acceptance using the original import/search records.
+
 Complete saved message history now supports literal content search, role filters,
 bounded previews, and explicit full-message details without changing the active
 chat or drafts. See [conversation message search](docs/conversation-message-search.md)

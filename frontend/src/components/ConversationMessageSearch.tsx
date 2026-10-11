@@ -3,6 +3,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { getSavedMessage, searchConversationMessages, type MessageRoleFilter, type MessageSearchItem, type MessageSearchPage } from "../api/messageSearch";
 import { ApiError } from "../api/executions";
 import type { ConversationMessage } from "../types/conversations";
+import { ConversationMessageContext } from "./ConversationMessageContext";
 
 type Props = { conversationId: number; agentId: number; disabled: boolean; revision: number };
 
@@ -25,6 +26,7 @@ export function ConversationMessageSearch({ conversationId, agentId, disabled, r
   const [detail, setDetail] = useState<ConversationMessage | null>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [contextMessage, setContextMessage] = useState<MessageSearchItem | null>(null);
   const generation = useRef(0);
   const searchRequest = useRef<AbortController | null>(null);
   const detailRequest = useRef<AbortController | null>(null);
@@ -40,6 +42,7 @@ export function ConversationMessageSearch({ conversationId, agentId, disabled, r
   function clearResults() {
     cancel(); setPage(null); setLoading(false); setError(null);
     setDetail(null); setDetailId(null); setDetailError(null);
+    setContextMessage(null);
   }
 
   useEffect(() => {
@@ -58,6 +61,7 @@ export function ConversationMessageSearch({ conversationId, agentId, disabled, r
     const current = generation.current;
     const controller = new AbortController(); searchRequest.current = controller;
     searching.current = true; setLoading(true); setError(null); setPage(null);
+    setContextMessage(null);
     setDetail(null); setDetailId(null); setDetailError(null);
     try {
       const result = await searchConversationMessages(conversationId, agentId, query, role, limit, offset, controller.signal);
@@ -71,6 +75,7 @@ export function ConversationMessageSearch({ conversationId, agentId, disabled, r
 
   async function read(item: MessageSearchItem) {
     if (disabled || searching.current || reading.current) return;
+    setContextMessage(null);
     detailRequest.current?.abort();
     const current = generation.current;
     const controller = new AbortController(); detailRequest.current = controller;
@@ -131,11 +136,16 @@ export function ConversationMessageSearch({ conversationId, agentId, disabled, r
           <Preview item={item} />
           <button type="button" disabled={disabled || detailId !== null}
             onClick={() => void read(item)}>Read full message {item.id}</button>
+          <button type="button" disabled={disabled || detailId !== null || contextMessage?.id === item.id}
+            onClick={() => { setDetail(null); setDetailError(null); setContextMessage(item); }}>Read surrounding messages {item.id}</button>
         </li>)}
       </ol>
     </>}
     {detailId !== null && <p role="status">Loading full message {detailId}...</p>}
     {detailError !== null && <p role="alert">{detailError}</p>}
+    {contextMessage !== null && <ConversationMessageContext key={`message-context-${contextMessage.id}`}
+      conversationId={conversationId} agentId={agentId} message={contextMessage} disabled={disabled}
+      onClose={() => setContextMessage(null)} />}
     {detail !== null && <section aria-label="Full saved message">
       <h4>Full message {detail.id}</h4>
       <p>{detail.role} · {detail.created_at}</p>

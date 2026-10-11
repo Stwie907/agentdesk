@@ -1,5 +1,34 @@
 # AgentDesk Backend
 
+## Saved message context API
+
+`GET /conversations/{conversation_id}/messages/{message_id}/context` requires
+positive signed SQLite-range conversation/message IDs and `agent_id`. The anchor
+must belong to that conversation, and the conversation must belong to the Agent.
+Missing, deleted, sibling-conversation, and foreign-scope anchors return 404;
+missing or invalid scope and out-of-range counts return 422.
+
+Optional `before` and `after` independently accept 0 to 10, defaulting to 3 each.
+The response includes the requested scope/counts, `anchor_message_id`,
+`anchor_index`, `has_more_before`, `has_more_after`, and `items` in ascending
+`created_at, id` order. The selected message is always present once. Earlier and
+later queries each read at most their requested count plus one SQL row to detect
+remaining history, including when a count is zero. The response contains at most
+21 complete messages and retains custom roles, original text, and timestamps.
+
+Reads disable HTTP caching, set `nosniff`, and perform no writes or model calls.
+There is no role filter: context includes adjacent saved turns of every role.
+The count is bounded; message contents remain complete and can be large. This
+reads current saved history rather than a frozen cross-request snapshot.
+
+`python -m app.check_message_context --base-url http://frontend` reuses both
+original import/search checkpoints and all 30 original response hashes. It
+creates no database fixtures and saves only its separate context checkpoint.
+After restarting, add `--verify-persistence` for read-only checks of original
+records, vectors, prior files, and nine context response hashes. Missing or
+changed evidence fails without repair. Follow the
+[complete acceptance instructions](../docs/conversation-message-context.md).
+
 Scoped read-only message search and single-message details are available at
 `GET /conversations/{id}/messages/search?agent_id=ID&query=TEXT` and
 `GET /conversations/{id}/messages/{message_id}?agent_id=ID`. Search the complete

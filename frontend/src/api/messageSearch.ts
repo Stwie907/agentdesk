@@ -36,7 +36,7 @@ function validIdentity(value: unknown, conversationId: number): boolean {
   return !!row && Number.isSafeInteger(row.id) && row.id! > 0 && row.conversation_id === conversationId && typeof row.role === "string";
 }
 
-export function compareSearchMessages(left: MessageSearchItem, right: MessageSearchItem): number {
+export function compareSearchMessages(left: Pick<ConversationMessage, "id" | "created_at">, right: Pick<ConversationMessage, "id" | "created_at">): number {
   const a = timestampKey(left.created_at), b = timestampKey(right.created_at);
   return a === b ? left.id - right.id : a < b ? -1 : 1;
 }
@@ -90,8 +90,16 @@ export async function getSavedMessage(conversationId: number, agentId: number, m
   }
   const value = await requestJson<unknown>(`/conversations/${conversationId}/messages/${messageId}?agent_id=${agentId}`,
     { cache: "no-store", signal });
+  const row = validateSavedMessage(value, conversationId);
+  if (row.id !== messageId) {
+    throw new ApiError(502, "The server returned a different or invalid saved message.");
+  }
+  return row;
+}
+
+export function validateSavedMessage(value: unknown, conversationId: number): ConversationMessage {
   const row = value as ConversationMessage;
-  if (!validIdentity(row, conversationId) || row.id !== messageId || typeof row.content !== "string") {
+  if (!validIdentity(row, conversationId) || typeof row.content !== "string") {
     throw new ApiError(502, "The server returned a different or invalid saved message.");
   }
   timestampKey(row.created_at);
