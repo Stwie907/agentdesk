@@ -1,5 +1,17 @@
 # Docker Compose demo
 
+## Verify Runtime configuration and retain browser drafts
+
+Follow [configuration acceptance](runtime-configuration.md) using the existing
+local Ollama settings and SQLite volume. Rebuild services, run the original Agent
+message-search checker (10 checks) and the new read-only configuration checker
+(8 checks), immediately recreate services and repeat. Compare original evidence
+digests and the configuration `response_sha256`. The new checker prints results
+without writing a checkpoint or contacting a model. Complete browser configuration
+and draft restoration/clearing checks after the idle HTTP pair. Configuration
+observations do not prove model availability; retain the separate real Ollama
+memory/vector-cache acceptance evidence.
+
 ## Verify browser conversation drafts
 
 Follow [draft acceptance](conversation-drafts.md): rebuild using the existing

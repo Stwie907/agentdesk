@@ -5,6 +5,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
+      "/runtime": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
       "/user-memories": {
         target: "http://127.0.0.1:8000",
         changeOrigin: true,

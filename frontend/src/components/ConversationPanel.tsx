@@ -370,6 +370,25 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
   return (
     <div aria-busy={pending !== null || loadingList || loadingMessages || loadingOlder}>
       <p>Conversations for Agent {agentId}</p>
+      <label htmlFor="conversation-select">Conversation</label>
+      <select id="conversation-select" value={selectedId}
+        disabled={loadingList || !listLoaded || pending !== null || confirmDelete || (conversations.length === 0 && !selectedConversation)}
+        onChange={(event) => {
+          chooseConversation(conversations.find((row) => String(row.id) === event.target.value) ??
+            (event.target.value === selectedId ? selectedConversation : null));
+          setNotice(null); setWriteError(null);
+        }}>
+        <option value="">Select a conversation</option>
+        {selectedConversation && !conversations.some((row) => row.id === conversationId) &&
+          <optgroup label="Current conversation">
+            <option value={selectedConversation.id}>{selectedConversation.title} (ID: {selectedConversation.id})</option>
+          </optgroup>}
+        {conversations.map((row) => <option key={row.id} value={row.id}>{row.title} (ID: {row.id})</option>)}
+      </select>
+      {conversationId !== null && <nav className="workbench-conversation-shortcuts" aria-label="Current conversation shortcuts">
+        <a href="#conversation-rename-title">填写标题草稿</a>
+        <a href="#conversation-message">填写聊天草稿</a>
+      </nav>}
       <AgentMessageSearch agentId={agentId} disabled={pending !== null || confirmDelete} revision={agentSearchKey + messageKey}
         navigationRevision={selectionRevision} onOpenMessage={openSearchMessage} />
       <form onSubmit={(event) => {
@@ -425,21 +444,6 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
         }}
         onFinish={() => { writeInProgress.current = false; if (mounted.current) setPending(null); }}
         onImported={() => { if (mounted.current) refreshList(); }} />
-      <label htmlFor="conversation-select">Conversation</label>
-      <select id="conversation-select" value={selectedId}
-        disabled={loadingList || !listLoaded || pending !== null || confirmDelete || (conversations.length === 0 && !selectedConversation)}
-        onChange={(event) => {
-          chooseConversation(conversations.find((row) => String(row.id) === event.target.value) ??
-            (event.target.value === selectedId ? selectedConversation : null));
-          setNotice(null); setWriteError(null);
-        }}>
-        <option value="">Select a conversation</option>
-        {selectedConversation && !conversations.some((row) => row.id === conversationId) &&
-          <optgroup label="Current conversation">
-            <option value={selectedConversation.id}>{selectedConversation.title} (ID: {selectedConversation.id})</option>
-          </optgroup>}
-        {conversations.map((row) => <option key={row.id} value={row.id}>{row.title} (ID: {row.id})</option>)}
-      </select>
       <p>Unsent chat and title drafts stay with each conversation. Enable browser saving to keep them after a reload.</p>
       <ConversationDraftControls agentId={agentId} enabled={drafts.enabled} error={drafts.error}
         disabled={pending !== null || confirmDelete || loadingList || !listLoaded}
