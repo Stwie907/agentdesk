@@ -7,6 +7,7 @@ import {
 import { ConversationExport } from "./ConversationExport";
 import { ConversationImport } from "./ConversationImport";
 import { ConversationMessageSearch } from "./ConversationMessageSearch";
+import { AgentMessageSearch } from "./AgentMessageSearch";
 import { ApiError } from "../api/executions";
 import type { Conversation, ConversationMessage } from "../types/conversations";
 
@@ -46,6 +47,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
   const [nextBeforeId, setNextBeforeId] = useState<number | null>(null);
   const [listKey, setListKey] = useState(0);
   const [messageKey, setMessageKey] = useState(0);
+  const [agentSearchKey, setAgentSearchKey] = useState(0);
   const [pending, setPending] = useState<"create" | "chat" | "rename" | "delete" | "import" | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [messageError, setMessageError] = useState<string | null>(null);
@@ -66,6 +68,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
   }
 
   function refreshList(validateCurrent = false) {
+    setAgentSearchKey((key) => key + 1);
     validateSelection.current = validateCurrent;
     setLoadingList(true);
     setListLoaded(false);
@@ -211,6 +214,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
       if (mounted.current) {
         chooseConversation(saved);
         setSearchDraft("");
+        setAgentSearchKey((key) => key + 1);
         changeBrowse({ ...browse, query: "", offset: 0 });
         setTitle("");
         setMessage("");
@@ -251,6 +255,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
         setConversations((rows) => rows.map((row) => row.id === saved.id ? saved : row));
         setRenameTitle(saved.title);
         setNotice(`Conversation ${saved.id} renamed.`);
+        setAgentSearchKey((key) => key + 1);
         if (browse.query) refreshList();
       }
     } catch (error) {
@@ -319,6 +324,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
   return (
     <div aria-busy={pending !== null || loadingList || loadingMessages || loadingOlder}>
       <p>Conversations for Agent {agentId}</p>
+      <AgentMessageSearch agentId={agentId} disabled={pending !== null || confirmDelete} revision={agentSearchKey + messageKey} />
       <form onSubmit={(event) => {
         event.preventDefault();
         if (loadingList || pending !== null || confirmDelete || searchDraft.trim().length > 200) return;

@@ -1,5 +1,11 @@
 # Search complete saved conversation history
 
+To search before selecting a conversation, use the separate **Search all Agent
+conversations** section and **Agent message content search**. See
+[Agent message search](agent-message-search.md) for cross-conversation results,
+full reads, context downloads, and retained chat/drafts. The single-conversation
+controls and API described here retain their existing behavior.
+
 Select a conversation and use **Message content search** to find saved messages,
 including history outside the latest 20-message page. Search results and full
 message details are separate from the chat transcript. They retain the current

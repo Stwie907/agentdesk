@@ -1,5 +1,7 @@
 SHELL := /bin/sh
 
+.PHONY: agent-message-search-check
+
 .PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check conversation-pagination-check message-pagination-check conversation-export-check conversation-import-check message-search-check message-context-check message-context-export-check memory-search-check memory-editing-check user-memory-check semantic-memory-check ollama-memory-check memory-evidence-check memory-vector-cache-check ollama-memory-vector-cache-check
 
 help:
@@ -30,6 +32,7 @@ help:
 	@printf '%s\n' '  message-search-check  Read-only search across retained complete conversation history'
 	@printf '%s\n' '  message-context-check  Read-only surrounding messages using original import/search evidence'
 	@printf '%s\n' '  message-context-export-check  Read-only JSON/Markdown excerpts using original context evidence'
+	@printf '%s\n' '  agent-message-search-check  Read-only cross-conversation Agent search retaining original response bytes'
 	@printf '%s\n' '  memory-search-check  Check ranked bilingual previews, Agent scope, and Runtime retrieval'
 	@printf '%s\n' '  memory-editing-check  Check scoped edits, conflicts, and preserved memory identity'
 	@printf '%s\n' '  user-memory-check  Check shared user memory, isolation, conditional edits, and Runtime retrieval'
@@ -112,6 +115,18 @@ check:
 	@test -f frontend/tests/MessageContextExport.test.tsx
 	@test -f frontend/tests/messageContextExportFixtures.ts
 	@test -f docs/conversation-message-context-export.md
+	@test -f backend/app/api/agent_messages.py
+	@test -f backend/app/schemas/agent_message_search.py
+	@test -f backend/app/services/agent_message_search.py
+	@test -f backend/app/check_agent_message_search.py
+	@test -f backend/tests/test_agent_message_search.py
+	@test -f backend/tests/test_agent_message_search_acceptance.py
+	@test -f frontend/src/api/agentMessageSearch.ts
+	@test -f frontend/src/components/AgentMessageSearch.tsx
+	@test -f frontend/tests/agentMessageSearchApi.test.ts
+	@test -f frontend/tests/AgentMessageSearch.test.tsx
+	@test -f frontend/tests/agentMessageSearchFixtures.ts
+	@test -f docs/agent-message-search.md
 	@test -d frontend/src/components
 	@test -d frontend/src/pages
 	@test -d frontend/tests
@@ -254,6 +269,10 @@ message-context-check:
 message-context-export-check:
 	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
 		python -m app.check_message_context_export --base-url http://frontend
+
+agent-message-search-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_agent_message_search --base-url http://frontend
 
 build:
 	docker compose build backend frontend

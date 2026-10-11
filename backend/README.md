@@ -1,5 +1,31 @@
 # AgentDesk Backend
 
+## Search messages across an Agent's conversations
+
+`GET /agents/{agent_id}/messages/search?query=TEXT` searches message content across
+only that Agent's saved conversations, including older unloaded messages.
+The required path ID is a positive signed 64-bit SQLite ID. Missing Agents return
+404; invalid IDs, queries, roles, limits, or offsets return 422.
+
+Search uses the existing literal ASCII-insensitive preview rules. A query allows
+1 to 200 characters. Optional roles are `user`, `assistant`, `system`, and `tool`;
+omit the role to include every saved role. Limits are 1 to 50, default 10; offset
+defaults to zero. Results are newest first by timestamp and ID, with total count,
+remaining-page flag, scope, original conversation title, and a preview bounded to
+240 Unicode characters. Titles are metadata rather than content matches.
+
+A scoped count and joined bounded page avoid loading each conversation separately.
+Responses use `no-store` and `nosniff`. Full detail, context, and context downloads
+reuse existing scoped conversation endpoints. Reads create no records or model
+calls and introduce no migration or dependency. Agent scope is the existing local
+workbench boundary, not authentication.
+
+`python -m app.check_agent_message_search --base-url http://frontend` reuses four
+original import/search/context/context-export checkpoints, all 57 prior response
+hashes, and existing messages in multiple conversations. Immediately recreate
+services and add `--verify-persistence` for an immutable read-only restart check.
+See [complete acceptance instructions](../docs/agent-message-search.md).
+
 ## Saved message context API
 
 `GET /conversations/{conversation_id}/messages/{message_id}/context` requires
