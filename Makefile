@@ -133,6 +133,13 @@ check:
 	@test -f frontend/tests/messageNavigationApi.test.ts
 	@test -f frontend/tests/MessageSearchNavigation.test.tsx
 	@test -f docs/message-search-navigation.md
+	@test -f frontend/src/state/conversationDraftStorage.ts
+	@test -f frontend/src/state/useConversationDrafts.ts
+	@test -f frontend/src/components/ConversationDraftControls.tsx
+	@test -f frontend/tests/conversationDraftStorage.test.ts
+	@test -f frontend/tests/ConversationDraftPersistence.test.tsx
+	@test -f frontend/tests/draftPersistenceFixtures.ts
+	@test -f docs/conversation-drafts.md
 	@test -d frontend/src/components
 	@test -d frontend/src/pages
 	@test -d frontend/tests

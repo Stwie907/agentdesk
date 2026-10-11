@@ -1,5 +1,15 @@
 # Docker Compose demo
 
+## Verify browser conversation drafts
+
+Follow [draft acceptance](conversation-drafts.md): rebuild using the existing
+local Ollama configuration, verify the retained Agent search checkpoint before
+and after service recreation, then check browser reload, Agent changes and
+confirmed clearing. Reuse the original acceptance files and database volume.
+The HTTP pair verifies unchanged saved records; browser draft persistence is
+covered by frontend tests and the separate browser steps. This milestone adds
+no backend endpoint or acceptance checkpoint.
+
 ## Verify saved-message navigation with retained evidence
 
 Follow [message navigation acceptance](message-search-navigation.md) after Agent

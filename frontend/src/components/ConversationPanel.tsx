@@ -9,6 +9,8 @@ import { ConversationImport } from "./ConversationImport";
 import { ConversationMessageSearch } from "./ConversationMessageSearch";
 import { AgentMessageSearch } from "./AgentMessageSearch";
 import { LocatedMessage } from "./LocatedMessage";
+import { ConversationDraftControls } from "./ConversationDraftControls";
+import { useConversationDrafts } from "../state/useConversationDrafts";
 import type { MessageNavigationTarget } from "../api/messageNavigation";
 import { ApiError } from "../api/executions";
 import type { Conversation, ConversationMessage } from "../types/conversations";
@@ -60,7 +62,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
   const mounted = useRef(true);
   const writeInProgress = useRef(false);
   const selectedRef = useRef<Conversation | null>(null);
-  const drafts = useRef(new Map<number, { message: string; renameTitle: string; baseTitle: string }>());
+  const drafts = useConversationDrafts(agentId);
   const draftRef = useRef({ message, renameTitle });
   const dataRevision = useRef(agentSearchKey + messageKey);
   draftRef.current = { message, renameTitle };
@@ -73,11 +75,17 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
   const locatedVisible = location !== null && location.target.conversation.id === conversationId &&
     location.revision === dataRevision.current && pending === null && !confirmDelete;
 
+  function editDraft(next: typeof draftRef.current) {
+    draftRef.current = next;
+    setMessage(next.message); setRenameTitle(next.renameTitle);
+    if (selectedRef.current) drafts.remember(selectedRef.current, next);
+  }
+
   function chooseConversation(row: Conversation | null) {
     const current = selectedRef.current;
     if (current?.id !== row?.id) {
-      if (current) drafts.current.set(current.id, { ...draftRef.current, baseTitle: current.title });
-      const stored = row ? drafts.current.get(row.id) : undefined;
+      if (current) drafts.remember(current, draftRef.current, false);
+      const stored = row ? drafts.restore(row) : null;
       const nextDraft = { message: stored?.message ?? "", renameTitle: row ?
         (stored && stored.renameTitle !== stored.baseTitle ? stored.renameTitle : row.title) : "" };
       draftRef.current = nextDraft;
@@ -157,7 +165,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
           if (selectedRef.current === current) {
             chooseConversation(selected);
             if (current && selected === null) {
-              drafts.current.delete(current.id);
+              drafts.forget(current.id);
               setMessage("");
               setNotice("The selected conversation was removed. Choose another conversation.");
             }
@@ -286,7 +294,8 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
       if (mounted.current) {
         chooseConversation(saved);
         setConversations((rows) => rows.map((row) => row.id === saved.id ? saved : row));
-        setRenameTitle(saved.title);
+        editDraft({ ...draftRef.current, renameTitle: saved.title });
+        drafts.commitSaved(saved, { renameTitle: saved.title });
         setNotice(`Conversation ${saved.id} renamed.`);
         setAgentSearchKey((key) => key + 1);
         if (browse.query) refreshList();
@@ -310,7 +319,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
       if (mounted.current) {
         setConversations((rows) => rows.filter((row) => row.id !== conversationId));
         chooseConversation(null);
-        drafts.current.delete(conversationId);
+        drafts.forget(conversationId);
         setMessage("");
         setMessages([]);
         setMessagesLoaded(false);
@@ -340,7 +349,10 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
     try {
       const reply = await sendConversationMessage(conversationId, agentId, message);
       if (mounted.current) {
-        if (reply.status === "completed") setMessage("");
+        if (reply.status === "completed") {
+          editDraft({ ...draftRef.current, message: "" });
+          if (selectedRef.current) drafts.commitSaved(selectedRef.current, { message: "" });
+        }
         setNotice(`Execution ${reply.execution_id} returned with status: ${reply.status}.` +
           (reply.status === "completed" ? "" : " Inspect the execution before sending another message."));
         setMessageKey((key) => key + 1);
@@ -428,7 +440,13 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
           </optgroup>}
         {conversations.map((row) => <option key={row.id} value={row.id}>{row.title} (ID: {row.id})</option>)}
       </select>
-      <p>Unsent chat and rename drafts stay with each conversation while this Agent remains selected.</p>
+      <p>Unsent chat and title drafts stay with each conversation. Enable browser saving to keep them after a reload.</p>
+      <ConversationDraftControls agentId={agentId} enabled={drafts.enabled} error={drafts.error}
+        disabled={pending !== null || confirmDelete || loadingList || !listLoaded}
+        onToggle={(enabled) => {
+          if (selectedRef.current) drafts.remember(selectedRef.current, draftRef.current, false);
+          drafts.toggle(enabled);
+        }} onClear={drafts.clearSaved} />
       {listLoaded && selectedConversation && !conversations.some((row) => row.id === conversationId) &&
         <p>Your current conversation is outside these results. Its messages and unsent draft stay selected.</p>}
       {conversationId !== null && (
@@ -436,7 +454,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
           <form onSubmit={(event) => void handleRename(event)}>
             <label htmlFor="conversation-rename-title">Conversation title</label>
             <input id="conversation-rename-title" value={renameTitle} maxLength={200} disabled={managementDisabled}
-              onChange={(event) => { setRenameTitle(event.target.value); setWriteError(null); }} />
+              onChange={(event) => { editDraft({ ...draftRef.current, renameTitle: event.target.value }); setWriteError(null); }} />
             <button type="submit" disabled={managementDisabled || !renameTitle.trim() || renameTitle.trim().length > 200 ||
                 renameTitle.trim() === selectedConversation?.title}>
               {pending === "rename" ? "Renaming..." : "Rename conversation"}
@@ -493,7 +511,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
         <label htmlFor="conversation-message">Chat message</label>
         <div><textarea id="conversation-message" rows={3} maxLength={4000} value={message}
           disabled={chatDisabled} placeholder="Example: I like Python."
-          onChange={(event) => { setMessage(event.target.value); setWriteError(null); }} /></div>
+          onChange={(event) => { editDraft({ ...draftRef.current, message: event.target.value }); setWriteError(null); }} /></div>
         <button type="submit" disabled={chatDisabled || !message.trim() || message.trim().length > 4000}>
           {pending === "chat" ? "Sending..." : "Send message"}
         </button>

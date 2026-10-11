@@ -13,8 +13,9 @@ are marked in the transcript.
 Chat and rename drafts are retained separately for each conversation in the
 current Agent session, including ordinary **Conversation** selection. Returning
 restores the exact unsent text. Creation/title-filter and Agent-search drafts
-remain available. Changing Agent or reloading the browser starts a fresh draft
-session. Drafts do not become saved messages until **Send message** is used.
+remain available. Browser saving defaults to off; changing Agent or reloading
+starts a fresh draft session unless saving was enabled for that Agent. Drafts
+do not become saved messages until **Send message** is used.
 
 Use **Cancel opening message** during a pending navigation or **Close located
 message** afterward. Errors preserve the current selection and drafts. Query,
@@ -22,6 +23,25 @@ role, size, clear, manual selection, data reloads, writes/delete confirmation,
 Agent changes, and unmounting cancel stale navigation. Closing or invalidating
 located context also cancels pending downloads. Inspector selection is retained.
 See [message navigation](../docs/message-search-navigation.md) for acceptance.
+
+## Keep conversation drafts after reload
+
+Enable **Keep this Agent's drafts on this browser** under **Conversation Chat**.
+The preference and exact chat/title text are saved separately for each Agent
+and conversation. After a reload or Agent change, choose the original Agent and
+conversation again. Selection, transcript, creation/search drafts and Inspector
+state are refreshed through their existing flow. Enabling saving includes drafts
+already typed in this page and keeps current edits ahead of older browser copies.
+
+Turning saving off retains existing browser copies while stopping future saves
+and restoration. **Clear saved drafts for this Agent** requires confirmation,
+removes that Agent's copies, and turns saving off; current page drafts are kept.
+Successful sends and renames update their saved draft copies even while saving
+is off. Successful deletion removes its copy. Storage errors preserve current
+text and show a warning; malformed, foreign or reused-conversation records are
+ignored. Use one browser origin for acceptance, such as `http://localhost:5173`.
+See [draft acceptance](../docs/conversation-drafts.md) for the exact idle HTTP
+pair followed by browser reload, Agent-isolation and clearing checks.
 
 ## Search all conversations for the selected Agent
 
@@ -126,7 +146,8 @@ Writes are guarded against repeated clicks. A failed request retains its draft;
 reload conversations/messages to check what was saved before retrying. A failed
 execution retains the chat draft and opens its inspection. A transcript load
 failure disables sending until recovery. Switching Agents resets the panel and
-ignores old responses. A conversation change resets the chat draft.
+ignores old responses. Conversation changes retain separate session drafts;
+opt-in browser saving also restores drafts after Agent changes or reloads.
 
 Conversation and memory data use the same SQLite volume. Mock responses remain
 fixed, while previous history and relevant memories reach the existing Runtime.
@@ -149,7 +170,7 @@ foreign rows, duplicate IDs, and inconsistent totals or boundaries.
 The active chat lives separately from the page. Searching or paging keeps its
 transcript and all drafts; an off-page selection is shown under **Current
 conversation** with an explanatory message. Explicitly selecting another chat
-clears its chat draft. Reload verifies an off-page selection; only a scoped 404
+restores its separate chat/title drafts. Reload verifies an off-page selection; only a scoped 404
 clears it, while other errors retain drafts and block writes.
 
 Create clears the search and selects the new conversation on the first page.
