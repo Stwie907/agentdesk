@@ -8,8 +8,10 @@ from app.crud.message import create_message, get_message_cursor, get_message_pag
 from app.database import get_db
 from app.schemas.chat import ChatResponse, ConversationChatRequest
 from app.schemas.message import MessageCreate, MessagePageResponse, MessageResponse
+from app.schemas.message_context import MessageContextResponse
 from app.schemas.message_search import MessageRoleFilter, MessageSearchResponse
 from app.services.conversation_service import run_conversation_chat
+from app.services.message_context import get_message_context
 from app.services.message_search import search_messages
 
 
@@ -73,6 +75,30 @@ def search_saved_messages(
     return MessageSearchResponse(
         conversation_id=conversation_id, agent_id=agent_id, query=normalized, role=role,
         limit=limit, offset=offset, total=total, has_more=offset + len(items) < total, items=items,
+    )
+
+
+@router.get("/{conversation_id}/messages/{message_id}/context", response_model=MessageContextResponse)
+def read_saved_message_context(
+    conversation_id: Annotated[int, Path(gt=0, le=9223372036854775807)],
+    message_id: Annotated[int, Path(gt=0, le=9223372036854775807)],
+    agent_id: Annotated[int, Query(gt=0, le=9223372036854775807)],
+    response: Response,
+    db: Session = Depends(get_db),
+    before: Annotated[int, Query(ge=0, le=10)] = 3,
+    after: Annotated[int, Query(ge=0, le=10)] = 3,
+):
+    require_conversation(db, conversation_id, agent_id)
+    anchor = get_message_cursor(db, conversation_id, message_id)
+    if anchor is None:
+        raise HTTPException(status_code=404, detail="Message not found in this conversation")
+    items, index, more_before, more_after = get_message_context(db, anchor, before, after)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return MessageContextResponse(
+        conversation_id=conversation_id, agent_id=agent_id, anchor_message_id=message_id,
+        before=before, after=after, anchor_index=index, has_more_before=more_before, has_more_after=more_after,
+        items=[MessageResponse.model_validate(row) for row in items],
     )
 
 

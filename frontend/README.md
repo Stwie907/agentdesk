@@ -1,5 +1,26 @@
 # AgentDesk Frontend
 
+## Read surrounding saved messages
+
+After searching saved message content, select **Read surrounding messages ID**.
+A separate **Saved message context** region shows the selected message and
+nearby turns in chronological timestamp/ID order, including other roles.
+Original content renders as plain text, with the selected message marked.
+The default is three messages on each side; each side can request 0 to 10.
+Changing a count clears the context and requires **Reload message context**.
+**Close message context** keeps the search results and every chat draft.
+
+Reads preserve the selected conversation, loaded transcript, title filter,
+chat/create/rename drafts, and Inspector. Duplicate reloads are blocked; count
+changes, close, search changes/paging, writes, reloads, Agent/conversation
+changes, and unmounting cancel stale reads. Choosing full-message details
+closes context. Failures retain drafts and require an explicit retry.
+The client validates scope, safe identities, calendar timestamps including
+microseconds, bounds, unique chronological messages, and the selected anchor.
+The existing conversations proxy handles this route without new dependencies.
+
+See [initial/restart and manual acceptance](../docs/conversation-message-context.md).
+
 **Message content search** searches the selected conversation's entire saved
 history. Role filters, paged previews, and **Read full message** keep the active
 chat, loaded messages, title filter, and drafts intact. Requests run only on an
