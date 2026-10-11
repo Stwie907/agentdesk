@@ -1093,3 +1093,18 @@ services without deleting the volume, and repeat with `--verify-persistence`.
 Each run performs ten read-only checks, verifies 18 JSON/Markdown attachment
 hashes and all 39 prior response hashes, and creates zero database records.
 Keep the initial/restart pair idle, then complete the manual download checks.
+
+## Explicit local Ollama model installation check
+
+After existing-data message-search and runtime-configuration acceptance, run:
+
+```bash
+docker compose -f docker-compose.yml exec -T backend \
+  python -m app.check_ollama_diagnostics --base-url http://frontend --agent-id 1 \
+  --expected-provider ollama --require-installed
+```
+
+Expect 8 checks, no inference and zero new conversations/messages/executions.
+Repeat after retaining the SQLite volume during restart. The metadata checker
+creates no checkpoints; previously retained evidence must remain unchanged.
+See [full initial/restart instructions](ollama-diagnostics.md).

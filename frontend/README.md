@@ -411,3 +411,13 @@ The selected chat, loaded transcript, title filter, and drafts remain available.
 
 See [context exports](../docs/conversation-message-context-export.md) for browser
 checks and the API's read-only initial/restart acceptance. No dependency is added.
+
+## Local model check
+
+Use **运行配置** and **Show runtime configuration**, then click
+**检查本地 Ollama 模型**. The check starts idle and runs only from this button.
+Each role displays its configured model and installation observation. Connection
+failures mean installation is unknown; Mock and keyword embedding are skipped.
+Changing Agent, refreshing settings or hiding the panel clears old results and
+cancels pending reads. Chat selection and unsent drafts remain with their
+existing conversation state. See [diagnostics](../docs/ollama-diagnostics.md).

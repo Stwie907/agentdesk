@@ -1,8 +1,10 @@
 SHELL := /bin/sh
 
-.PHONY: agent-message-search-check runtime-config-check
+.PHONY: agent-message-search-check runtime-config-check ollama-diagnostics-check
 
 RUNTIME_CONFIG_AGENT_ID ?= 1
+OLLAMA_DIAGNOSTICS_AGENT_ID ?= 1
+OLLAMA_DIAGNOSTICS_ARGS ?= --expected-provider ollama --require-installed
 
 .PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check conversation-pagination-check message-pagination-check conversation-export-check conversation-import-check message-search-check message-context-check message-context-export-check memory-search-check memory-editing-check user-memory-check semantic-memory-check ollama-memory-check memory-evidence-check memory-vector-cache-check ollama-memory-vector-cache-check
 
@@ -36,6 +38,7 @@ help:
 	@printf '%s\n' '  message-context-export-check  Read-only JSON/Markdown excerpts using original context evidence'
 	@printf '%s\n' '  agent-message-search-check  Read-only cross-conversation Agent search retaining original response bytes'
 	@printf '%s\n' '  runtime-config-check  Read-only process settings and selected Agent model; set RUNTIME_CONFIG_AGENT_ID'
+	@printf '%s\n' '  ollama-diagnostics-check  Read installed local models without inference; set OLLAMA_DIAGNOSTICS_AGENT_ID'
 	@printf '%s\n' '  memory-search-check  Check ranked bilingual previews, Agent scope, and Runtime retrieval'
 	@printf '%s\n' '  memory-editing-check  Check scoped edits, conflicts, and preserved memory identity'
 	@printf '%s\n' '  user-memory-check  Check shared user memory, isolation, conditional edits, and Runtime retrieval'
@@ -305,6 +308,10 @@ agent-message-search-check:
 runtime-config-check:
 	docker compose -f docker-compose.yml exec -T backend \
 		python -m app.check_runtime_configuration --base-url http://frontend --agent-id $(RUNTIME_CONFIG_AGENT_ID)
+
+ollama-diagnostics-check:
+	docker compose -f docker-compose.yml exec -T backend \
+		python -m app.check_ollama_diagnostics --base-url http://frontend --agent-id $(OLLAMA_DIAGNOSTICS_AGENT_ID) $(OLLAMA_DIAGNOSTICS_ARGS)
 
 build:
 	docker compose build backend frontend

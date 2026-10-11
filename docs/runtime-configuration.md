@@ -1,5 +1,9 @@
 # Read current Runtime configuration
 
+For an explicit inventory check, use **检查本地 Ollama 模型** after opening
+settings. See [local model diagnostics](ollama-diagnostics.md). This separate
+check does not change the `/runtime/config` no-probe contract.
+
 Under **Submit Task**, find **Runtime Configuration** and click **Show runtime
 configuration**. The panel starts collapsed and adds no configuration request to
 startup. **Refresh runtime configuration** reads current settings again. An open
