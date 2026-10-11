@@ -1,5 +1,28 @@
 # AgentDesk Frontend
 
+## Open a saved result in its conversation
+
+On an Agent search result, choose **Open message ID in chat**. The client reads
+the result's scoped conversation and full saved message before changing selection.
+**Located saved message in chat** receives focus and displays its surrounding
+context with the existing JSON/Markdown downloads. The target can be outside the
+current title page or the latest 20 chat messages. Opening another result in the
+same conversation retains already loaded older history; loaded target messages
+are marked in the transcript.
+
+Chat and rename drafts are retained separately for each conversation in the
+current Agent session, including ordinary **Conversation** selection. Returning
+restores the exact unsent text. Creation/title-filter and Agent-search drafts
+remain available. Changing Agent or reloading the browser starts a fresh draft
+session. Drafts do not become saved messages until **Send message** is used.
+
+Use **Cancel opening message** during a pending navigation or **Close located
+message** afterward. Errors preserve the current selection and drafts. Query,
+role, size, clear, manual selection, data reloads, writes/delete confirmation,
+Agent changes, and unmounting cancel stale navigation. Closing or invalidating
+located context also cancels pending downloads. Inspector selection is retained.
+See [message navigation](../docs/message-search-navigation.md) for acceptance.
+
 ## Search all conversations for the selected Agent
 
 Under **Conversation Chat**, **Search all Agent conversations** sits above

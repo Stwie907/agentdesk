@@ -127,6 +127,12 @@ check:
 	@test -f frontend/tests/AgentMessageSearch.test.tsx
 	@test -f frontend/tests/agentMessageSearchFixtures.ts
 	@test -f docs/agent-message-search.md
+	@test -f frontend/src/api/messageNavigation.ts
+	@test -f frontend/src/components/LocatedMessage.tsx
+	@test -f frontend/tests/messageNavigationFixtures.ts
+	@test -f frontend/tests/messageNavigationApi.test.ts
+	@test -f frontend/tests/MessageSearchNavigation.test.tsx
+	@test -f docs/message-search-navigation.md
 	@test -d frontend/src/components
 	@test -d frontend/src/pages
 	@test -d frontend/tests

@@ -1,5 +1,12 @@
 # AgentDesk
 
+Choose **Open message ID in chat** on an Agent search result to select its original
+conversation and focus the saved-message context, including an older message
+outside the latest 20-message page. Chat and rename drafts stay with each
+conversation while the same Agent remains selected. See
+[message search navigation](docs/message-search-navigation.md) for exact controls,
+draft lifetime, and verification using the retained Agent search checkpoint.
+
 Under **Conversation Chat**, use **Search all Agent conversations** to search
 saved message content across the selected Agent's conversations. A conversation
 selection is optional. Results show each saved title and ID; full-message reads,

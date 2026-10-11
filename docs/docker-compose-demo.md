@@ -1,5 +1,16 @@
 # Docker Compose demo
 
+## Verify saved-message navigation with retained evidence
+
+Follow [message navigation acceptance](message-search-navigation.md) after Agent
+message search initial/restart acceptance. Rebuild the frontend and use
+`python -m app.check_agent_message_search --base-url http://frontend --verify-persistence`
+before and after recreating services with the data volume retained. Both runs
+must reuse the existing Agent search checkpoint and retain its original response
+digests, rows, vectors, and previous files. Then check **Open message ID in chat**,
+old-message context, and per-conversation draft restoration in the browser.
+The linked guide distinguishes HTTP evidence from manual navigation checks.
+
 ## Verify message search across an Agent's conversations
 
 Follow [Agent message search acceptance](agent-message-search.md) after the
