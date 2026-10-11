@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { ConversationPanel } from "../src/components/ConversationPanel";
 import { conversationMessagePageResponse, conversationPageResponse } from "./conversationFixtures";
@@ -8,13 +8,14 @@ import { deferredResponse } from "./taskFixtures";
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-async function setup() {
+async function setup(importedPage?: Promise<Response>) {
   let saved = false;
   const onActivity = vi.fn();
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), "http://localhost"); const agent = Number(url.searchParams.get("agent_id"));
     if (url.pathname === "/conversations/page") {
       const query = url.searchParams.get("query") ?? "";
+      if (saved && importedPage) return importedPage;
       return conversationPageResponse(agent === 7 && !query ? (saved ? [importResult().conversation, conversation] : [conversation]) : [], { agent_id: agent, query });
     }
     if (url.pathname === "/conversations/91/messages/page") return conversationMessagePageResponse(messages.slice(-20), { has_more: true, next_before_id: 6 });
@@ -123,15 +124,32 @@ test("invalid files cannot be submitted and delete confirmation locks import", a
   expect(fetchMock).toHaveBeenCalledTimes(2);
 });
 
-test("import preserves active title filters and off-page selection", async () => {
-  const { fetchMock } = await setup();
+test("import refreshes active title filters and preserves off-page selection after a delayed page response", async () => {
+  const refreshedPage = deferredResponse();
+  const { fetchMock } = await setup(refreshedPage.promise);
   fireEvent.change(screen.getByLabelText("Conversation title search"), { target: { value: "No matches" } });
   fireEvent.click(screen.getByRole("button", { name: "Search conversations" }));
   await screen.findByText("Your current conversation is outside these results. Its messages and unsent draft stay selected.");
-  await choose(); fireEvent.click(screen.getByRole("button", { name: "Confirm import as new conversation" }));
+  await choose();
+  const requestsBeforeImport = fetchMock.mock.calls.length;
+  fireEvent.click(screen.getByRole("button", { name: "Confirm import as new conversation" }));
   await screen.findByText(/as conversation 92 with 25 saved messages/);
+  await waitFor(() => {
+    const refreshRequests = fetchMock.mock.calls.slice(requestsBeforeImport).filter(([input]) =>
+      new URL(String(input), "http://localhost").pathname === "/conversations/page");
+    expect(refreshRequests).toHaveLength(1);
+    const url = new URL(String(refreshRequests[0][0]), "http://localhost");
+    expect(url.searchParams.get("agent_id")).toBe("7");
+    expect(url.searchParams.get("query")).toBe("No matches");
+  });
+  expect(screen.getByRole("button", { name: "Search conversations" })).toBeDisabled();
+  await act(async () => {
+    refreshedPage.resolve(conversationPageResponse([], { agent_id: 7, query: "No matches" }));
+  });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Search conversations" })).toBeEnabled());
   expect(screen.getByLabelText("Conversation title search")).toHaveValue("No matches");
   expect(screen.getByLabelText("Conversation")).toHaveValue("91");
   expect(screen.getByLabelText("Chat message")).toHaveValue("Keep chat draft");
-  expect(fetchMock.mock.calls.at(-1)?.[0]).toContain("query=No+matches");
+  expect(screen.getByText("20 messages loaded. Earlier messages are available.")).toBeInTheDocument();
+  expect(screen.getByText("Your current conversation is outside these results. Its messages and unsent draft stay selected.")).toBeInTheDocument();
 });
