@@ -37,9 +37,9 @@ export async function getConversationPage(agentId: number, query = "", limit = 1
   return { ...page, items } as ConversationPage;
 }
 
-export async function getConversation(conversationId: number, agentId: number): Promise<Conversation> {
+export async function getConversation(conversationId: number, agentId: number, signal?: AbortSignal): Promise<Conversation> {
   const row = validateConversation(await requestJson<unknown>(`/conversations/${conversationId}?agent_id=${agentId}`,
-    { cache: "no-store" }), agentId);
+    { cache: "no-store", ...(signal ? { signal } : {}) }), agentId);
   if (row.id !== conversationId) throw new ApiError(502, "The server returned a different conversation. Reload conversations.");
   return row;
 }

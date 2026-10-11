@@ -8,6 +8,8 @@ import { ConversationExport } from "./ConversationExport";
 import { ConversationImport } from "./ConversationImport";
 import { ConversationMessageSearch } from "./ConversationMessageSearch";
 import { AgentMessageSearch } from "./AgentMessageSearch";
+import { LocatedMessage } from "./LocatedMessage";
+import type { MessageNavigationTarget } from "../api/messageNavigation";
 import { ApiError } from "../api/executions";
 import type { Conversation, ConversationMessage } from "../types/conversations";
 
@@ -48,6 +50,8 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
   const [listKey, setListKey] = useState(0);
   const [messageKey, setMessageKey] = useState(0);
   const [agentSearchKey, setAgentSearchKey] = useState(0);
+  const [selectionRevision, setSelectionRevision] = useState(0);
+  const [location, setLocation] = useState<{ target: MessageNavigationTarget; revision: number } | null>(null);
   const [pending, setPending] = useState<"create" | "chat" | "rename" | "delete" | "import" | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [messageError, setMessageError] = useState<string | null>(null);
@@ -56,15 +60,45 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
   const mounted = useRef(true);
   const writeInProgress = useRef(false);
   const selectedRef = useRef<Conversation | null>(null);
+  const drafts = useRef(new Map<number, { message: string; renameTitle: string; baseTitle: string }>());
+  const draftRef = useRef({ message, renameTitle });
+  const dataRevision = useRef(agentSearchKey + messageKey);
+  draftRef.current = { message, renameTitle };
+  dataRevision.current = agentSearchKey + messageKey;
   const validateSelection = useRef(false);
   const messageGeneration = useRef(0);
   const olderInProgress = useRef(false);
   const selectedId = selectedConversation === null ? "" : String(selectedConversation.id);
   const conversationId = selectedConversation?.id ?? null;
+  const locatedVisible = location !== null && location.target.conversation.id === conversationId &&
+    location.revision === dataRevision.current && pending === null && !confirmDelete;
 
   function chooseConversation(row: Conversation | null) {
+    const current = selectedRef.current;
+    if (current?.id !== row?.id) {
+      if (current) drafts.current.set(current.id, { ...draftRef.current, baseTitle: current.title });
+      const stored = row ? drafts.current.get(row.id) : undefined;
+      const nextDraft = { message: stored?.message ?? "", renameTitle: row ?
+        (stored && stored.renameTitle !== stored.baseTitle ? stored.renameTitle : row.title) : "" };
+      draftRef.current = nextDraft;
+      setMessage(nextDraft.message); setRenameTitle(nextDraft.renameTitle);
+      setConfirmDelete(false); setLocation(null); setSelectionRevision((key) => key + 1);
+    } else if (current && row && draftRef.current.renameTitle === current.title) {
+      setRenameTitle(row.title);
+    }
     selectedRef.current = row;
     setSelectedConversation(row);
+  }
+
+  function openSearchMessage(target: MessageNavigationTarget): boolean {
+    if (!mounted.current || writeInProgress.current || confirmDelete || target.conversation.agent_id !== agentId ||
+        target.message.agent_id !== agentId || target.message.conversation_id !== target.conversation.id) return false;
+    chooseConversation(target.conversation);
+    setConversations((rows) => rows.map((row) => row.id === target.conversation.id ? target.conversation : row));
+    setLocation({ target, revision: dataRevision.current });
+    setWriteError(null);
+    setNotice(`Opened conversation ${target.conversation.id} at saved message ${target.message.id}. Conversation drafts were kept.`);
+    return true;
   }
 
   function refreshList(validateCurrent = false) {
@@ -83,10 +117,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
     setListKey((key) => key + 1);
   }
 
-  useEffect(() => {
-    setRenameTitle(selectedConversation?.title ?? "");
-    setConfirmDelete(false);
-  }, [conversationId]);
+  useEffect(() => { setLocation(null); }, [agentSearchKey, messageKey, pending, confirmDelete]);
 
   useEffect(() => {
     mounted.current = true;
@@ -119,12 +150,14 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
           }
         }
         if (!cancelled) {
-          setConversations(page.items);
+          const liveSelection = selectedRef.current;
+          setConversations(page.items.map((row) => liveSelection !== current && row.id === liveSelection?.id ? liveSelection : row));
           setTotal(page.total);
           setHasMore(page.has_more);
-          if (selectedRef.current?.id === current?.id) {
+          if (selectedRef.current === current) {
             chooseConversation(selected);
             if (current && selected === null) {
+              drafts.current.delete(current.id);
               setMessage("");
               setNotice("The selected conversation was removed. Choose another conversation.");
             }
@@ -277,6 +310,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
       if (mounted.current) {
         setConversations((rows) => rows.filter((row) => row.id !== conversationId));
         chooseConversation(null);
+        drafts.current.delete(conversationId);
         setMessage("");
         setMessages([]);
         setMessagesLoaded(false);
@@ -324,7 +358,8 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
   return (
     <div aria-busy={pending !== null || loadingList || loadingMessages || loadingOlder}>
       <p>Conversations for Agent {agentId}</p>
-      <AgentMessageSearch agentId={agentId} disabled={pending !== null || confirmDelete} revision={agentSearchKey + messageKey} />
+      <AgentMessageSearch agentId={agentId} disabled={pending !== null || confirmDelete} revision={agentSearchKey + messageKey}
+        navigationRevision={selectionRevision} onOpenMessage={openSearchMessage} />
       <form onSubmit={(event) => {
         event.preventDefault();
         if (loadingList || pending !== null || confirmDelete || searchDraft.trim().length > 200) return;
@@ -384,7 +419,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
         onChange={(event) => {
           chooseConversation(conversations.find((row) => String(row.id) === event.target.value) ??
             (event.target.value === selectedId ? selectedConversation : null));
-          setMessage(""); setNotice(null); setWriteError(null);
+          setNotice(null); setWriteError(null);
         }}>
         <option value="">Select a conversation</option>
         {selectedConversation && !conversations.some((row) => row.id === conversationId) &&
@@ -393,6 +428,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
           </optgroup>}
         {conversations.map((row) => <option key={row.id} value={row.id}>{row.title} (ID: {row.id})</option>)}
       </select>
+      <p>Unsent chat and rename drafts stay with each conversation while this Agent remains selected.</p>
       {listLoaded && selectedConversation && !conversations.some((row) => row.id === conversationId) &&
         <p>Your current conversation is outside these results. Its messages and unsent draft stay selected.</p>}
       {conversationId !== null && (
@@ -426,6 +462,10 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
       {conversationId !== null && <ConversationMessageSearch key={`message-search-${conversationId}`} conversationId={conversationId} agentId={agentId}
         disabled={pending !== null || confirmDelete || loadingList || !listLoaded}
         revision={messageKey} />}
+      {locatedVisible && location !== null && <LocatedMessage key={`${conversationId}-${location.target.message.id}`}
+        target={location.target} loaded={messagesLoaded && !loadingMessages ?
+          messages.some((row) => row.conversation_id === conversationId && row.id === location.target.message.id) : null}
+        onClose={() => setLocation(null)} />}
       <button type="button" disabled={conversationId === null || loadingMessages || pending !== null || confirmDelete}
         onClick={() => setMessageKey((key) => key + 1)}>Reload messages</button>
       {conversationId === null && <p>Create or select a conversation to send a message.</p>}
@@ -443,7 +483,7 @@ function AgentConversations({ agentId, onActivity }: { agentId: number; onActivi
       )}
       {conversationId !== null && messagesLoaded && messages.length > 0 && (
         <ol aria-label="Conversation messages">
-          {messages.map((row) => <li key={row.id}>
+          {messages.map((row) => <li key={row.id} aria-current={locatedVisible && location?.target.message.id === row.id ? "true" : undefined}>
             <p><strong>{row.role}</strong> · Message {row.id}</p>
             <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{row.content}</p>
           </li>)}

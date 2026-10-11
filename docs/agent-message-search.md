@@ -5,6 +5,12 @@ above **Conversation title search**. Select an Agent in the top task form first.
 A conversation selection is optional. This searches saved message content across
 all conversations belonging to that Agent.
 
+Results also offer **Open message ID in chat** to select the result's original
+conversation and focus its saved context. Chat/rename drafts stay with their
+conversation in the current Agent session. This explicit navigation action is
+described in [message navigation](message-search-navigation.md), including the
+retained-checkpoint verification and exact browser round-trip steps.
+
 ## API contract
 
 `GET /agents/{agent_id}/messages/search`
