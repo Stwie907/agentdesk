@@ -1,5 +1,15 @@
 # AgentDesk Frontend
 
+## Export a displayed execution report
+
+Load an execution in **Runtime V4 Execution Inspector**, then use **Export JSON**
+or **Export Markdown**. Reports include saved input/output, status, failure
+metadata, structured trace, optional snapshot and replay history. No extra
+request is made when exporting; current chat/title drafts are retained.
+Refresh the execution first if newer data is needed. Reports are limited to
+10 MiB and contain saved user inputs and tool results. Review them before sharing.
+See [format and acceptance](../docs/execution-reports.md).
+
 ## Navigate the workbench
 
 The sidebar links directly to tasks/Agent selection, runtime configuration,

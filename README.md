@@ -1,5 +1,11 @@
 # AgentDesk
 
+Under **Runtime V4 Execution Inspector**, load a saved execution and choose
+**Export JSON** or **Export Markdown** to download its currently displayed
+execution, trace, snapshot and replay history. Exporting makes no extra API
+request or database write. See [execution reports](docs/execution-reports.md)
+for the versioned format, limits and browser acceptance.
+
 Under **Conversation Chat**, enable **Keep this Agent's drafts on this browser**
 to retain unsent chat and title drafts through reloads and Agent changes.
 Re-select the original Agent and conversation to restore them. Saving defaults
