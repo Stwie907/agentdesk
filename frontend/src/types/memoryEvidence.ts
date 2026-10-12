@@ -32,3 +32,12 @@ export type ExecutionMemoryContext = {
   available: boolean;
   evidence: MemoryEvidence | null;
 };
+
+/** Browser read state; it never means that retrieval was rerun. */
+export type MemoryEvidenceExportState = {
+  execution_id: number;
+  agent_id: number;
+  input: string;
+  status: "not_loaded" | "loading" | "unavailable" | "loaded" | "failed";
+  evidence: MemoryEvidence | null;
+};

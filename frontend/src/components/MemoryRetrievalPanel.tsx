@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 
 import { getExecutionMemoryContext } from "../api/memoryEvidence";
-import type { ExecutionMemoryContext, MemoryEvidenceItem } from "../types/memoryEvidence";
+import type { ExecutionMemoryContext, MemoryEvidenceItem, MemoryEvidenceExportState } from "../types/memoryEvidence";
 
-type Props = { executionId: number; agentId: number; input: string };
+type Props = { executionId: number; agentId: number; input: string;
+  onReportState?: (state: MemoryEvidenceExportState) => void };
 
 function CapturedMemories({ rows, name }: { rows: MemoryEvidenceItem[]; name: string }) {
   return <section aria-label={name}>
@@ -21,18 +22,27 @@ function CapturedMemories({ rows, name }: { rows: MemoryEvidenceItem[]; name: st
   </section>;
 }
 
-export function MemoryRetrievalPanel({ executionId, agentId, input }: Props) {
+export function MemoryRetrievalPanel({ executionId, agentId, input, onReportState }: Props) {
   const [result, setResult] = useState<ExecutionMemoryContext | null>(null);
   const [loading, setLoading] = useState(false);
   const [opened, setOpened] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const version = useRef(0);
   const inFlight = useRef(false);
+  const reportCallback = useRef(onReportState);
+  reportCallback.current = onReportState;
+  const scope = useRef({ executionId, agentId, input });
+  scope.current = { executionId, agentId, input };
+
+  function publish(status: MemoryEvidenceExportState["status"], evidence: ExecutionMemoryContext["evidence"] = null) {
+    reportCallback.current?.({ execution_id: executionId, agent_id: agentId, input, status, evidence });
+  }
 
   useEffect(() => {
     version.current += 1;
     inFlight.current = false;
     setResult(null); setError(null); setOpened(false); setLoading(false);
+    publish("not_loaded");
     return () => { version.current += 1; };
   }, [executionId, agentId, input]);
 
@@ -40,16 +50,23 @@ export function MemoryRetrievalPanel({ executionId, agentId, input }: Props) {
     if (inFlight.current) return;
     inFlight.current = true;
     const requestVersion = ++version.current;
+    const valid = () => version.current === requestVersion && scope.current.executionId === executionId &&
+      scope.current.agentId === agentId && scope.current.input === input;
     setOpened(true); setLoading(true); setError(null); setResult(null);
+    publish("loading");
     try {
       const body = await getExecutionMemoryContext(executionId, agentId, input);
-      if (version.current === requestVersion) setResult(body);
+      if (valid()) {
+        setResult(body);
+        publish(body.available ? "loaded" : "unavailable", body.evidence);
+      }
     } catch (requestError) {
-      if (version.current === requestVersion) {
+      if (valid()) {
+        publish("failed");
         setError(requestError instanceof Error ? requestError.message : "Unable to load memory retrieval evidence.");
       }
     } finally {
-      if (version.current === requestVersion) {
+      if (valid()) {
         inFlight.current = false; setLoading(false);
       }
     }

@@ -2,6 +2,8 @@
 
 Issue #161 adds browser-local exports from the existing Runtime V4 Inspector.
 FastAPI, storage, routes, model configuration and dependencies are unchanged.
+Issue #163 adds optional captured memory evidence in schema version 2; see
+[the memory evidence contract](execution-report-memory-evidence.md).
 
 ## Use
 
@@ -18,11 +20,11 @@ refresh/replay/cancel/retry. A missing execution or failed inspection read has
 no export controls. A valid execution without a snapshot can still be exported.
 Late inspection/action responses cannot replace a newer execution selection.
 
-## JSON schema version 1
+## JSON schema version 2
 
 | Field | Meaning |
 | --- | --- |
-| `schema_version` | Integer `1`; separate from the persisted snapshot version. |
+| `schema_version` | Integer `2`; separate from the persisted snapshot version. |
 | `source` | `displayed_execution_inspection`. |
 | `captured_at` | Browser UTC ISO time when serialization starts. |
 | `consistency` | Explanation that separate existing reads are not an atomic backup. |
@@ -30,13 +32,14 @@ Late inspection/action responses cannot replace a newer execution selection.
 | `trace` | Displayed structured trace events with their IDs, execution scope, step/tool/error, message and creation time. Empty array if no events exist. |
 | `snapshot` | Displayed saved snapshot metadata, version and original input/plan/output strings, or `null` if unavailable. |
 | `replays` | Displayed saved replay executions; empty array if none exist. |
+| `memory_retrieval` | Explicit browser read status and optional captured evidence for this execution. |
 
 Only these known fields are serialized. User strings are retained without
 truncation, including Unicode, whitespace, HTML and multiline results. Snapshot
 plan strings remain original strings: malformed legacy JSON is not reinterpreted
 or repaired by the export. JSON nulls and empty strings remain distinct.
 
-Markdown uses literal JSON code blocks for these same four data sections,
+Markdown uses literal JSON code blocks for these data sections,
 with fences longer than any backtick sequence in their saved content. This
 keeps user headings, Markdown and HTML inside literal blocks. Null snapshots
 and empty trace/replay arrays have explicit text instead. Both files are UTF-8.
@@ -54,9 +57,10 @@ Inspection reads still use the existing endpoints. Those reads happen separately
 active tasks can change between reads and after export. The capture timestamp
 is not a transactional database timestamp. For newer data, refresh before export.
 Reports are for review and debugging, not importable conversation backups or
-restorable database backups. Memory retrieval evidence is not included.
+restorable database backups. Captured memory evidence is included only after
+the existing **Show memory retrieval** read succeeds.
 
-Saved inputs and tool results may contain user information. The controls remind
+Saved inputs, tool results and captured memories may contain user information. The controls remind
 users to review reports before sharing; original user strings are not redacted.
 
 ## Verification
@@ -78,9 +82,11 @@ For browser acceptance on Windows:
 1. Select Agent 1 and conversation 16. Enter unsaved title `Report title draft`
    and unsent chat `Report chat draft`. Do not rename or send.
 2. Load an existing completed execution in Inspector. Export both formats.
-3. Open JSON in a text editor and verify `schema_version: 1`, execution ID,
+3. Open JSON in a text editor and verify `schema_version: 2`, execution ID,
    status and output agree with Inspector. Check Markdown's corresponding
    sections; missing snapshot is allowed when Inspector also shows none.
+   To include memory evidence, use **Show memory retrieval**, wait for completion,
+   then export again. Without that read the report says `not_loaded`.
 4. Return to Conversation Chat: Agent, conversation and both drafts remain.
 5. Load a different existing execution and export again. The new filenames
    and `execution.id` match the newly displayed execution.
@@ -88,6 +94,7 @@ For browser acceptance on Windows:
    volumes, reload the page after preserving drafts if desired, then repeat
    exports of the same saved record. Data sections match if the stored record
    has not changed; `captured_at` will differ and file digests need not match.
+   Repeat the same explicit memory read before comparing `memory_retrieval`.
 
 Existing search/configuration/model acceptance checks can be rerun after frontend
 recreation to confirm the retained records and checkpoint bytes. This feature

@@ -1,3 +1,5 @@
+import { validateExecutionMemoryContext } from "../api/memoryEvidence";
+import type { MemoryEvidenceExportState, MemoryEvidenceItem } from "../types/memoryEvidence";
 import type { ExecutionInspection } from "../types/executions";
 
 export type ExecutionReportFormat = "json" | "markdown";
@@ -8,6 +10,7 @@ export function createExecutionReport(
   inspection: ExecutionInspection,
   format: ExecutionReportFormat,
   capturedAt = new Date().toISOString(),
+  memoryState?: MemoryEvidenceExportState,
 ) {
   const source = inspection.execution;
   if (!Number.isSafeInteger(source.id) || source.id <= 0 ||
@@ -22,9 +25,37 @@ export function createExecutionReport(
     failure_type: row.failure_type, failure_message: row.failure_message,
     replay_of_execution_id: row.replay_of_execution_id, created_at: row.created_at,
   });
+  const memory = memoryState ?? {
+    execution_id: source.id, agent_id: source.agent_id, input: source.input,
+    status: "not_loaded", evidence: null,
+  };
+  if (memory.execution_id !== source.id || memory.agent_id !== source.agent_id || memory.input !== source.input ||
+      !["not_loaded", "loading", "unavailable", "loaded", "failed"].includes(memory.status) ||
+      (memory.status === "loaded" ? memory.evidence === null : memory.evidence !== null)) {
+    throw new Error("The memory evidence does not match this execution. Reload it before exporting.");
+  }
+  const body = validateExecutionMemoryContext({
+    execution_id: source.id, available: memory.status === "loaded", evidence: memory.evidence,
+  }, source.id, source.agent_id, source.input);
+  const facts = body.evidence;
+  const item = (row: MemoryEvidenceItem) => ({
+    memory_id: row.memory_id, scope: row.scope, scope_id: row.scope_id, content: row.content,
+    created_at: row.created_at, score: row.score, matched_terms: [...row.matched_terms], similarity: row.similarity,
+  });
+  const memoryRetrieval = {
+    execution_id: source.id, agent_id: source.agent_id, status: memory.status,
+    evidence: facts === null ? null : {
+      version: facts.version, agent_id: facts.agent_id, user_id: facts.user_id, query: facts.query,
+      limit: facts.limit, recorded_at: facts.recorded_at, requested_mode: facts.requested_mode,
+      mode: facts.mode, provider: facts.provider, model: facts.model,
+      min_similarity: facts.min_similarity, fallback_reason: facts.fallback_reason,
+      agent_memories: facts.agent_memories.map(item), shared_memories: facts.shared_memories.map(item),
+      context: facts.context,
+    },
+  };
   const snapshot = inspection.snapshot;
   const report = {
-    schema_version: 1,
+    schema_version: 2,
     source: "displayed_execution_inspection",
     captured_at: capturedAt,
     consistency: "Existing endpoints are read separately; this is not an atomic database backup.",
@@ -41,6 +72,7 @@ export function createExecutionReport(
       created_at: snapshot.created_at,
     },
     replays: inspection.replays.map(execution),
+    memory_retrieval: memoryRetrieval,
   };
   // Use a fence longer than any backtick run in saved text. User content stays
   // inside a literal block, including HTML and Markdown headings.
@@ -53,15 +85,16 @@ export function createExecutionReport(
   };
   const content = format === "json" ? JSON.stringify(report, null, 2) + "\n" : [
     `# AgentDesk execution ${source.id}`,
-    "Report schema: 1. Source: the currently displayed saved execution inspection.",
+    "Report schema: 2. Source: the currently displayed saved execution inspection.",
     `Captured at: ${capturedAt}`,
     report.consistency,
-    "This report may contain saved user inputs and tool results. Review it before sharing.",
+    "This report may contain saved user inputs, tool results and captured memory content. Review it before sharing.",
     "## Execution", literal(report.execution),
     "## Runtime V4 trace",
     report.trace.length === 0 ? "No Runtime V4 trace events." : literal(report.trace),
     "## Snapshot",
     report.snapshot === null ? "No snapshot available." : literal(report.snapshot),
+    "## Captured memory retrieval", literal(report.memory_retrieval),
     "## Replay history",
     report.replays.length === 0 ? "No replay executions." : literal(report.replays),
     "",

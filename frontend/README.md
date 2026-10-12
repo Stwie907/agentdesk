@@ -10,6 +10,11 @@ Refresh the execution first if newer data is needed. Reports are limited to
 10 MiB and contain saved user inputs and tool results. Review them before sharing.
 See [format and acceptance](../docs/execution-reports.md).
 
+Version 2 reports also include the captured memory evidence already loaded with
+**Show memory retrieval**. Export does not trigger an evidence read. The report
+marks unread, pending, unavailable and failed evidence explicitly. See
+[memory evidence export](../docs/execution-report-memory-evidence.md).
+
 ## Navigate the workbench
 
 The sidebar links directly to tasks/Agent selection, runtime configuration,

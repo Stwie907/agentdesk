@@ -5,6 +5,10 @@ Under **Runtime V4 Execution Inspector**, load a saved execution and choose
 execution, trace, snapshot and replay history. Exporting makes no extra API
 request or database write. See [execution reports](docs/execution-reports.md)
 for the versioned format, limits and browser acceptance.
+Use **Show memory retrieval** before exporting to include captured memory
+evidence. Version 2 reports distinguish not loaded, loading, unavailable, loaded
+and failed reads without rerunning retrieval. See
+[memory evidence reports](docs/execution-report-memory-evidence.md).
 
 Under **Conversation Chat**, enable **Keep this Agent's drafts on this browser**
 to retain unsent chat and title drafts through reloads and Agent changes.
