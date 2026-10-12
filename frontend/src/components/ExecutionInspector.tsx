@@ -2,6 +2,7 @@ import {
   type FormEvent,
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -17,6 +18,7 @@ import type {
   Execution,
   ExecutionInspection,
 } from "../types/executions";
+import { ExecutionReportExport } from "./ExecutionReportExport";
 import { MemoryRetrievalPanel } from "./MemoryRetrievalPanel";
 
 type ExecutionInspectorProps = {
@@ -43,23 +45,36 @@ export function ExecutionInspector({
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const generation = useRef(0);
+  const selectedScope = useRef(selectedExecutionId);
+  selectedScope.current = selectedExecutionId;
+  const currentInspection = useRef(inspection);
+  currentInspection.current = inspection;
+
+  useEffect(() => () => { generation.current += 1; }, []);
+
   const loadExecution = useCallback(
     async (parsedExecutionId: number) => {
+      const request = ++generation.current;
+      const scope = selectedScope.current;
+      const valid = () => request === generation.current && scope === selectedScope.current;
+      setRefreshing(false); setReplaying(false); setCancelling(false); setRetrying(false);
       setLoading(true);
       setError(null);
       setInspection(null);
 
       try {
         const result = await getExecutionInspection(parsedExecutionId);
-        setInspection(result);
+        if (valid()) setInspection(result);
       } catch (requestError) {
+        if (!valid()) return;
         if (requestError instanceof ApiError) {
           setError(requestError.message);
         } else {
           setError("Unable to load execution.");
         }
       } finally {
-        setLoading(false);
+        if (valid()) setLoading(false);
       }
     },
     [],
@@ -82,6 +97,9 @@ export function ExecutionInspector({
       !Number.isInteger(parsedExecutionId) ||
       parsedExecutionId <= 0
     ) {
+      generation.current += 1;
+      setLoading(false);
+      setRefreshing(false); setReplaying(false); setCancelling(false); setRetrying(false);
       setInspection(null);
       setError("Enter a valid positive execution ID.");
       return;
@@ -91,10 +109,15 @@ export function ExecutionInspector({
   }
 
   async function handleRefresh() {
-    if (inspection === null || refreshing) {
+    if (inspection === null || actionInProgress) {
       return;
     }
 
+    const request = ++generation.current;
+    const scope = selectedScope.current;
+    const sourceId = inspection.execution.id;
+    const valid = () => request === generation.current && scope === selectedScope.current &&
+      currentInspection.current?.execution.id === sourceId;
     setRefreshing(true);
     setError(null);
 
@@ -103,23 +126,30 @@ export function ExecutionInspector({
         inspection.execution.id,
       );
 
+      if (!valid()) return;
       setInspection(result);
     } catch (requestError) {
+      if (!valid()) return;
       if (requestError instanceof ApiError) {
         setError(requestError.message);
       } else {
         setError("Unable to refresh execution.");
       }
     } finally {
-      setRefreshing(false);
+      if (request === generation.current) setRefreshing(false);
     }
   }
 
   async function handleReplay() {
-    if (inspection === null || replaying) {
+    if (inspection === null || actionInProgress) {
       return;
     }
 
+    const request = ++generation.current;
+    const scope = selectedScope.current;
+    const sourceId = inspection.execution.id;
+    const valid = () => request === generation.current && scope === selectedScope.current &&
+      currentInspection.current?.execution.id === sourceId;
     setReplaying(true);
     setError(null);
 
@@ -128,29 +158,36 @@ export function ExecutionInspector({
         inspection.execution.id,
       );
 
+      if (!valid()) return;
       setExecutionId(String(replay.id));
 
       await loadExecution(replay.id);
     } catch (requestError) {
+      if (!valid()) return;
       if (requestError instanceof ApiError) {
         setError(requestError.message);
       } else {
         setError("Unable to replay execution.");
       }
     } finally {
-      setReplaying(false);
+      if (request === generation.current) setReplaying(false);
     }
   }
 
   async function handleCancel() {
     if (
       inspection === null ||
-      cancelling ||
+      actionInProgress ||
       inspection.execution.status !== "pending"
     ) {
       return;
     }
 
+    const request = ++generation.current;
+    const scope = selectedScope.current;
+    const sourceId = inspection.execution.id;
+    const valid = () => request === generation.current && scope === selectedScope.current &&
+      currentInspection.current?.execution.id === sourceId;
     setCancelling(true);
     setError(null);
 
@@ -159,6 +196,7 @@ export function ExecutionInspector({
         inspection.execution.id,
       );
 
+      if (!valid()) return;
       setExecutionId(String(cancelledExecution.id));
 
       setInspection((currentInspection) => {
@@ -172,25 +210,31 @@ export function ExecutionInspector({
         };
       });
     } catch (requestError) {
+      if (!valid()) return;
       if (requestError instanceof ApiError) {
         setError(requestError.message);
       } else {
         setError("Unable to cancel execution.");
       }
     } finally {
-      setCancelling(false);
+      if (request === generation.current) setCancelling(false);
     }
   }
 
   async function handleRetry() {
     if (
       inspection === null ||
-      retrying ||
+      actionInProgress ||
       inspection.execution.status !== "failed"
     ) {
       return;
     }
 
+    const request = ++generation.current;
+    const scope = selectedScope.current;
+    const sourceId = inspection.execution.id;
+    const valid = () => request === generation.current && scope === selectedScope.current &&
+      currentInspection.current?.execution.id === sourceId;
     setRetrying(true);
     setError(null);
 
@@ -199,6 +243,7 @@ export function ExecutionInspector({
         inspection.execution.id,
       );
 
+      if (!valid()) return;
       setExecutionId(String(retriedExecution.id));
 
       setInspection((currentInspection) => {
@@ -212,13 +257,14 @@ export function ExecutionInspector({
         };
       });
     } catch (requestError) {
+      if (!valid()) return;
       if (requestError instanceof ApiError) {
         setError(requestError.message);
       } else {
         setError("Unable to retry execution.");
       }
     } finally {
-      setRetrying(false);
+      if (request === generation.current) setRetrying(false);
     }
   }
 
@@ -226,6 +272,9 @@ export function ExecutionInspector({
 
   useEffect(() => {
     if (selectedExecutionId === null) {
+      generation.current += 1;
+      setInspection(null); setLoading(false);
+      setRefreshing(false); setReplaying(false); setCancelling(false); setRetrying(false);
       return;
     }
 
@@ -411,7 +460,7 @@ export function ExecutionInspector({
 
             <button
               type="button"
-              disabled={replaying}
+              disabled={actionInProgress}
               onClick={() => void handleReplay()}
             >
               {replaying ? "Replaying..." : "Replay execution"}
@@ -420,7 +469,7 @@ export function ExecutionInspector({
             {inspection.execution.status === "failed" && (
           <button
             type="button"
-            disabled={retrying}
+            disabled={actionInProgress}
             onClick={() => void handleRetry()}
           >
             {retrying ? "Retrying..." : "Retry execution"}
@@ -430,7 +479,7 @@ export function ExecutionInspector({
         {inspection.execution.status === "pending" && (
               <button
                 type="button"
-                disabled={cancelling}
+                disabled={actionInProgress}
                 onClick={() => void handleCancel()}
               >
                 {cancelling
@@ -439,6 +488,12 @@ export function ExecutionInspector({
               </button>
             )}
           </section>
+
+          <ExecutionReportExport
+            key={inspection.execution.id}
+            inspection={inspection}
+            disabled={actionInProgress}
+          />
 
           <MemoryRetrievalPanel
             key={inspection.execution.id}
