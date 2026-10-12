@@ -1,5 +1,15 @@
 # AgentDesk
 
+## Project showcase
+
+Start with the [5–10 minute showcase guide](docs/project-showcase.md),
+[architecture and tradeoffs](docs/architecture-overview.md), and
+[resume/interview guide](docs/resume-guide.md). The showcase offers a read-only
+route for retained data and an isolated Mock route for new reviewers. It marks
+actions that create executions or modify records.
+
+This is a local showcase milestone; no v1.0 release is declared by these docs.
+
 Under **Runtime V4 Execution Inspector**, load a saved execution and choose
 **Export JSON** or **Export Markdown** to download its currently displayed
 execution, trace, snapshot and replay history. Exporting makes no extra API
@@ -571,7 +581,7 @@ and connection pooling remain future MCP work.
 - `mcp-server/`: independent stdio business tools, lookup fixtures, SQLite ticket store, and protocol tests.
 - `evaluation/`: a fixed Mock dataset, HTTP evaluator, reports, and evaluator tests.
 
-RAG and additional MCP business tools remain future milestones.
+Document-ingestion RAG and additional MCP business tools remain future milestones.
 
 ## Runtime configuration
 
