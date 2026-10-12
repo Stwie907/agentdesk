@@ -147,6 +147,7 @@ test("unmount prevents pending evidence from publishing to its owner", async () 
 
 test("explicit memory loading and both exports preserve exact workbench conversation drafts", async () => {
   const draftFetch = mockDraftRequests().fetchMock;
+  const memoryRead = deferredResponse();
   const data = inspection(42, 7); const body = fixture(); body.evidence!.agent_id = 7; body.evidence!.agent_memories[0].scope_id = 7;
   const fetchMock = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
     const path = new URL(String(url), "http://localhost").pathname;
@@ -154,7 +155,7 @@ test("explicit memory loading and both exports preserve exact workbench conversa
     if (path === "/agents/7") return jsonResponse(testAgent);
     if (path === "/projects/1") return jsonResponse({ id: 1, owner_id: 1 });
     if (path.startsWith("/conversations")) return draftFetch(url, init);
-    if (path.endsWith("/memory-context")) return response(body);
+    if (path.endsWith("/memory-context")) return memoryRead.promise;
     if (path === "/executions/42") return response(data.execution);
     if (path.endsWith("/trace")) return response(data.trace);
     if (path.endsWith("/snapshot")) return response(data.snapshot);
@@ -171,9 +172,23 @@ test("explicit memory loading and both exports preserve exact workbench conversa
   fireEvent.change(message, { target: { value: "  未发送记忆报告草稿\n第二行  " } });
   fireEvent.change(title, { target: { value: "未保存记忆报告标题" } });
   fireEvent.change(screen.getByLabelText("Execution ID"), { target: { value: "42" } });
-  fireEvent.click(screen.getByRole("button", { name: "Load Execution" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Show memory retrieval" }));
-  await screen.findByText("Memory #7");
+  // Flush the mocked inspection read before clicking its newly mounted panel.
+  // Control the evidence response explicitly instead of relying on a short
+  // findByText polling window under the full CI suite's scheduling load.
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Load Execution" }));
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Show memory retrieval" }));
+  });
+  expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/memory-context")))
+    .toEqual([["/executions/42/memory-context?agent_id=7", { cache: "no-store" }]]);
+  expect(screen.getByText(/Memory evidence: Loading/)).toBeInTheDocument();
+  await act(async () => {
+    memoryRead.resolve(response(body));
+    await memoryRead.promise;
+  });
+  expect(screen.getByText("Memory #7")).toBeInTheDocument();
   const count = fetchMock.mock.calls.length;
   expect(exportJson().memory_retrieval.status).toBe("loaded");
   fireEvent.click(within(screen.getByRole("region", { name: "Export execution report" })).getByRole("button", { name: "Export Markdown" }));

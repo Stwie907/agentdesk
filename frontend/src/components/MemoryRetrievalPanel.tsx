@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import { getExecutionMemoryContext } from "../api/memoryEvidence";
 import type { ExecutionMemoryContext, MemoryEvidenceItem, MemoryEvidenceExportState } from "../types/memoryEvidence";
@@ -38,7 +38,9 @@ export function MemoryRetrievalPanel({ executionId, agentId, input, onReportStat
     reportCallback.current?.({ execution_id: executionId, agent_id: agentId, input, status, evidence });
   }
 
-  useEffect(() => {
+  // Establish the scope before the first interactive paint. A passive effect
+  // can otherwise invalidate a read clicked immediately after async mounting.
+  useLayoutEffect(() => {
     version.current += 1;
     inFlight.current = false;
     setResult(null); setError(null); setOpened(false); setLoading(false);
