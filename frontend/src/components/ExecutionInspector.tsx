@@ -18,6 +18,7 @@ import type {
   Execution,
   ExecutionInspection,
 } from "../types/executions";
+import type { MemoryEvidenceExportState } from "../types/memoryEvidence";
 import { ExecutionReportExport } from "./ExecutionReportExport";
 import { MemoryRetrievalPanel } from "./MemoryRetrievalPanel";
 
@@ -45,11 +46,23 @@ export function ExecutionInspector({
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [memoryReportState, setMemoryReportState] = useState<MemoryEvidenceExportState | null>(null);
   const generation = useRef(0);
   const selectedScope = useRef(selectedExecutionId);
   selectedScope.current = selectedExecutionId;
   const currentInspection = useRef(inspection);
   currentInspection.current = inspection;
+
+  const handleMemoryReportState = useCallback((state: MemoryEvidenceExportState) => {
+    const source = currentInspection.current?.execution;
+    if (source && state.execution_id === source.id && state.agent_id === source.agent_id && state.input === source.input) {
+      setMemoryReportState(state);
+    }
+  }, []);
+  const scopedMemoryReport = inspection !== null && memoryReportState !== null &&
+    memoryReportState.execution_id === inspection.execution.id &&
+    memoryReportState.agent_id === inspection.execution.agent_id &&
+    memoryReportState.input === inspection.execution.input ? memoryReportState : undefined;
 
   useEffect(() => () => { generation.current += 1; }, []);
 
@@ -62,6 +75,7 @@ export function ExecutionInspector({
       setLoading(true);
       setError(null);
       setInspection(null);
+      setMemoryReportState(null);
 
       try {
         const result = await getExecutionInspection(parsedExecutionId);
@@ -492,11 +506,13 @@ export function ExecutionInspector({
           <ExecutionReportExport
             key={inspection.execution.id}
             inspection={inspection}
+            memoryState={scopedMemoryReport}
             disabled={actionInProgress}
           />
 
           <MemoryRetrievalPanel
-            key={inspection.execution.id}
+            key={JSON.stringify([inspection.execution.id, inspection.execution.agent_id, inspection.execution.input])}
+            onReportState={handleMemoryReportState}
             executionId={inspection.execution.id}
             agentId={inspection.execution.agent_id}
             input={inspection.execution.input}

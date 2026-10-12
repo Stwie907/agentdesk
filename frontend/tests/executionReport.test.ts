@@ -10,7 +10,7 @@ test("JSON preserves all displayed data, Unicode, nulls and failure details", ()
   const original = structuredClone(source);
   const file = createExecutionReport(source, "json", "2026-10-12T08:00:00Z");
   const report = JSON.parse(file.content);
-  expect(report).toMatchObject({ schema_version: 1, captured_at: "2026-10-12T08:00:00Z",
+  expect(report).toMatchObject({ schema_version: 2, captured_at: "2026-10-12T08:00:00Z",
     source: "displayed_execution_inspection", ...source });
   expect(source).toEqual(original);
   expect(file.filename).toBe("execution-42.json");
@@ -24,7 +24,8 @@ test("Markdown fences saved content and preserves recoverable structured section
   expect(file.content).toContain("````json");
   const blocks = [...file.content.matchAll(/(`{3,})json\n([\s\S]*?)\n\1/g)];
   expect(blocks.map((block) => JSON.parse(block[2]))).toEqual([
-    source.execution, source.trace, source.snapshot, source.replays,
+    source.execution, source.trace, source.snapshot,
+    { execution_id: 42, agent_id: 1, status: "not_loaded", evidence: null }, source.replays,
   ]);
   expect(file.content).toContain("not an atomic database backup");
 });

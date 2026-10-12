@@ -59,6 +59,13 @@ export async function getExecutionMemoryContext(executionId: number, agentId: nu
   requireValid(positiveId(executionId) && positiveId(agentId));
   const body = await requestJson<unknown>(
     `/executions/${executionId}/memory-context?agent_id=${agentId}`, { cache: "no-store" });
+  return validateExecutionMemoryContext(body, executionId, agentId, input);
+}
+
+/** Revalidate captured data without issuing any HTTP or model request. */
+export function validateExecutionMemoryContext(body: unknown, executionId: number,
+  agentId: number, input: string): ExecutionMemoryContext {
+  requireValid(positiveId(executionId) && positiveId(agentId));
   requireValid(object(body) && body.execution_id === executionId && typeof body.available === "boolean");
   if (!body.available) {
     requireValid(body.evidence === null);
