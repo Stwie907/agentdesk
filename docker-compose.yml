@@ -1,1 +1,74 @@
-services: {}
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: sqlite:////data/agentdesk.db
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      OLLAMA_BASE_URL: ${COMPOSE_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_PLANNER_MODEL: ${OLLAMA_PLANNER_MODEL:-qwen2.5:7b}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-120}
+      MEMORY_RETRIEVAL_MODE: ${MEMORY_RETRIEVAL_MODE:-keyword}
+      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-embeddinggemma}
+      MEMORY_EMBEDDING_TIMEOUT_SECONDS: ${MEMORY_EMBEDDING_TIMEOUT_SECONDS:-60}
+      MEMORY_SEMANTIC_MIN_SIMILARITY: ${MEMORY_SEMANTIC_MIN_SIMILARITY:-0.35}
+      MEMORY_VECTOR_CACHE_ENABLED: ${MEMORY_VECTOR_CACHE_ENABLED:-true}
+      MCP_TIMEOUT_SECONDS: ${MCP_TIMEOUT_SECONDS:-30}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - agentdesk-data:/data
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import json, urllib.request; response = urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3); assert json.load(response) == {'status': 'ok'}"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "127.0.0.1:5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+        restart: true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+  evaluation:
+    profiles: ["evaluation"]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    working_dir: /
+    environment:
+      EVALUATION_REVISION: ${EVALUATION_REVISION:-unknown}
+    volumes:
+      - ./evaluation:/evaluation:ro
+      - ./evaluation/reports:/reports
+    command:
+      - python
+      - -m
+      - evaluation.run
+      - --base-url
+      - http://frontend
+      - --output-dir
+      - /reports
+  mcp-check:
+    profiles: ["mcp"]
+    build:
+      context: ./mcp-server
+
+volumes:
+  agentdesk-data:

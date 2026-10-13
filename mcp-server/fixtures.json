@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "orders": [
+    {
+      "order_id": "DEMO-1001",
+      "status": "shipped",
+      "currency": "CNY",
+      "total": "129.00",
+      "items": [
+        {"sku": "DEMO-NOTEBOOK", "name": "Demo notebook set", "quantity": 1}
+      ]
+    },
+    {
+      "order_id": "DEMO-1002",
+      "status": "processing",
+      "currency": "CNY",
+      "total": "59.00",
+      "items": [
+        {"sku": "DEMO-PEN", "name": "Demo pen set", "quantity": 1}
+      ]
+    }
+  ]
+}

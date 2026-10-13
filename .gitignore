@@ -3,7 +3,12 @@
 __pycache__/
 *.pyc
 node_modules/
+.npm-cache/
 dist/
 coverage/
 .idea/
 .vscode/
+.venv/
+.pytest_cache/
+/evaluation/reports/
+/mcp-server/data/

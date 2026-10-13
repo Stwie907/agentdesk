@@ -1,0 +1,438 @@
+# AgentDesk Frontend
+
+## Export a displayed execution report
+
+Load an execution in **Runtime V4 Execution Inspector**, then use **Export JSON**
+or **Export Markdown**. Reports include saved input/output, status, failure
+metadata, structured trace, optional snapshot and replay history. No extra
+request is made when exporting; current chat/title drafts are retained.
+Refresh the execution first if newer data is needed. Reports are limited to
+10 MiB and contain saved user inputs and tool results. Review them before sharing.
+See [format and acceptance](../docs/execution-reports.md).
+
+Version 2 reports also include the captured memory evidence already loaded with
+**Show memory retrieval**. Export does not trigger an evidence read. The report
+marks unread, pending, unavailable and failed evidence explicitly. See
+[memory evidence export](../docs/execution-report-memory-evidence.md).
+
+## Navigate the workbench
+
+The sidebar links directly to tasks/Agent selection, runtime configuration,
+conversation chat, Agent/shared memory, execution history and Inspector. Narrow
+screens use the same links in a horizontal header. Native in-page navigation
+keeps the existing components mounted and retains their state without new API
+requests or writes. Controls use larger targets and responsive form layouts.
+
+**Conversation** selection is at the top of the chat area. After selecting a
+conversation, use **填写标题草稿** or **填写聊天草稿** to jump to the existing title
+and message inputs. These links do not rename a conversation or send a message.
+Saved messages have their own scrollable transcript so long history does not
+push the composer far down the page. Existing search, backup, import, draft,
+memory and Runtime V4 controls remain available under their original labels.
+
+## Read current Runtime configuration
+
+Next to **Submit Task** on wide screens (below on narrow screens), expand
+**Runtime Configuration** to read the current
+provider, selected Agent's saved chat model, configured planner model and memory
+settings. The panel starts collapsed and reads only on expansion, refresh or an
+Agent change while open. Late/cancelled reads cannot replace the new Agent's
+settings. Chat/title drafts, conversation selection and Inspector are retained.
+Model availability is explicitly unchecked; reading does not call a model.
+Vite and Nginx both proxy `/runtime` to the existing FastAPI backend.
+See [configuration acceptance](../docs/runtime-configuration.md) for the retained
+HTTP pair, UI controls and the separate browser draft checks.
+
+## Open a saved result in its conversation
+
+On an Agent search result, choose **Open message ID in chat**. The client reads
+the result's scoped conversation and full saved message before changing selection.
+**Located saved message in chat** receives focus and displays its surrounding
+context with the existing JSON/Markdown downloads. The target can be outside the
+current title page or the latest 20 chat messages. Opening another result in the
+same conversation retains already loaded older history; loaded target messages
+are marked in the transcript.
+
+Chat and rename drafts are retained separately for each conversation in the
+current Agent session, including ordinary **Conversation** selection. Returning
+restores the exact unsent text. Creation/title-filter and Agent-search drafts
+remain available. Browser saving defaults to off; changing Agent or reloading
+starts a fresh draft session unless saving was enabled for that Agent. Drafts
+do not become saved messages until **Send message** is used.
+
+Use **Cancel opening message** during a pending navigation or **Close located
+message** afterward. Errors preserve the current selection and drafts. Query,
+role, size, clear, manual selection, data reloads, writes/delete confirmation,
+Agent changes, and unmounting cancel stale navigation. Closing or invalidating
+located context also cancels pending downloads. Inspector selection is retained.
+See [message navigation](../docs/message-search-navigation.md) for acceptance.
+
+## Keep conversation drafts after reload
+
+Enable **Keep this Agent's drafts on this browser** under **Conversation Chat**.
+The preference and exact chat/title text are saved separately for each Agent
+and conversation. After a reload or Agent change, choose the original Agent and
+conversation again. Selection, transcript, creation/search drafts and Inspector
+state are refreshed through their existing flow. Enabling saving includes drafts
+already typed in this page and keeps current edits ahead of older browser copies.
+
+Turning saving off retains existing browser copies while stopping future saves
+and restoration. **Clear saved drafts for this Agent** requires confirmation,
+removes that Agent's copies, and turns saving off; current page drafts are kept.
+Successful sends and renames update their saved draft copies even while saving
+is off. Successful deletion removes its copy. Storage errors preserve current
+text and show a warning; malformed, foreign or reused-conversation records are
+ignored. Use one browser origin for acceptance, such as `http://localhost:5173`.
+See [draft acceptance](../docs/conversation-drafts.md) for the exact idle HTTP
+pair followed by browser reload, Agent-isolation and clearing checks.
+
+## Search all conversations for the selected Agent
+
+Under **Conversation Chat**, **Search all Agent conversations** sits above
+**Conversation title search**. Select an Agent above; selecting a conversation
+is optional. Enter `中文` or `turn 01` in **Agent message content search**, keep
+**Agent message role** at **All roles**, and choose **Search Agent messages**.
+The space in `turn 01` is part of the literal query.
+
+Results identify their saved conversation title/ID. **Read full Agent message ID**
+loads that result's complete content; **Read Agent message context ID** loads its
+surrounding messages using the result's conversation scope. Loaded context offers
+**Export context JSON** and **Export context Markdown**. The active chat, loaded
+transcript, title filter, drafts, and Inspector selection are retained. Context
+controls have unique labels even when the same message is open in both panels.
+
+Use **Agent search results per page** and the Agent matching-message buttons to
+page. Query, role, size, and clear changes do not submit automatically. Errors
+retain the query and require explicit retries. Data revisions, write/delete locks,
+Agent changes, and unmounting abort pending reads/downloads. Title browsing retains
+Agent results and their displayed context.
+See [Agent message search](../docs/agent-message-search.md) for exact acceptance.
+
+## Read surrounding saved messages
+
+After searching saved message content, select **Read surrounding messages ID**.
+A separate **Saved message context** region shows the selected message and
+nearby turns in chronological timestamp/ID order, including other roles.
+Original content renders as plain text, with the selected message marked.
+The default is three messages on each side; each side can request 0 to 10.
+Changing a count clears the context and requires **Reload message context**.
+**Close message context** keeps the search results and every chat draft.
+
+Reads preserve the selected conversation, loaded transcript, title filter,
+chat/create/rename drafts, and Inspector. Duplicate reloads are blocked; count
+changes, close, search changes/paging, writes, reloads, Agent/conversation
+changes, and unmounting cancel stale reads. Choosing full-message details
+closes context. Failures retain drafts and require an explicit retry.
+The client validates scope, safe identities, calendar timestamps including
+microseconds, bounds, unique chronological messages, and the selected anchor.
+The existing conversations proxy handles this route without new dependencies.
+
+See [initial/restart and manual acceptance](../docs/conversation-message-context.md).
+
+**Message content search** searches the selected conversation's entire saved
+history. Role filters, paged previews, and **Read full message** keep the active
+chat, loaded messages, title filter, and drafts intact. Requests run only on an
+explicit action; late responses are invalidated after relevant changes.
+See [message search](../docs/conversation-message-search.md) for a browser checklist.
+
+React and TypeScript execution workbench for AgentDesk. It supports task
+submission, execution history, filters, pagination, execution inspection,
+structured traces, snapshots, replay, cancellation, retry, and automatic refresh.
+The Agent Memory panel lists, adds, edits, deletes, and previews relevant persistent
+memories for the Agent selected in the task form.
+
+## Requirements
+
+- Node.js 24.15 or later, below Node.js 25.
+- npm 11 or later.
+
+## Local development
+
+From `frontend/`:
+
+```sh
+npm ci
+npm run dev
+```
+
+Open the Local URL printed by Vite, normally `http://localhost:5173`.
+Start the [backend](../backend/README.md) in a separate terminal. Vite proxies
+`/agents`, `/executions`, `/memories`, and `/conversations` to
+`http://127.0.0.1:8000`. If those requests report
+`ECONNREFUSED` or status `502`, confirm that the backend completed startup.
+
+## Conversation Chat
+
+Select an Agent in the task form. Under **Conversation Chat**, enter a title of
+1 to 200 characters and select **Create conversation**, or choose an existing
+conversation. Its saved messages load in order. Enter a **Chat message** of
+1 to 4000 characters and select **Send message** to continue the same history.
+
+For example, send `My name is Tom`, followed by `I like Python`. Existing rules
+save an Agent name/preference and refresh **Agent Memory** after each returned
+execution. Questions such as `What do I like about Python?` do not create a new
+preference. Each returned execution also opens in the Inspector and refreshes
+execution history. One-off **Submit Task** continues to use its existing endpoint.
+
+Select a conversation to edit **Conversation title** and choose **Rename
+conversation**. The title allows 1 to 200 trimmed characters. Its ID, transcript,
+selection, and chat draft are retained after a successful rename.
+
+**Delete conversation** opens an inline confirmation with the title and ID.
+**Cancel delete** makes no request; **Confirm delete** removes the conversation
+and messages, then clears the selection and chat draft. Agent memories and
+execution inspection remain available. Writes and selection are disabled while
+a mutation is pending; other writes are also disabled during confirmation.
+Rename/delete responses are checked for the selected conversation and Agent.
+
+Writes are guarded against repeated clicks. A failed request retains its draft;
+reload conversations/messages to check what was saved before retrying. A failed
+execution retains the chat draft and opens its inspection. A transcript load
+failure disables sending until recovery. Switching Agents resets the panel and
+ignores old responses. Conversation changes retain separate session drafts;
+opt-in browser saving also restores drafts after Agent changes or reloads.
+
+Conversation and memory data use the same SQLite volume. Mock responses remain
+fixed, while previous history and relevant memories reach the existing Runtime.
+Ollama uses that context for generated replies. No paid service is added.
+
+### Title search and paging
+
+The panel uses the scoped `/conversations/page` endpoint to load 10 newest
+conversations initially. **Conversation title search** applies a trimmed title
+fragment only on **Search conversations**. A blank query or **Clear conversation
+search** lists all titles for that Agent. Matching is literal, with ASCII English
+case ignored and Chinese fragments supported. Message contents are not searched.
+
+**Conversations per page** offers 5, 10, 20, and 50. **Previous conversations**
+and **Next conversations** respect the returned count and page boundaries.
+Search and size changes reset the offset. A failed page blocks writes until an
+explicit successful retry. Scoped response validation rejects wrong metadata,
+foreign rows, duplicate IDs, and inconsistent totals or boundaries.
+
+The active chat lives separately from the page. Searching or paging keeps its
+transcript and all drafts; an off-page selection is shown under **Current
+conversation** with an explanatory message. Explicitly selecting another chat
+restores its separate chat/title drafts. Reload verifies an off-page selection; only a scoped 404
+clears it, while other errors retain drafts and block writes.
+
+Create clears the search and selects the new conversation on the first page.
+Rename refreshes a filtered list without losing the selected transcript.
+Delete reloads and fills the page, or returns to the preceding available page.
+Browse controls are locked during writes and deletion confirmation. Agent
+changes reset the panel and invalidate late page and write responses.
+
+## Agent Memory
+
+Select an Agent in the task form. Its memories load below that form. Enter, for
+example, `I prefer concise Python answers.` and select **Save memory**. Content
+must be non-blank and at most 2000 characters after trimming. Saving the same
+content reuses the existing memory; a canonical `User's name is ...` entry follows
+the backend's existing name replacement policy.
+
+**Reload memories** loads the latest records, including changes made through
+other API clients. **Delete memory** requires inline confirmation and sends the
+selected Agent ID. A failed write retains the draft or record and is not retried
+automatically. Switching Agents clears drafts and ignores responses from the
+previous selection.
+
+Memories use the existing backend SQLite database. In Mock mode, Runtime logs
+can confirm relevant memory retrieval, but the reply remains the fixed `[MOCK]`
+message. Use the existing local Ollama provider for model-generated replies.
+
+### Edit saved memory
+
+Select **Edit memory** beside a saved row. **Edited memory content** starts with
+the original text. Enter 1–2000 trimmed characters, then **Save changes**.
+**Cancel editing** sends no request; an unfinished add-memory draft is retained.
+An unchanged draft cannot be submitted. Saving keeps the Memory ID and creation
+time and clears the old retrieval preview without automatically searching again.
+
+Only one record is edited at a time. Other writes and reloads wait until editing
+ends; chat-triggered refreshes are deferred so they cannot erase the draft.
+Requests include the selected Agent and the original saved content. Duplicate
+or stale-content conflicts keep both the saved row and edit draft. Copy any draft
+you want to retain, cancel editing, and reload to review the current record.
+Failed requests are not retried automatically. Switching Agents starts independent
+state and ignores both late success and late failure responses.
+
+### Memory retrieval preview
+
+Enter `Python` or `机器学习` in **Memory search query** and select **Search
+memories**. The trimmed query allows 1 to 500 characters. **Result limit** offers
+1, 3, 5, 10, or 20, with 5 selected initially. A search starts only on submission,
+after the selected Agent's memory list has loaded; typing does not send requests.
+
+Results show saved content, the Memory ID, **Keyword matches**, and **Matched
+text**. This uses Runtime's shared keyword ranking. Scores count distinct
+matching terms, and Chinese matches use character fragments; they are not
+semantic confidence scores. An empty result does not clear the saved memory list.
+
+Search sends a read-only GET and creates no chat message, execution, or memory.
+Changing the preview limit does not change Runtime's default limit of 5.
+Query/limit changes invalidate previous requests and results. Saving, deleting,
+reloading, or refreshing memories after chat clears the preview while retaining
+its draft and limit. Switching Agents resets both and ignores late responses.
+Errors preserve the draft and require an explicit **Search memories** retry.
+Returned scope, query, limits, ordering, scores, and match evidence are validated
+before display. Content renders as plain text.
+
+## Shared User Memory
+
+Select an Agent, then **Show shared memories**. The panel starts collapsed and
+fetches only after it is opened. Its owner label shows the resolved username/User
+ID. Save a shared preference, then switch to another Agent of the same user:
+the same record ID is visible. Another owner's Agents load a separate list.
+Switching Agents resets drafts, edits, confirmations, and search state; late
+responses from the previous selection are ignored.
+
+Shared content permits 1–2000 trimmed characters. Exact duplicates reuse the row.
+Editing sends original `expected_content` and both Agent/User scopes; saves keep
+ID/time. **Cancel shared editing** makes no request and retains an add draft.
+Blank, unchanged, or overlong edits are disabled. Writes and reloads wait while
+saving. Failures preserve the draft; copy it before canceling and reloading.
+
+**Delete shared memory** explains that deletion affects all Agents of the owner
+and requires confirmation. **Shared memory search query** allows 1–500 characters
+and returns up to five keyword-ranked matches. Searches run only on submission;
+query changes, edits, and reloads invalidate stale responses. Response validation
+rejects mismatched owners, identities, timestamps, queries, duplicates, and scores.
+
+The existing Agent Memory panel and automatic extraction remain independent.
+Save facts in this panel explicitly to share them. Vite and Nginx both proxy
+`/user-memories` to FastAPI, including GET, POST, PATCH, and DELETE.
+
+## Optional semantic previews
+
+Select **Semantic (local embeddings)** in **Memory search method** or **Shared
+memory search method**. The query and limit are sent to the scoped semantic
+endpoint only after submission. Keyword is the initial selection.
+
+Semantic results show **Cosine similarity**, the embedding provider/model, and
+the server's Runtime memory mode. Mock results explicitly show **Mock fixture
+vectors**. For Mock, save `I prefer concise answers.` and query `Keep it brief.`;
+the Chinese pair is `我喜欢简洁的回答。` / `请用简短的方式解释。`. Ollama mode
+supports general queries through the configured local embedding model.
+
+Changing the method, query, limit, Agent, or saved-memory revision invalidates
+older results. Embedding failures keep the query/method and show the server error;
+retry is explicit. The client rejects non-finite/out-of-range similarity, wrong
+scopes, metadata, duplicate IDs, and inconsistent ranking.
+
+Preview selection is independent of Runtime configuration. Set the backend's
+`MEMORY_RETRIEVAL_MODE=semantic` to use semantic retrieval during chat. The panel
+shows the current server mode so users can distinguish these settings.
+
+## Tests and production build
+
+```sh
+npm test
+npm run build
+```
+
+## Docker Compose
+
+From the repository root:
+
+```sh
+sh deployment/start-demo.sh
+```
+
+This builds the frontend and backend, waits for health, and initializes a
+`Demo Agent` in Mock mode. Open `http://localhost:5173`.
+
+The production container serves the Vite build with Nginx. `nginx.conf` forwards
+API paths to the `backend:8000` Compose service, preserving paths and query
+strings. It provides a `/healthz` endpoint for the frontend container and forwards
+`/health` to the backend. The static workbench and API share the same browser
+origin; the browser does not need to resolve Docker service names.
+
+See [the Docker Compose guide](../docs/docker-compose-demo.md) for normal Ollama
+mode, persistence, smoke checks, shutdown, and troubleshooting.
+
+### Load older saved messages
+
+The selected conversation initially requests its latest 20 messages using the
+scoped `/conversations/{id}/messages/page` route. Messages display in ascending
+timestamp/ID order. **Load older messages** prepends the next page and keeps the
+chat, rename, and new-conversation drafts. The counter shows loaded messages
+and whether earlier history is available. No full transcript fetch is needed
+for this panel; legacy API callers and Runtime context keep their full history.
+
+Older loads keep already rendered messages visible, block duplicate requests
+and chat/management writes while loading, and support an explicit retry after
+failure. Invalid scope, duplicate IDs, ordering, cursors, or overlapping
+responses are rejected before they can enter the transcript. Timestamp checks
+preserve microseconds. Conversation/Agent changes and **Reload messages**
+ignore stale older responses. Reload keeps the unsent chat draft and returns
+to the latest 20; a completed chat also refreshes that latest page. Conversation
+title search/paging preserves already loaded older messages for the active chat.
+
+## Download complete conversations
+
+**Export JSON** and **Export Markdown** download the selected conversation's
+complete saved transcript, including history outside the loaded 20-message page.
+Unsent chat, rename, and creation drafts remain on the page. JSON downloads retain
+structured IDs, roles, timestamps, and content; Markdown treats original text
+literally, including Chinese, HTML, and embedded code fences.
+
+Both buttons are disabled during an export or chat/management write and delete
+confirmation. Failed exports preserve drafts and loaded history for retry.
+Switching Agent/conversation cancels the request and suppresses late downloads.
+Off-page selected conversations remain exportable. The client checks attachment
+headers and validates JSON scope, count, ordering, timestamps, and message IDs
+before creating a short-lived browser download URL. The existing frontend proxy
+handles this API; no new dependency is required.
+
+See [export acceptance and limits](../docs/conversation-export.md), including
+manual validation of full history without loading earlier messages.
+
+## Import a JSON backup as a separate conversation
+
+**Conversation JSON backup** reads a local file and previews its title, saved
+message count, and selected destination Agent. File selection performs no HTTP
+request. **Confirm import as new conversation** sends the backup only after
+confirmation. A successful import refreshes the conversation list while keeping
+the current selection, active title filter, loaded history, and chat/create/rename
+drafts. Search for the imported title to select the new local conversation.
+
+The client validates UTF-8, complete version-1 metadata, counts, scope within the
+source transcript, unique IDs, timestamps, and ordering. It preserves original
+JSON text for the request; the backend independently validates duplicate keys and
+strict numeric types. Import creates no chat execution and does not notify the
+execution inspector. The Nginx proxy permits bodies up to the matching 10 MiB cap.
+
+Pending imports block duplicate submissions and other conversation writes. File
+replacement/clearing and Agent changes ignore stale file reads; unmounting ignores
+late responses. An already submitted request retains its original destination
+Agent and may finish even after the Agent selection changes. There is no automatic
+retry: after an uncertain response, reload conversations and check the imported
+title before confirming again. Failed imports retain the file preview and drafts.
+
+See [import acceptance and limitations](../docs/conversation-import.md).
+## Export the displayed saved-message context
+
+Open surrounding messages from a saved message search result, then choose
+**Export context JSON** or **Export context Markdown**. Only the displayed
+window is exported; use the existing complete-conversation **Export JSON** for
+an importable backup. Count edits require **Reload message context** first.
+
+The client validates scope, anchor, counts, UTF-8, size, headers, and complete
+attachment contents before starting a download. If the saved window changed,
+reload context before exporting again. Errors retain context and all drafts.
+Changing counts/search/scope, refreshing, closing context, or unmounting cancels
+pending downloads. Late responses cannot start a download in another context.
+The selected chat, loaded transcript, title filter, and drafts remain available.
+
+See [context exports](../docs/conversation-message-context-export.md) for browser
+checks and the API's read-only initial/restart acceptance. No dependency is added.
+
+## Local model check
+
+Use **运行配置** and **Show runtime configuration**, then click
+**检查本地 Ollama 模型**. The check starts idle and runs only from this button.
+Each role displays its configured model and installation observation. Connection
+failures mean installation is unknown; Mock and keyword embedding are skipped.
+Changing Agent, refreshing settings or hiding the panel clears old results and
+cancels pending reads. Chat selection and unsent drafts remain with their
+existing conversation state. See [diagnostics](../docs/ollama-diagnostics.md).

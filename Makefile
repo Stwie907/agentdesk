@@ -1,21 +1,58 @@
 SHELL := /bin/sh
 
-.PHONY: help check test lint build start stop
+.PHONY: agent-message-search-check runtime-config-check ollama-diagnostics-check
+
+RUNTIME_CONFIG_AGENT_ID ?= 1
+OLLAMA_DIAGNOSTICS_AGENT_ID ?= 1
+OLLAMA_DIAGNOSTICS_ARGS ?= --expected-provider ollama --require-installed
+
+.PHONY: help check test lint build start stop demo demo-check evaluate evaluation-test mcp-check mcp-test mcp-runtime-check mcp-tracking-check mcp-ticket-check memory-check conversation-check conversation-management-check conversation-pagination-check message-pagination-check conversation-export-check conversation-import-check message-search-check message-context-check message-context-export-check memory-search-check memory-editing-check user-memory-check semantic-memory-check ollama-memory-check memory-evidence-check memory-vector-cache-check ollama-memory-vector-cache-check
 
 help:
 	@printf '%s\n' \
 		'Available targets:' \
 		'  check  Validate the monorepo structure' \
-		'  test   Validate the initialization state' \
+		'  test   Run backend and frontend tests' \
 		'  lint   Report that no linter is configured' \
-		'  build  Report that no build is configured' \
-		'  start  Report that no services are configured' \
-		'  stop   Report that no services are configured'
+		'  build  Build service containers' \
+		'  start  Start service containers' \
+		'  stop   Stop service containers, retaining demo data' \
+		'  demo   Build and start the Mock demo with a Demo Agent' \
+		'  demo-check  Check the workbench, Mock tasks, snapshots, and replay' \
+		'  evaluate  Evaluate the running Mock demo and save reports' \
+		'  evaluation-test  Test the evaluator without a running backend' \
+		'  mcp-check  Verify standalone business tools over stdio' \
+		'  mcp-test  Run business data and MCP protocol tests in Docker'
+	@printf '%s\n' '  mcp-runtime-check  Check MCP order tasks and replay through the running Mock API'
+	@printf '%s\n' '  mcp-tracking-check  Check MCP shipment tasks and replay through the running Mock API'
+	@printf '%s\n' '  mcp-ticket-check  Check MCP ticket writes, deduplication, permissions, and replay'
+	@printf '%s\n' '  memory-check  Check Agent memory storage, scope, deletion, and Runtime retrieval'
+	@printf '%s\n' '  conversation-check  Check multi-turn chat, automatic memory, and Agent scope'
+	@printf '%s\n' '  conversation-management-check  Check rename, message deletion, and retained Agent data'
+	@printf '%s\n' '  conversation-pagination-check  Check scoped conversation pages, literal title search, and read-only probes'
+	@printf '%s\n' '  message-pagination-check  Check bounded older-message cursors and read-only restart persistence'
+	@printf '%s\n' '  conversation-export-check  Check complete JSON/Markdown downloads and immutable restart evidence'
+	@printf '%s\n' '  conversation-import-check  Check atomic JSON backup imports and original IDs after restart'
+	@printf '%s\n' '  message-search-check  Read-only search across retained complete conversation history'
+	@printf '%s\n' '  message-context-check  Read-only surrounding messages using original import/search evidence'
+	@printf '%s\n' '  message-context-export-check  Read-only JSON/Markdown excerpts using original context evidence'
+	@printf '%s\n' '  agent-message-search-check  Read-only cross-conversation Agent search retaining original response bytes'
+	@printf '%s\n' '  runtime-config-check  Read-only process settings and selected Agent model; set RUNTIME_CONFIG_AGENT_ID'
+	@printf '%s\n' '  ollama-diagnostics-check  Read installed local models without inference; set OLLAMA_DIAGNOSTICS_AGENT_ID'
+	@printf '%s\n' '  memory-search-check  Check ranked bilingual previews, Agent scope, and Runtime retrieval'
+	@printf '%s\n' '  memory-editing-check  Check scoped edits, conflicts, and preserved memory identity'
+	@printf '%s\n' '  user-memory-check  Check shared user memory, isolation, conditional edits, and Runtime retrieval'
+	@printf '%s\n' '  semantic-memory-check  Enable Mock semantic Runtime and check vectors, scope, edits, and persistence fixtures'
+	@printf '%s\n' '  ollama-memory-check  Read-only real Ollama retrieval acceptance using saved semantic fixtures'
+	@printf '%s\n' '  memory-evidence-check  Check saved Runtime retrieval evidence using existing Mock semantic fixtures'
+	@printf '%s\n' '  memory-vector-cache-check  Check scoped vector reuse, invalidation, and cache persistence'
+	@printf '%s\n' '  ollama-memory-vector-cache-check  Verify real Ollama query-only cache reuse without creating chats'
 
 check:
 	@test -f README.md
 	@test -f Makefile
 	@test -f docker-compose.yml
+	@test -f docker-compose.mock.yml
 	@test -f .env.example
 	@test -f .github/workflows/ci.yml
 	@test -d backend
@@ -24,17 +61,356 @@ check:
 	@test -d evaluation
 	@test -d docs
 	@test -d deployment
+	@test -f backend/app/main.py
+	@test -f backend/app/config.py
+	@test -f backend/app/seed_demo.py
+	@test -f backend/app/check_demo.py
+	@test -f backend/app/api/health.py
+	@test -f backend/tests/test_health.py
+	@test -f backend/requirements.txt
+	@test -f backend/Dockerfile
+	@test -f backend/.dockerignore
+	@test -f backend/README.md
+	@test -f frontend/src/main.tsx
+	@test -f frontend/src/App.tsx
+	@test -f frontend/src/api/conversationExport.ts
+	@test -f frontend/src/components/ConversationExport.tsx
+	@test -f frontend/tests/ConversationExport.test.tsx
+	@test -f frontend/tests/conversationExportApi.test.ts
+	@test -f frontend/tests/conversationExportFixtures.ts
+	@test -f docs/conversation-export.md
+	@test -f backend/app/schemas/conversation_import.py
+	@test -f backend/app/services/conversation_import.py
+	@test -f backend/app/check_conversation_import.py
+	@test -f backend/tests/test_conversation_import.py
+	@test -f backend/tests/test_conversation_import_acceptance.py
+	@test -f frontend/src/api/conversationImport.ts
+	@test -f frontend/src/components/ConversationImport.tsx
+	@test -f frontend/tests/ConversationImport.test.tsx
+	@test -f frontend/tests/conversationImportApi.test.ts
+	@test -f frontend/tests/conversationImportFixtures.ts
+	@test -f docs/conversation-import.md
+	@test -f backend/app/schemas/message_search.py
+	@test -f backend/app/services/message_search.py
+	@test -f backend/app/check_message_search.py
+	@test -f backend/tests/test_message_search.py
+	@test -f backend/tests/test_message_search_acceptance.py
+	@test -f frontend/src/api/messageSearch.ts
+	@test -f frontend/src/components/ConversationMessageSearch.tsx
+	@test -f frontend/tests/messageSearchApi.test.ts
+	@test -f frontend/tests/ConversationMessageSearch.test.tsx
+	@test -f frontend/tests/messageSearchFixtures.ts
+	@test -f docs/conversation-message-search.md
+	@test -f backend/app/schemas/message_context.py
+	@test -f backend/app/services/message_context.py
+	@test -f backend/app/check_message_context.py
+	@test -f backend/tests/test_message_context.py
+	@test -f backend/tests/test_message_context_acceptance.py
+	@test -f frontend/src/api/messageContext.ts
+	@test -f frontend/src/components/ConversationMessageContext.tsx
+	@test -f frontend/tests/messageContextApi.test.ts
+	@test -f frontend/tests/ConversationMessageContext.test.tsx
+	@test -f frontend/tests/messageContextFixtures.ts
+	@test -f backend/app/services/message_context_export.py
+	@test -f backend/app/check_message_context_export.py
+	@test -f backend/tests/test_message_context_export.py
+	@test -f backend/tests/test_message_context_export_acceptance.py
+	@test -f frontend/src/api/messageContextExport.ts
+	@test -f frontend/src/components/MessageContextExport.tsx
+	@test -f frontend/tests/messageContextExportApi.test.ts
+	@test -f frontend/tests/MessageContextExport.test.tsx
+	@test -f frontend/tests/messageContextExportFixtures.ts
+	@test -f docs/conversation-message-context-export.md
+	@test -f backend/app/api/agent_messages.py
+	@test -f backend/app/schemas/agent_message_search.py
+	@test -f backend/app/services/agent_message_search.py
+	@test -f backend/app/check_agent_message_search.py
+	@test -f backend/tests/test_agent_message_search.py
+	@test -f backend/tests/test_agent_message_search_acceptance.py
+	@test -f frontend/src/api/agentMessageSearch.ts
+	@test -f frontend/src/components/AgentMessageSearch.tsx
+	@test -f frontend/tests/agentMessageSearchApi.test.ts
+	@test -f frontend/tests/AgentMessageSearch.test.tsx
+	@test -f frontend/tests/agentMessageSearchFixtures.ts
+	@test -f docs/agent-message-search.md
+	@test -f frontend/src/api/messageNavigation.ts
+	@test -f frontend/src/components/LocatedMessage.tsx
+	@test -f frontend/tests/messageNavigationFixtures.ts
+	@test -f frontend/tests/messageNavigationApi.test.ts
+	@test -f frontend/tests/MessageSearchNavigation.test.tsx
+	@test -f docs/message-search-navigation.md
+	@test -f frontend/src/state/conversationDraftStorage.ts
+	@test -f frontend/src/state/useConversationDrafts.ts
+	@test -f frontend/src/components/ConversationDraftControls.tsx
+	@test -f frontend/tests/conversationDraftStorage.test.ts
+	@test -f frontend/tests/ConversationDraftPersistence.test.tsx
+	@test -f frontend/tests/draftPersistenceFixtures.ts
+	@test -f docs/conversation-drafts.md
+	@test -f backend/app/api/runtime.py
+	@test -f backend/app/schemas/runtime_configuration.py
+	@test -f backend/app/services/runtime_configuration.py
+	@test -f backend/app/check_runtime_configuration.py
+	@test -f backend/tests/test_runtime_configuration.py
+	@test -f backend/tests/test_runtime_configuration_acceptance.py
+	@test -f frontend/src/api/runtimeConfiguration.ts
+	@test -f frontend/src/components/RuntimeConfigurationPanel.tsx
+	@test -f frontend/tests/runtimeConfigurationApi.test.ts
+	@test -f frontend/tests/RuntimeConfigurationPanel.test.tsx
+	@test -f frontend/tests/runtimeConfigurationFixtures.ts
+	@test -f docs/runtime-configuration.md
+	@test -d frontend/src/components
+	@test -d frontend/src/pages
+	@test -d frontend/tests
+	@test -f frontend/package.json
+	@test -f frontend/package-lock.json
+	@test -f frontend/vite.config.ts
+	@test -f frontend/Dockerfile
+	@test -f frontend/nginx.conf
+	@test -f frontend/README.md
+	@test -f deployment/start-demo.sh
+	@test -f docs/docker-compose-demo.md
+	@test -f deployment/evaluate-demo.sh
+	@test -f evaluation/__init__.py
+	@test -f evaluation/dataset.json
+	@test -f evaluation/run.py
+	@test -f evaluation/tests/test_run.py
+	@test -f evaluation/README.md
+	@test -f deployment/check-mcp.sh
+	@test -f mcp-server/server.py
+	@test -f mcp-server/orders.py
+	@test -f mcp-server/check.py
+	@test -f mcp-server/fixtures.json
+	@test -f mcp-server/requirements.txt
+	@test -f mcp-server/Dockerfile
+	@test -f mcp-server/.dockerignore
+	@test -f mcp-server/README.md
+	@test -f mcp-server/tests/test_orders.py
+	@test -f mcp-server/client.py
+	@test -f mcp-server/tests/test_client.py
+	@test -f backend/app/tools/mcp_order.py
+	@test -f backend/app/runtime/trace_details.py
+	@test -f backend/app/check_mcp_runtime.py
+	@test -f backend/tests/test_mcp_order.py
+	@test -f backend/tests/test_mcp_runtime_api.py
+	@test -f .dockerignore
+	@test -f mcp-server/tracking.py
+	@test -f mcp-server/tracking-fixtures.json
+	@test -f mcp-server/tests/test_tracking.py
+	@test -f backend/app/tools/mcp_tracking.py
+	@test -f backend/app/check_mcp_tracking.py
+	@test -f backend/tests/test_mcp_tracking.py
+	@test -f backend/tests/test_mcp_tracking_api.py
+	@test -f mcp-server/tickets.py
+	@test -f mcp-server/tests/test_tickets.py
+	@test -f backend/app/tools/mcp_ticket.py
+	@test -f backend/app/check_mcp_ticket.py
+	@test -f backend/tests/test_mcp_ticket.py
+	@test -f backend/tests/test_mcp_ticket_api.py
+	@test -f backend/app/check_memory.py
+	@test -f backend/tests/test_memory_api_contract.py
+	@test -f frontend/src/components/MemoryPanel.tsx
+	@test -f frontend/src/api/memories.ts
+	@test -f frontend/src/types/memories.ts
+	@test -f frontend/tests/MemoryPanel.test.tsx
+	@test -f frontend/tests/MemorySelection.test.tsx
+	@test -f backend/app/check_conversation.py
+	@test -f backend/tests/test_conversation_api_contract.py
+	@test -f frontend/src/components/ConversationPanel.tsx
+	@test -f frontend/src/api/conversations.ts
+	@test -f frontend/src/types/conversations.ts
+	@test -f frontend/tests/ConversationPanel.test.tsx
+	@test -f frontend/tests/ConversationFlow.test.tsx
+	@test -f backend/app/check_conversation_management.py
+	@test -f backend/tests/test_conversation_management_api.py
+	@test -f backend/app/check_conversation_pagination.py
+	@test -f backend/tests/test_conversation_pagination.py
+	@test -f backend/tests/test_conversation_pagination_acceptance.py
+	@test -f frontend/tests/ConversationPagination.test.tsx
+	@test -f frontend/tests/conversationPaginationApi.test.ts
+	@test -f frontend/tests/conversationFixtures.ts
+	@test -f backend/app/check_message_pagination.py
+	@test -f backend/app/services/conversation_export.py
+	@test -f backend/app/check_conversation_export.py
+	@test -f backend/tests/test_conversation_export.py
+	@test -f backend/tests/test_conversation_export_acceptance.py
+	@test -f backend/tests/test_message_pagination.py
+	@test -f backend/tests/test_message_pagination_acceptance.py
+	@test -f frontend/tests/ConversationMessagePagination.test.tsx
+	@test -f frontend/tests/messagePaginationApi.test.ts
+	@test -f frontend/tests/ConversationManagement.test.tsx
+	@test -f backend/app/services/memory_retrieval.py
+	@test -f backend/app/check_memory_search.py
+	@test -f backend/tests/test_memory_search.py
+	@test -f frontend/src/components/MemorySearchPanel.tsx
+	@test -f frontend/tests/MemorySearchPanel.test.tsx
+	@test -f backend/app/check_memory_editing.py
+	@test -f backend/tests/test_memory_editing.py
+	@test -f frontend/tests/MemoryEditing.test.tsx
+	@test -f backend/app/models/user_memory.py
+	@test -f backend/app/schemas/user_memory.py
+	@test -f backend/app/services/user_memory_service.py
+	@test -f backend/app/api/user_memories.py
+	@test -f backend/app/check_user_memory.py
+	@test -f backend/alembic/versions/c84f31a920de_add_user_memories.py
+	@test -f backend/tests/test_user_memory.py
+	@test -f frontend/src/components/UserMemoryPanel.tsx
+	@test -f frontend/src/api/userMemories.ts
+	@test -f frontend/src/types/userMemories.ts
+	@test -f frontend/tests/UserMemoryPanel.test.tsx
+	@test -f backend/app/memory_config.py
+	@test -f backend/app/services/memory_embeddings.py
+	@test -f backend/app/services/semantic_memory.py
+	@test -f backend/app/schemas/semantic_memory.py
+	@test -f backend/app/check_semantic_memory.py
+	@test -f backend/tests/test_semantic_memory.py
+	@test -f frontend/src/api/semanticMemories.ts
+	@test -f frontend/tests/SemanticMemory.test.tsx
+	@test -f backend/app/check_ollama_memory.py
+	@test -f backend/tests/test_ollama_memory_acceptance.py
+	@test -f backend/app/check_memory_evidence.py
+	@test -f backend/app/schemas/memory_evidence.py
+	@test -f backend/app/services/memory_evidence.py
+	@test -f backend/tests/test_memory_evidence.py
+	@test -f frontend/src/components/MemoryRetrievalPanel.tsx
+	@test -f frontend/src/api/memoryEvidence.ts
+	@test -f backend/app/models/memory_vector_cache.py
+	@test -f backend/app/services/memory_vector_cache.py
+	@test -f backend/app/check_memory_vector_cache.py
+	@test -f backend/tests/test_memory_vector_cache.py
+	@test -f backend/tests/test_memory_vector_cache_acceptance.py
+	@test -f backend/app/check_ollama_memory_vector_cache.py
+	@test -f backend/tests/test_ollama_memory_vector_cache_acceptance.py
 
 test: check
+	@python -m unittest discover -s evaluation/tests -v
+	@cd backend && python -m pytest
+	@cd frontend && npm test
 
 lint:
 	@printf '%s\n' 'No linter is configured.'
 
+message-search-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_message_search --base-url http://frontend
+
+message-context-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_message_context --base-url http://frontend
+
+message-context-export-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_message_context_export --base-url http://frontend
+
+agent-message-search-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_agent_message_search --base-url http://frontend
+
+runtime-config-check:
+	docker compose -f docker-compose.yml exec -T backend \
+		python -m app.check_runtime_configuration --base-url http://frontend --agent-id $(RUNTIME_CONFIG_AGENT_ID)
+
+ollama-diagnostics-check:
+	docker compose -f docker-compose.yml exec -T backend \
+		python -m app.check_ollama_diagnostics --base-url http://frontend --agent-id $(OLLAMA_DIAGNOSTICS_AGENT_ID) $(OLLAMA_DIAGNOSTICS_ARGS)
+
 build:
-	@printf '%s\n' 'No build is configured.'
+	docker compose build backend frontend
 
 start:
-	@printf '%s\n' 'No services are configured.'
+	docker compose up --detach --wait --wait-timeout 180 backend frontend
 
 stop:
-	@printf '%s\n' 'No services are configured.'
+	docker compose down
+
+demo:
+	sh deployment/start-demo.sh
+
+demo-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_demo --base-url http://frontend
+
+evaluate:
+	sh deployment/evaluate-demo.sh
+
+evaluation-test:
+	python -m unittest discover -s evaluation/tests -v
+
+mcp-check:
+	sh deployment/check-mcp.sh
+
+mcp-test:
+	docker compose run --build --rm --no-deps -T mcp-check \
+		python -m unittest discover -s tests -v
+
+mcp-runtime-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_mcp_runtime --base-url http://frontend
+
+mcp-tracking-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_mcp_tracking --base-url http://frontend
+
+mcp-ticket-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_mcp_ticket --base-url http://frontend
+
+memory-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_memory --base-url http://frontend
+
+conversation-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_conversation --base-url http://frontend
+
+conversation-management-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_conversation_management --base-url http://frontend
+
+conversation-pagination-check:
+	docker compose -f docker-compose.yml exec -T backend \
+		python -m app.check_conversation_pagination --base-url http://frontend
+
+message-pagination-check:
+	docker compose -f docker-compose.yml exec -T backend \
+		python -m app.check_message_pagination --base-url http://frontend
+
+memory-search-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_memory_search --base-url http://frontend
+
+memory-editing-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_memory_editing --base-url http://frontend
+
+user-memory-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_user_memory --base-url http://frontend
+
+semantic-memory-check:
+	MEMORY_RETRIEVAL_MODE=semantic docker compose -f docker-compose.yml -f docker-compose.mock.yml \
+		up --detach --wait --wait-timeout 180 backend frontend
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_semantic_memory --base-url http://frontend
+
+ollama-memory-check:
+	docker compose -f docker-compose.yml exec -T backend python -m app.check_ollama_memory --base-url http://frontend
+
+memory-evidence-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_memory_evidence --base-url http://frontend
+
+memory-vector-cache-check:
+	docker compose -f docker-compose.yml -f docker-compose.mock.yml exec -T backend \
+		python -m app.check_memory_vector_cache --base-url http://frontend
+
+ollama-memory-vector-cache-check:
+	docker compose -f docker-compose.yml exec -T backend \
+		python -m app.check_ollama_memory_vector_cache --base-url http://frontend
+
+conversation-export-check:
+	docker compose -f docker-compose.yml exec -T backend \
+		python -m app.check_conversation_export --base-url http://frontend
+
+conversation-import-check:
+	docker compose -f docker-compose.yml exec -T backend \
+		python -m app.check_conversation_import --base-url http://frontend

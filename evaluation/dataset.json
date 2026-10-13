@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "name": "runtime-v4-mock-v1",
+  "provider": "mock",
+  "cases": [
+    {
+      "id": "addition",
+      "message": "Calculate 40 + 2",
+      "expected_output": "42",
+      "expected_tool": "calculator",
+      "expected_expression": "40+2"
+    },
+    {
+      "id": "subtraction",
+      "message": "Calculate 18 - 7",
+      "expected_output": "11",
+      "expected_tool": "calculator",
+      "expected_expression": "18-7"
+    },
+    {
+      "id": "multiplication",
+      "message": "calculate -3 * 7",
+      "expected_output": "-21",
+      "expected_tool": "calculator",
+      "expected_expression": "-3*7"
+    },
+    {
+      "id": "division",
+      "message": "计算20/4",
+      "expected_output": "5.0",
+      "expected_tool": "calculator",
+      "expected_expression": "20/4"
+    },
+    {
+      "id": "decimal",
+      "message": "Calculate 1.5 + 2.25",
+      "expected_output": "3.75",
+      "expected_tool": "calculator",
+      "expected_expression": "1.5+2.25"
+    },
+    {
+      "id": "greeting",
+      "message": "Hello AgentDesk",
+      "expected_output": "[MOCK] AgentDesk demo response. No language model was called.",
+      "expected_tool": null
+    },
+    {
+      "id": "unsupported_expression",
+      "message": "Calculate (2 + 3) * 4",
+      "expected_output": "[MOCK] AgentDesk demo response. No language model was called.",
+      "expected_tool": null
+    },
+    {
+      "id": "replay_addition",
+      "replay_of": "addition",
+      "expected_output": "42",
+      "expected_tool": "calculator",
+      "expected_expression": "40+2"
+    }
+  ]
+}
